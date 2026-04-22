@@ -132,6 +132,11 @@ interface RepositoryManager {
    * @throws Error if repository is not allowed
    */
   validateRepository(repoPath: string): string;
+  
+  /**
+   * Update the list of allowed repositories (for dynamic configuration)
+   */
+  updateAllowedRepositories(repos: string[]): void;
 }
 ```
 
@@ -585,9 +590,9 @@ All tools follow the MCP specification and return structured responses. Each too
 
 **Parameters:**
 - `repository` (required): Repository path
-- `path` (required): Path for new worktree
+- `path` (required): Path for new worktree (absolute path or relative to repository root)
 - `branch` (optional): Branch name (creates new branch if doesn't exist)
-- `commitish` (optional): Commit/branch to checkout
+- `commitish` (optional): Commit-ish reference to checkout (commit hash, branch name, tag, or tree-ish like HEAD~1)
 
 **Output Format:**
 ```json
@@ -600,10 +605,12 @@ All tools follow the MCP specification and return structured responses. Each too
 
 **Validation:**
 - Repository must be in allowed list
-- Path must be validated (no `..`, must be absolute or relative to repo)
-- Path must not already exist
+- Path must be validated:
+  - If absolute: must be within allowed directories (not system directories)
+  - If relative: resolved against repository root, no `..` traversal
+  - Must not already exist
 - Branch name must be valid (alphanumeric, `-`, `_`, `/`)
-- Commitish must be valid if provided
+- Commitish must match Git ref format if provided: alphanumeric, `-`, `_`, `/`, `~`, `^`, or valid commit hash (40 hex chars)
 
 **Git Command:** `git worktree add <path> <branch>`
 
@@ -630,7 +637,7 @@ All tools follow the MCP specification and return structured responses. Each too
 - Repository must be in allowed list
 - Path must be validated
 - Worktree must exist
-- Cannot remove main worktree
+- Cannot remove main worktree (the worktree at the repository root containing the `.git` directory, not a `.git` file)
 
 **Git Command:** `git worktree remove <path>` or `git worktree remove --force <path>`
 
@@ -681,7 +688,7 @@ All tools follow the MCP specification and return structured responses. Each too
 - Repository must be in allowed list
 - Source path must be validated and exist
 - Destination path must be validated and not exist
-- Cannot move main worktree
+- Cannot move main worktree (the worktree at the repository root containing the `.git` directory)
 
 **Git Command:** `git worktree move <source> <destination>`
 
@@ -708,7 +715,7 @@ All tools follow the MCP specification and return structured responses. Each too
 **Validation:**
 - Repository must be in allowed list
 - Path must be validated and exist
-- Worktree must not already be locked
+- If worktree is already locked, return success (idempotent operation) with existing lock reason
 
 **Git Command:** `git worktree lock <path>` or `git worktree lock --reason "<reason>" <path>`
 
@@ -1004,7 +1011,7 @@ node dist/standalone.js
 
 ### Embedded Mode
 
-**Transport:** Web Standards Streamable HTTP
+**Transport:** Streamable HTTP (Web Standards compliant streaming)
 
 **Configuration:**
 - Allowed repositories from VS Code workspace folders
@@ -1015,7 +1022,7 @@ node dist/standalone.js
 
 ```typescript
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import { WebSocketServerTransport } from '@modelcontextprotocol/sdk/server/websocket.js';
+import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamable-http.js';
 import { createGitServer } from './server/git-server.js';
 import { RepositoryManager } from './core/repository-manager.js';
 import * as vscode from 'vscode';
@@ -1052,8 +1059,8 @@ export async function activateGitServer(
   // Register tools
   createGitServer(server, repoManager);
   
-  // Create WebSocket transport
-  const transport = new WebSocketServerTransport({
+  // Create Streamable HTTP transport
+  const transport = new StreamableHTTPServerTransport({
     port,
     path: '/mcp',
   });
@@ -1144,7 +1151,7 @@ export function createGitServer(
 
 | Aspect | Standalone | Embedded |
 |--------|-----------|----------|
-| **Transport** | stdio | WebSocket (HTTP) |
+| **Transport** | stdio | Streamable HTTP |
 | **Repository Config** | Environment variable | VS Code workspace folders |
 | **Deployment** | Separate process | Within VS Code extension |
 | **Use Case** | CLI tools, external clients | VS Code extensions |
