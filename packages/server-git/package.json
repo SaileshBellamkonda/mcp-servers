@@ -1,0 +1,49 @@
+{
+  "name": "@mcp-servers/server-git",
+  "version": "1.0.0",
+  "description": "Git MCP Server - Safe, controlled Git operations via Model Context Protocol",
+  "type": "module",
+  "main": "./dist/standalone.js",
+  "types": "./dist/standalone.d.ts",
+  "exports": {
+    ".": "./dist/standalone.js",
+    "./embedded": "./dist/embedded.js"
+  },
+  "bin": {
+    "git-mcp-server": "./dist/standalone.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx src/standalone.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "lint": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "keywords": ["mcp", "git", "model-context-protocol", "vscode"],
+  "author": "Development Team",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "zod": "^3.22.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@vitest/coverage-v8": "^1.2.0",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.0",
+    "vitest": "^1.2.0"
+  },
+  "peerDependencies": {
+    "vscode": "*"
+  },
+  "peerDependenciesMeta": {
+    "vscode": {
+      "optional": true
+    }
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
