@@ -1,4 +1,3 @@
-import type { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import type { RepositoryManager } from './repository-manager.js';
 import type { PathValidator } from './path-validator.js';
 import type { GitExecutor } from './git-executor.js';

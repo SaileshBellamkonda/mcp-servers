@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { Server } from '@modelcontextprotocol/sdk/server/index.js';
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { registerGitWorkspaces } from '../../../src/tools/git-workspaces.js';
 import { RepositoryManager } from '../../../src/core/repository-manager.js';
 import { PathValidator } from '../../../src/core/path-validator.js';
@@ -8,11 +8,11 @@ import { OutputParser } from '../../../src/core/output-parser.js';
 import type { Services } from '../../../src/core/types.js';
 
 describe('git_workspaces tool', () => {
-  let server: Server;
+  let server: McpServer;
   let services: Services;
 
   beforeEach(() => {
-    server = new Server(
+    server = new McpServer(
       { name: 'test-server', version: '1.0.0' },
       { capabilities: { tools: {} } }
     );
@@ -29,13 +29,13 @@ describe('git_workspaces tool', () => {
   });
 
   it('should register git_workspaces tool', () => {
-    const tools = Array.from((server as any)._tools.keys());
+    const tools = Object.keys((server as any)._registeredTools);
     expect(tools).toContain('git_workspaces');
   });
 
   it('should return list of allowed repositories', async () => {
-    const handler = (server as any)._tools.get('git_workspaces').handler;
-    const result = await handler({});
+    const tool = (server as any)._registeredTools['git_workspaces'];
+    const result = await tool.handler({});
     
     const content = JSON.parse(result.content[0].text);
     expect(content.repositories).toHaveLength(2);
@@ -44,8 +44,8 @@ describe('git_workspaces tool', () => {
   });
 
   it('should extract repository names from paths', async () => {
-    const handler = (server as any)._tools.get('git_workspaces').handler;
-    const result = await handler({});
+    const tool = (server as any)._registeredTools['git_workspaces'];
+    const result = await tool.handler({});
     
     const content = JSON.parse(result.content[0].text);
     expect(content.repositories[0].name).toBe('repo1');

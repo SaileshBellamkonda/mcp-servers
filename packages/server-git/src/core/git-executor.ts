@@ -19,7 +19,11 @@ export class GitExecutor {
     }
 
     try {
-      this.gitPath = await which('git');
+      const gitPath = await which('git');
+      if (!gitPath) {
+        throw new Error('Git executable not found');
+      }
+      this.gitPath = gitPath;
       return this.gitPath;
     } catch (error) {
       throw new GitMcpError(
