@@ -21,11 +21,17 @@
     "lint": "tsc --noEmit",
     "clean": "rm -rf dist"
   },
-  "keywords": ["mcp", "git", "model-context-protocol", "vscode"],
+  "keywords": [
+    "mcp",
+    "git",
+    "model-context-protocol",
+    "vscode"
+  ],
   "author": "Development Team",
   "license": "MIT",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
+    "which": "^6.0.1",
     "zod": "^3.22.0"
   },
   "devDependencies": {
