@@ -1,6 +1,5 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { GitMcpError, ErrorCode } from '../core/types.js';
 import type { Services } from '../core/types.js';
 
 const GitCommitSchema = z.object({

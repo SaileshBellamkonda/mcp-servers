@@ -30,7 +30,7 @@ export function registerGitAdd(server: McpServer, services: Services): void {
       }
       
       // Validate all file paths
-      const validatedFiles = services.pathValidator.validatePaths(repository, files);
+      services.pathValidator.validatePaths(repository, files);
       
       const result = await services.gitExecutor.execute(repository, ['add', ...files]);
       
