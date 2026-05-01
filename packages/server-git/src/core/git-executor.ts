@@ -1,4 +1,4 @@
-import { execFile } from 'child_process';
+import { execFile } from 'node:child_process';
 import which from 'which';
 import { GitMcpError, ErrorCode } from './types.js';
 import type { GitCommandResult, ExecuteOptions } from './types.js';
@@ -55,7 +55,7 @@ export class GitExecutor {
       // Ensure PATH is set in environment for child process
       const env = {
         ...process.env,
-        PATH: process.env.PATH || process.env.Path || '',
+        PATH: process.env['PATH'] ?? process.env['Path'] ?? '',
       };
       
       // Use execFile which handles paths with spaces better than spawn
@@ -77,18 +77,25 @@ export class GitExecutor {
         }
         
         // Check if error is an execution error (not just non-zero exit code)
-        if (error && !(error as any).code) {
-          // Execution error (git not found, etc.)
+        // execFile errors that are non-exit-code failures have no numeric .code
+        interface ExecError extends Error {
+          code?: number | string;
+        }
+        const execError = error as ExecError | null;
+        if (execError && typeof execError.code !== 'number' && typeof execError.code !== 'string') {
+          // Execution error (git not found, permission denied, etc.)
           reject(new GitMcpError(
             ErrorCode.GIT_ERROR,
-            `Failed to execute git command: ${error.message}`,
-            { args, error: error.message }
+            `Failed to execute git command: ${execError.message}`,
+            { args, error: execError.message }
           ));
           return;
         }
         
         // Handle both success and failure (non-zero exit code)
-        const exitCode = (error as any)?.code ?? 0;
+        const exitCode = (execError?.code != null && typeof execError.code === 'number')
+          ? execError.code
+          : 0;
         const result: GitCommandResult = {
           stdout: stdout || '',
           stderr: stderr || '',

@@ -1,13 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import type {
   GitCommandResult,
-  ExecuteOptions,
   FileStatus,
   Commit,
   Branch,
-  Worktree,
-  Repository,
-  Services
+  Worktree
 } from '../../../src/core/types.js';
 
 describe('Core Types', () => {

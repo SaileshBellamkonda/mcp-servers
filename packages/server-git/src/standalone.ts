@@ -1,12 +1,12 @@
 #!/usr/bin/env node
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import { McpServer } from '@modelcontextprotocol/server';
+import { StdioServerTransport } from '@modelcontextprotocol/server';
 import { createGitServer } from './server/git-server.js';
 import { RepositoryManager } from './core/repository-manager.js';
 
 async function main() {
   // Parse allowed repositories from environment
-  const allowedReposEnv = process.env.GIT_ALLOWED_REPOS;
+  const allowedReposEnv = process.env['GIT_ALLOWED_REPOS'];
   
   if (!allowedReposEnv) {
     console.error('Error: GIT_ALLOWED_REPOS environment variable not set');

@@ -1,6 +1,6 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import path from 'path';
+import path from 'node:path';
 import type { Services } from '../core/types.js';
 
 const GitWorkspacesSchema = z.object({});

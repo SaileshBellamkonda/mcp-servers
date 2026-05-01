@@ -31,7 +31,7 @@ export function registerGitStatus(server: McpServer, services: Services): void {
       
       // Parse output
       const lines = result.stdout.split('\n');
-      const branchLine = lines[0];
+      const branchLine = lines[0] ?? '';
       const fileLines = lines.slice(1).join('\n');
       
       // Extract branch info

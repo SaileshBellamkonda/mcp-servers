@@ -10,7 +10,7 @@ function makeMockServer(
   initialStatus: ServerStatus = 'stopped'
 ): { server: IManagedServer; triggerStatusChange: () => void } {
   const listeners: (() => void)[] = [];
-  let _status: ServerStatus = initialStatus;
+  const _status: ServerStatus = initialStatus;
 
   const server = {
     id,

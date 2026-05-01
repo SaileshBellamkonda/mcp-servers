@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import * as vscode from 'vscode';
 import { McpServersTreeProvider } from '../../src/tree-provider';
 import type { ServerRegistry } from '../../src/server-registry';

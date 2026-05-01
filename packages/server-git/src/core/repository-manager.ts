@@ -1,4 +1,4 @@
-import path from 'path';
+import path from 'node:path';
 import { GitMcpError, ErrorCode } from './types.js';
 
 export class RepositoryManager {
@@ -36,11 +36,12 @@ export class RepositoryManager {
   }
 
   private normalizePath(repoPath: string): string {
-    // Use posix path normalization to ensure consistent forward slashes
-    // This is important for cross-platform compatibility
-    let normalized = path.posix.normalize(repoPath.replace(/\\/g, '/'));
-    // Remove trailing slash if present (except for root path)
-    if (normalized.length > 1 && normalized.endsWith('/')) {
+    // Use platform-native path.normalize for consistent cross-platform behavior.
+    // This ensures Windows paths (C:\\foo) and POSIX paths (/foo) are handled correctly
+    // and that path-validator's path.resolve+path.sep containment check works on all OSes.
+    let normalized = path.normalize(repoPath);
+    // Remove trailing separator if present (except for root paths like / or C:\\)
+    if (normalized.length > 1 && normalized.endsWith(path.sep)) {
       normalized = normalized.slice(0, -1);
     }
     return normalized;

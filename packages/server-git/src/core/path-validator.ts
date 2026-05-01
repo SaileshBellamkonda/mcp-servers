@@ -1,4 +1,4 @@
-import path from 'path';
+import path from 'node:path';
 import { GitMcpError, ErrorCode } from './types.js';
 import type { RepositoryManager } from './repository-manager.js';
 
@@ -20,7 +20,8 @@ export class PathValidator {
   constructor(private repoManager: RepositoryManager) {}
 
   /**
-   * Validate a path is safe and within an allowed repository
+   * Validate a path is safe and within an allowed repository.
+   * Uses platform-native path resolution to prevent path traversal on all OSes.
    * @throws GitMcpError if path is invalid or unsafe
    */
   validatePath(repoPath: string, filePath: string): string {
@@ -36,13 +37,17 @@ export class PathValidator {
       );
     }
 
-    // Resolve path against repository root using posix for consistency
-    const normalizedFile = filePath.replace(/\\/g, '/');
-    const resolved = path.posix.join(validatedRepo, normalizedFile);
-    const normalizedResolved = path.posix.normalize(resolved);
+    // Convert validatedRepo (stored with forward slashes) to platform-specific form
+    const validatedRepoPlatform = validatedRepo.split('/').join(path.sep);
+    const resolvedPlatform = path.resolve(validatedRepoPlatform, filePath);
+    // Normalize both for robust comparison
+    const normalizedRepo = path.normalize(validatedRepoPlatform);
+    const normalizedResolved = path.normalize(resolvedPlatform);
 
-    // Ensure resolved path is within repository
-    if (!normalizedResolved.startsWith(validatedRepo + '/') && normalizedResolved !== validatedRepo) {
+    // Ensure resolved path is within repository (OWASP A01 — path traversal prevention)
+    const relativeToRepo = path.relative(normalizedRepo, normalizedResolved);
+    const isInside = relativeToRepo === '' || (!relativeToRepo.startsWith('..' + path.sep) && relativeToRepo !== '..');
+    if (!isInside) {
       throw new GitMcpError(
         ErrorCode.SECURITY_ERROR,
         `Path outside repository: ${filePath}`,

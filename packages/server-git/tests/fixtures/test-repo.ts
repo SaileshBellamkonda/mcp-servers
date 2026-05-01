@@ -1,8 +1,8 @@
-import { mkdtemp, rm, writeFile, mkdir } from 'fs/promises';
-import { dirname, join } from 'path';
-import { tmpdir } from 'os';
-import { execFile } from 'child_process';
-import { promisify } from 'util';
+import { mkdtemp, rm, writeFile, mkdir } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
+import { tmpdir } from 'node:os';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
 

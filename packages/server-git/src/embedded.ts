@@ -1,17 +1,16 @@
-import { randomUUID } from 'node:crypto';
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
-import { createMcpExpressApp } from '@modelcontextprotocol/sdk/server/express.js';
+import { McpServer, WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/server';
+import { createMcpExpressApp } from '@modelcontextprotocol/express';
 import { createGitServer } from './server/git-server.js';
 import { RepositoryManager } from './core/repository-manager.js';
-import type { Express } from 'express';
-import type { Server as HttpServer } from 'node:http';
+import express from 'express';
+import { randomUUID } from 'node:crypto';
+import type { Server } from 'node:http';
 
 interface GitServerInstance {
   server: McpServer;
-  app: Express;
-  httpServer: HttpServer;
-  transports: Map<string, StreamableHTTPServerTransport>;
+  app: express.Express;
+  httpServer: Server;
+  transports: Map<string, WebStandardStreamableHTTPServerTransport>;
 }
 
 /**
@@ -46,26 +45,29 @@ export async function activateGitServer(
   
   // Register tools
   createGitServer(server, repoManager);
-  
-  // Create Express app
-  const app = createMcpExpressApp({ host: '127.0.0.1' });
+
+  const transport = new WebStandardStreamableHTTPServerTransport();
+  await server.connect(transport);
+
+  // Create Express app with MCP middleware
+  const app: express.Express = createMcpExpressApp({ host: '127.0.0.1' });
   
   // Map to store transports by session ID
-  const transports = new Map<string, StreamableHTTPServerTransport>();
-  
+  const transports = new Map<string, WebStandardStreamableHTTPServerTransport>();
+
   // MCP POST endpoint
   app.post('/mcp', async (req, res) => {
     const sessionId = req.headers['mcp-session-id'] as string | undefined;
     
     try {
-      let transport: StreamableHTTPServerTransport;
+      let transport: WebStandardStreamableHTTPServerTransport;
       
       if (sessionId && transports.has(sessionId)) {
         // Reuse existing transport
         transport = transports.get(sessionId)!;
       } else if (!sessionId) {
         // New initialization request
-        transport = new StreamableHTTPServerTransport({
+        transport = new WebStandardStreamableHTTPServerTransport({
           sessionIdGenerator: () => randomUUID(),
           onsessioninitialized: (sid) => {
             transports.set(sid, transport);
@@ -87,7 +89,7 @@ export async function activateGitServer(
         return;
       }
       
-      await transport.handleRequest(req, res, req.body);
+      return await transport.handleRequest(req);
     } catch (error) {
       console.error('Error handling MCP request:', error);
       if (!res.headersSent) {

@@ -39,7 +39,11 @@ export class OutputParser {
       .split('\n')
       .filter(line => line.trim())
       .map(line => {
-        const [hash, author, date, message] = line.split('|');
+        const parts = line.split('|');
+        const hash = parts[0] ?? '';
+        const author = parts[1] ?? '';
+        const date = parts[2] ?? '';
+        const message = parts[3] ?? '';
         return { hash, author, date, message };
       });
   }

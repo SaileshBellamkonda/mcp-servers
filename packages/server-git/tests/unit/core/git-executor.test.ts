@@ -1,13 +1,13 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { GitExecutor } from '../../../src/core/git-executor.js';
 import { GitMcpError, ErrorCode } from '../../../src/core/types.js';
-import { tmpdir } from 'os';
-import { join } from 'path';
+//import { tmpdir } from 'os';
+//import { join } from 'path';
 
 describe('GitExecutor', () => {
   let executor: GitExecutor;
   const validPath = process.cwd(); // Use current directory which exists
-  const invalidPath = join(tmpdir(), 'nonexistent-git-repo-' + Date.now());
+  //const invalidPath = join(tmpdir(), 'nonexistent-git-repo-' + Date.now());
 
   beforeEach(() => {
     executor = new GitExecutor();

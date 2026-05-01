@@ -1,6 +1,9 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { RepositoryManager } from '../../../src/core/repository-manager.js';
 import { GitMcpError, ErrorCode } from '../../../src/core/types.js';
+import path from 'node:path';
+
+const normalize = (s: string) => path.normalize(s);
 
 describe('RepositoryManager', () => {
   let manager: RepositoryManager;
@@ -11,8 +14,8 @@ describe('RepositoryManager', () => {
 
   describe('getAllowedRepositories', () => {
     it('should return all allowed repositories', () => {
-      const repos = manager.getAllowedRepositories();
-      expect(repos).toEqual(['/repo1', '/repo2']);
+      const repos = manager.getAllowedRepositories().map(normalize);
+      expect(repos).toEqual(['/repo1', '/repo2'].map(normalize));
     });
 
     it('should return empty array when no repositories configured', () => {
@@ -41,7 +44,7 @@ describe('RepositoryManager', () => {
   describe('validateRepository', () => {
     it('should return normalized path for allowed repository', () => {
       const result = manager.validateRepository('/repo1');
-      expect(result).toBe('/repo1');
+      expect(normalize(result)).toBe(normalize('/repo1'));
     });
 
     it('should throw error for disallowed repository', () => {
@@ -63,7 +66,8 @@ describe('RepositoryManager', () => {
   describe('updateAllowedRepositories', () => {
     it('should update the list of allowed repositories', () => {
       manager.updateAllowedRepositories(['/repo3', '/repo4']);
-      expect(manager.getAllowedRepositories()).toEqual(['/repo3', '/repo4']);
+      const repos = manager.getAllowedRepositories().map(normalize);
+      expect(repos).toEqual(['/repo3', '/repo4'].map(normalize));
     });
 
     it('should allow empty list', () => {
