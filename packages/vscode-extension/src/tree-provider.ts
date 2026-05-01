@@ -11,8 +11,10 @@ export class McpServersTreeProvider implements vscode.TreeDataProvider<IManagedS
     this._registry.onDidChange(() => this._onDidChange.fire());
   }
 
-  getChildren(): ReadonlyArray<IManagedServer> {
-    return this._registry.servers;
+  getChildren(element?: IManagedServer): vscode.ProviderResult<IManagedServer[]> {
+    // This tree is flat — servers are root nodes and have no children.
+    if (element) return [];
+    return Array.from(this._registry.servers);
   }
 
   getTreeItem(element: IManagedServer): vscode.TreeItem {
