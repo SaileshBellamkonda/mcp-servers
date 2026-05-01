@@ -27,58 +27,25 @@ Before creating any feature, component, or behavior change — no matter how sim
 
 ### 2. Plan Before Implementation
 
-**Skill:** `writing-plans`
+**Skill:** `planner`
 
-After a design is approved, create a detailed implementation plan with bite-sized TDD tasks. Output plans to `docs/plans/`. Plans must include exact file paths, test files, and verification steps.
+After a design is approved, use the planner skill to produce atomic YAML task files with TDD-ordered steps. Output plans to `docs/plans/`. TDD task order is enforced by the planner: write failing test → implement → verify green → commit.
 
-### 3. Test-Driven Development
+### 3. Execute the Plan
 
-**Skill:** `test-driven-development`
+**Skill:** `executor`
 
-All production code MUST be written test-first using Red-Green-Refactor:
-
-1. **RED** — Write a failing test that describes the expected behavior
-2. **GREEN** — Write the minimal code to make the test pass
-3. **REFACTOR** — Clean up while keeping tests green
-
-No production code without a failing test first. If code was written before its test, delete it and start over.
-
-### 4. Verify Before Claiming Done
-
-**Skill:** `verification-before-completion`
-
-Never claim work is complete without fresh verification evidence. Run tests, linter, and build. Evidence before assertions, always.
-
-### 5. Request Code Review
-
-**Skill:** `requesting-code-review`
-
-After completing tasks, major features, or before merging — request a code review to ensure quality and correctness.
+Run each YAML task file in order. The executor enforces both TDD (verifying tests fail before implementation, then pass after) and verification before completion (no task is marked done without fresh evidence from running the actual commands).
 
 ## Skill Reference
-
-> The `using-superpowers` skill governs skill discovery. Invoke it first to determine which other skill applies.
-
-### Skill Discovery
-
-| Skill | When to Use |
-|---|---|
-| `using-superpowers` | At the start of any task to determine which process or domain skill applies before taking action |
 
 ### Core Workflow (use in order)
 
 | Skill | When to Use |
 |---|---|
 | `brainstorming` | Before ANY creative work — features, components, behavior changes |
-| `writing-plans` | After design approval, before touching code |
-| `test-driven-development` | During ALL implementation — new features, bug fixes, refactoring |
-| `requesting-code-review` | After completing tasks, major features, or before merging |
-
-### Quality & Troubleshooting
-
-| Skill | When to Use |
-|---|---|
-| `systematic-debugging` | Any bug, test failure, or unexpected behavior — investigate root cause before fixing |
+| `planner` | After design approval — produces atomic YAML task files with TDD-ordered steps |
+| `executor` | After planning — executes YAML tasks with TDD enforcement and verification |
 
 ### Domain — MCP Servers
 
@@ -152,7 +119,7 @@ In VS Code extension mode, MCP servers:
 
 ## Plans
 
-Use `docs/plans/` directory to store implementation plans. The `writing-plans` skill handles creation automatically.
+Use `docs/plans/` directory to store implementation plans. The `planner` skill handles creation automatically.
 
 ## Specs
 
@@ -163,8 +130,8 @@ Use `docs/specs/` directory to store design specs. The `brainstorming` skill han
 This is a new repository. To begin development:
 
 1. **Define your first MCP server** — Use the `brainstorming` skill to design what your MCP server will do
-2. **Create an implementation plan** — Use the `writing-plans` skill to break down the work
-3. **Build with TDD** — Use the `test-driven-development` skill to implement
+2. **Create an implementation plan** — Use the `planner` skill to produce atomic YAML task files
+3. **Execute the plan** — Use the `executor` skill to run tasks with TDD enforcement and verification
 4. **Use the mcp-builder skill** — Leverage the MCP builder skill for guidance on creating high-quality MCP servers
 
 ## MCP Resources
