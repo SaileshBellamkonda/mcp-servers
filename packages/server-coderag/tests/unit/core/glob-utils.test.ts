@@ -33,6 +33,47 @@ describe('WELL_KNOWN_EXCLUDES', () => {
     expect(WELL_KNOWN_EXCLUDES).toContain('**/.vscode/**');
   });
 
+  it('contains .idea pattern (JetBrains)', () => {
+    expect(WELL_KNOWN_EXCLUDES).toContain('**/.idea/**');
+  });
+
+  it('contains .vs pattern (Visual Studio)', () => {
+    expect(WELL_KNOWN_EXCLUDES).toContain('**/.vs/**');
+  });
+
+  it('contains Visual Studio artefact patterns (.suo, .user)', () => {
+    expect(WELL_KNOWN_EXCLUDES).toContain('**/*.suo');
+    expect(WELL_KNOWN_EXCLUDES).toContain('**/*.user');
+  });
+
+  it('contains .eclipse and .settings patterns', () => {
+    expect(WELL_KNOWN_EXCLUDES).toContain('**/.eclipse/**');
+    expect(WELL_KNOWN_EXCLUDES).toContain('**/.settings/**');
+  });
+
+  it('contains Eclipse project file patterns', () => {
+    expect(WELL_KNOWN_EXCLUDES).toContain('**/.project');
+    expect(WELL_KNOWN_EXCLUDES).toContain('**/.classpath');
+  });
+
+  it('contains JetBrains module file patterns (.iml, .iws, .ipr)', () => {
+    expect(WELL_KNOWN_EXCLUDES).toContain('**/*.iml');
+    expect(WELL_KNOWN_EXCLUDES).toContain('**/*.iws');
+    expect(WELL_KNOWN_EXCLUDES).toContain('**/*.ipr');
+  });
+
+  it('contains Fleet, Zed, Nova, and Atom patterns', () => {
+    expect(WELL_KNOWN_EXCLUDES).toContain('**/.fleet/**');
+    expect(WELL_KNOWN_EXCLUDES).toContain('**/.zed/**');
+    expect(WELL_KNOWN_EXCLUDES).toContain('**/.nova/**');
+    expect(WELL_KNOWN_EXCLUDES).toContain('**/.atom/**');
+  });
+
+  it('contains Sublime Text patterns', () => {
+    expect(WELL_KNOWN_EXCLUDES).toContain('**/.sublime-project');
+    expect(WELL_KNOWN_EXCLUDES).toContain('**/.sublime-workspace');
+  });
+
   it('contains coverage pattern', () => {
     expect(WELL_KNOWN_EXCLUDES).toContain('**/coverage/**');
   });
