@@ -6,6 +6,8 @@ import { fileURLToPath } from 'node:url';
 import { VectorDB } from '../../src/vectordb/db.js';
 import { Embedder } from '../../src/embedder/embedder.js';
 import { Indexer } from '../../src/indexer/indexer.js';
+import { SyncManager } from '../../src/indexer/sync-manager.js';
+import { GlobMatcher } from '../../src/core/glob-utils.js';
 import { createCodeRagServer } from '../../src/server/coderag-server.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -58,7 +60,7 @@ beforeEach(() => {
     { name: 'test-coderag', version: '1.0.0' },
     { capabilities: { tools: {} } }
   );
-  createCodeRagServer(server, db, embedder, indexer, 5, tmpDir);
+  createCodeRagServer(server, db, embedder, indexer, 5, [tmpDir], new SyncManager());
 });
 
 afterEach(() => {
@@ -371,10 +373,10 @@ describe('sync_documents', () => {
   it('indexes new markdown files in the default directory', async () => {
     writeFileSync(path.join(tmpDir, 'sync-doc.md'), '# Sync\n\nDocument to sync.', 'utf8');
     const result = await getHandler('sync_documents')({}) as { content: Array<{ text: string }> };
-    const data = JSON.parse(result.content[0]!.text) as { success: boolean; indexed: number; directory: string };
+    const data = JSON.parse(result.content[0]!.text) as { success: boolean; indexed: number; directories: string[] };
     expect(data.success).toBe(true);
     expect(data.indexed).toBeGreaterThanOrEqual(1);
-    expect(data.directory).toBe(tmpDir);
+    expect(data.directories).toEqual([tmpDir]);
   });
 
   it('accepts an explicit directory override', async () => {
@@ -382,10 +384,10 @@ describe('sync_documents', () => {
     mkdirSync(subDir, { recursive: true });
     writeFileSync(path.join(subDir, 'sub-doc.md'), '# Sub\n\nSubdirectory document.', 'utf8');
     const result = await getHandler('sync_documents')({ directory: subDir }) as { content: Array<{ text: string }> };
-    const data = JSON.parse(result.content[0]!.text) as { success: boolean; indexed: number; directory: string };
+    const data = JSON.parse(result.content[0]!.text) as { success: boolean; indexed: number; directories: string[] };
     expect(data.success).toBe(true);
     expect(data.indexed).toBeGreaterThanOrEqual(1);
-    expect(data.directory).toBe(subDir);
+    expect(data.directories).toEqual([subDir]);
   });
 
   it('removes stale index entries and reports removed count', async () => {
@@ -406,5 +408,158 @@ describe('sync_documents', () => {
     const data = JSON.parse(result.content[0]!.text) as { indexed: number; skipped: number };
     expect(data.indexed).toBe(0);
     expect(data.skipped).toBe(0);
+  });
+});
+
+describe('sync lock behavior', () => {
+  let lockDb: VectorDB;
+  let lockServer: McpServer;
+  let lockSyncManager: SyncManager;
+
+  function getLockHandler(toolName: string) {
+    return (lockServer as unknown as { _registeredTools: Record<string, { handler: (input: unknown) => unknown }> })
+      ._registeredTools[toolName]!.handler;
+  }
+
+  beforeEach(() => {
+    lockDb = VectorDB.open(':memory:', DIMS);
+    lockSyncManager = new SyncManager();
+    lockServer = new McpServer(
+      { name: 'lock-test', version: '1.0.0' },
+      { capabilities: { tools: {} } }
+    );
+    const lockIndexer = new Indexer(lockDb, embedder, 512);
+    createCodeRagServer(lockServer, lockDb, embedder, lockIndexer, 5, [tmpDir], lockSyncManager);
+  });
+
+  afterEach(() => {
+    lockDb.close();
+  });
+
+  it('index_markdown returns { locked: true } while sync is running', async () => {
+    let releaseLock!: () => void;
+    const lockPromise = lockSyncManager.run('test', () => new Promise<void>((r) => { releaseLock = r; }));
+
+    const mdPath = path.join(tmpDir, 'locktest.md');
+    writeFileSync(mdPath, '# Lock\n\nContent.');
+    const result = await getLockHandler('index_markdown')({ filepath: mdPath }) as { content: Array<{ text: string }> };
+    const data = JSON.parse(result.content[0]!.text) as { locked: boolean; operation: string };
+    expect(data.locked).toBe(true);
+    expect(data.operation).toBe('test');
+
+    releaseLock();
+    await lockPromise;
+  });
+
+  it('index_code returns { locked: true } while sync is running', async () => {
+    let releaseLock!: () => void;
+    const lockPromise = lockSyncManager.run('test', () => new Promise<void>((r) => { releaseLock = r; }));
+
+    const tsPath = path.join(tmpDir, 'locktest.ts');
+    writeFileSync(tsPath, 'function lock() {}');
+    const result = await getLockHandler('index_code')({ filepath: tsPath }) as { content: Array<{ text: string }> };
+    const data = JSON.parse(result.content[0]!.text) as { locked: boolean };
+    expect(data.locked).toBe(true);
+
+    releaseLock();
+    await lockPromise;
+  });
+
+  it('delete_document returns { locked: true } while sync is running', async () => {
+    let releaseLock!: () => void;
+    const lockPromise = lockSyncManager.run('test', () => new Promise<void>((r) => { releaseLock = r; }));
+
+    const result = await getLockHandler('delete_document')({ filename: '/some/file.md' }) as { content: Array<{ text: string }> };
+    const data = JSON.parse(result.content[0]!.text) as { locked: boolean };
+    expect(data.locked).toBe(true);
+
+    releaseLock();
+    await lockPromise;
+  });
+
+  it('reindex_document returns { locked: true } while sync is running', async () => {
+    let releaseLock!: () => void;
+    const lockPromise = lockSyncManager.run('test', () => new Promise<void>((r) => { releaseLock = r; }));
+
+    const result = await getLockHandler('reindex_document')({ filename: '/some/file.md' }) as { content: Array<{ text: string }> };
+    const data = JSON.parse(result.content[0]!.text) as { locked: boolean };
+    expect(data.locked).toBe(true);
+
+    releaseLock();
+    await lockPromise;
+  });
+
+  it('sync_documents returns { locked: true } while sync is running', async () => {
+    let releaseLock!: () => void;
+    const lockPromise = lockSyncManager.run('test', () => new Promise<void>((r) => { releaseLock = r; }));
+
+    const result = await getLockHandler('sync_documents')({}) as { content: Array<{ text: string }> };
+    const data = JSON.parse(result.content[0]!.text) as { locked: boolean };
+    expect(data.locked).toBe(true);
+
+    releaseLock();
+    await lockPromise;
+  });
+});
+
+describe('exclusion responses', () => {
+  let exclDb: VectorDB;
+  let exclServer: McpServer;
+
+  function getExclHandler(toolName: string) {
+    return (exclServer as unknown as { _registeredTools: Record<string, { handler: (input: unknown) => unknown }> })
+      ._registeredTools[toolName]!.handler;
+  }
+
+  beforeEach(() => {
+    exclDb = VectorDB.open(':memory:', DIMS);
+    exclServer = new McpServer(
+      { name: 'excl-test', version: '1.0.0' },
+      { capabilities: { tools: {} } }
+    );
+    const tmpFwd = tmpDir.replace(/\\/g, '/');
+    // Build an indexer that excludes *.draft.md docs and *.test.ts code
+    const exclIndexer = new Indexer(exclDb, embedder, 512, {
+      docsMatcher: new GlobMatcher([`${tmpFwd}/**/*.md`], ['**/*.draft.md'], tmpDir),
+      codeMatcher: new GlobMatcher([`${tmpFwd}/**/*.ts`], ['**/*.test.ts'], tmpDir),
+    });
+    createCodeRagServer(exclServer, exclDb, embedder, exclIndexer, 5, [tmpDir], new SyncManager());
+  });
+
+  afterEach(() => {
+    exclDb.close();
+  });
+
+  it('index_markdown returns { excluded: true } for an excluded file', async () => {
+    const draftPath = path.join(tmpDir, 'my.draft.md');
+    writeFileSync(draftPath, '# Draft');
+    const result = await getExclHandler('index_markdown')({ filepath: draftPath }) as { content: Array<{ text: string }> };
+    const data = JSON.parse(result.content[0]!.text) as { results: Array<{ excluded?: boolean }> };
+    expect(data.results[0]!.excluded).toBe(true);
+  });
+
+  it('index_markdown succeeds for a non-excluded markdown file', async () => {
+    const mdPath = path.join(tmpDir, 'guide.md');
+    writeFileSync(mdPath, '# Guide\n\nContent here.');
+    const result = await getExclHandler('index_markdown')({ filepath: mdPath }) as { content: Array<{ text: string }> };
+    const data = JSON.parse(result.content[0]!.text) as { results: Array<{ success: boolean }> };
+    expect(data.results[0]!.success).toBe(true);
+  });
+
+  it('index_code returns { excluded: true } for an excluded code file', async () => {
+    const testPath = path.join(tmpDir, 'app.test.ts');
+    writeFileSync(testPath, 'describe("x", () => {});');
+    const result = await getExclHandler('index_code')({ filepath: testPath }) as { content: Array<{ text: string }> };
+    const data = JSON.parse(result.content[0]!.text) as { results: Array<{ excluded?: boolean }> };
+    expect(data.results[0]!.excluded).toBe(true);
+  });
+
+  it('reindex_document returns { excluded: true } for an excluded doc file', async () => {
+    const draftPath = path.join(tmpDir, 'draft.draft.md');
+    writeFileSync(draftPath, '# Draft');
+    const result = await getExclHandler('reindex_document')({ filename: draftPath }) as { content: Array<{ text: string }> };
+    const data = JSON.parse(result.content[0]!.text) as { excluded?: boolean; success: boolean };
+    expect(data.excluded).toBe(true);
+    expect(data.success).toBe(false);
   });
 });

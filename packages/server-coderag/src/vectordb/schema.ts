@@ -8,10 +8,12 @@ CREATE TABLE IF NOT EXISTS db_meta (
 CREATE TABLE IF NOT EXISTS documents (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,
   filename    TEXT    NOT NULL UNIQUE,
+  doc_type    TEXT    NOT NULL DEFAULT 'doc' CHECK(doc_type IN ('doc','code')),
   indexed_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
   modified_at DATETIME NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_filename ON documents(filename);
+CREATE INDEX IF NOT EXISTS idx_doc_type ON documents(doc_type);
 
 CREATE TABLE IF NOT EXISTS chunks (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -57,5 +59,31 @@ CREATE INDEX IF NOT EXISTS idx_rel_source ON code_relations(source_chunk_id);
 CREATE INDEX IF NOT EXISTS idx_rel_target ON code_relations(target_chunk_id);
 CREATE INDEX IF NOT EXISTS idx_rel_type   ON code_relations(relation_type);
 CREATE INDEX IF NOT EXISTS idx_rel_name   ON code_relations(target_name);
+
+CREATE TABLE IF NOT EXISTS index_rules (
+  id        INTEGER PRIMARY KEY AUTOINCREMENT,
+  rule_type TEXT NOT NULL CHECK(rule_type IN ('docs_include','docs_exclude','code_include','code_exclude')),
+  pattern   TEXT NOT NULL
+);
 `;
+}
+
+export function buildMigrations(): string[] {
+  return [
+    // Migration 1: add doc_type column if missing
+    `ALTER TABLE documents ADD COLUMN doc_type TEXT NOT NULL DEFAULT 'doc'`,
+    // Migration 2: back-fill code documents based on presence of code_metadata
+    `UPDATE documents SET doc_type = 'code'
+     WHERE id IN (
+       SELECT DISTINCT d.id FROM documents d
+       JOIN chunks c ON c.document_id = d.id
+       JOIN code_metadata cm ON cm.chunk_id = c.id
+     ) AND doc_type = 'doc'`,
+    // Migration 3: create index_rules table
+    `CREATE TABLE IF NOT EXISTS index_rules (
+       id        INTEGER PRIMARY KEY AUTOINCREMENT,
+       rule_type TEXT NOT NULL,
+       pattern   TEXT NOT NULL
+     )`,
+  ];
 }

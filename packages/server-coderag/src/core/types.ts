@@ -5,16 +5,21 @@ export interface EmbeddingConfig {
   batchSize: number;
 }
 
+export interface GlobConfig {
+  docsInclude: string[];
+  docsExclude: string[];
+  codeInclude: string[];
+  codeExclude: string[];
+}
+
 export interface CodeRagConfig {
   embedding: EmbeddingConfig;
   dbPath: string;
-  documentsDir: string;
+  globs: GlobConfig;
   chunkSize: number;
   topK: number;
-  exclude: string[];
   useGitignore: boolean;
-  /** Pre-configured embedding dimension. When set, skips the detectDimensions() API call at startup. */
-  embeddingDim?: number | undefined;
+  embeddingDim: number;
 }
 
 export type SymbolType = 'function' | 'method' | 'class' | 'struct' | 'interface';
@@ -74,6 +79,7 @@ export interface CodeRelation {
 export interface DocumentRecord {
   filename: string;
   modifiedAt: Date;
+  docType: 'doc' | 'code';
 }
 
 export interface CodeSyncResult {
@@ -82,6 +88,12 @@ export interface CodeSyncResult {
   failed: number;
   added: number;
   updated: number;
+}
+
+export interface SyncStatus {
+  inProgress: boolean;
+  operation: string | null;
+  startedAt: Date | null;
 }
 
 export class ConfigError extends Error {

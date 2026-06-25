@@ -1,6 +1,6 @@
 import Database from 'better-sqlite3';
 import { createRequire } from 'node:module';
-import { buildSchema } from './schema.js';
+import { buildSchema, buildMigrations } from './schema.js';
 import type {
   MarkdownChunk,
   CodeChunk,
@@ -8,6 +8,7 @@ import type {
   DocumentRecord,
   SearchResult,
   SearchFilter,
+  GlobConfig,
 } from '../core/types.js';
 
 const require = createRequire(import.meta.url);
@@ -17,7 +18,7 @@ function loadSqliteVec(db: Database.Database): void {
     const sqliteVec = require('sqlite-vec') as { load: (db: Database.Database) => void };
     sqliteVec.load(db);
   } catch (err) {
-    throw new Error(`Failed to load sqlite-vec extension: ${String(err)}`);
+    throw new Error(`Failed to load sqlite-vec extension: ${String(err)}`, { cause: err });
   }
 }
 
@@ -29,6 +30,33 @@ function serializeVector(vec: number[]): Buffer {
   return buf;
 }
 
+function columnExists(db: Database.Database, table: string, column: string): boolean {
+  const row = db
+    .prepare(`SELECT COUNT(*) as cnt FROM pragma_table_info(?) WHERE name=?`)
+    .get(table, column) as { cnt: number };
+  return row.cnt > 0;
+}
+
+function tableExists(db: Database.Database, table: string): boolean {
+  const row = db
+    .prepare(`SELECT COUNT(*) as cnt FROM sqlite_master WHERE type='table' AND name=?`)
+    .get(table) as { cnt: number };
+  return row.cnt > 0;
+}
+
+function runMigrations(db: Database.Database): void {
+  const migrations = buildMigrations();
+  // Migration 1: add doc_type column
+  if (tableExists(db, 'documents') && !columnExists(db, 'documents', 'doc_type')) {
+    if (migrations[0]) db.exec(migrations[0]);
+    if (migrations[1]) db.exec(migrations[1]);
+  }
+  // Migration 2: create index_rules table
+  if (!tableExists(db, 'index_rules')) {
+    if (migrations[2]) db.exec(migrations[2]);
+  }
+}
+
 export class VectorDB {
   private readonly db: Database.Database;
 
@@ -36,11 +64,6 @@ export class VectorDB {
     this.db = db;
   }
 
-  /**
-   * Read the dimension stored in an existing database without loading sqlite-vec or
-   * modifying the file. Returns null when the DB file does not exist or has no
-   * stored dimension (i.e. it is a new / uninitialised database).
-   */
   static readStoredDimensions(dbPath: string): number | null {
     if (dbPath === ':memory:') return null;
     try {
@@ -62,25 +85,25 @@ export class VectorDB {
     db.pragma('foreign_keys = ON');
     db.pragma('journal_mode = WAL');
 
-    // Check stored dimensions vs requested
     db.exec(`CREATE TABLE IF NOT EXISTS db_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);`);
     const stored = (db.prepare('SELECT value FROM db_meta WHERE key = ?').get('dimensions') as { value: string } | undefined)?.value;
 
     if (stored !== undefined) {
       const storedDim = parseInt(stored, 10);
       if (storedDim !== dimensions) {
-        db.close();
-        throw new Error(
-          `DB was created with ${String(storedDim)} dimensions but embedding endpoint returns ${String(dimensions)}. ` +
-          `Delete the database file to start fresh with the new model.`
-        );
+        // Dimension mismatch: drop and recreate vec_chunks, update stored dim
+        db.exec('DROP TABLE IF EXISTS vec_chunks');
+        db.exec(`CREATE VIRTUAL TABLE vec_chunks USING vec0(embedding FLOAT[${String(dimensions)}])`);
+        db.prepare('INSERT OR REPLACE INTO db_meta (key, value) VALUES (?, ?)').run('dimensions', String(dimensions));
+        db.prepare('DELETE FROM db_meta WHERE key = ?').run('last_docs_sync_at');
+        db.prepare('DELETE FROM db_meta WHERE key = ?').run('last_code_sync_at');
       }
     } else {
-      // First init: create schema and store dimensions
       db.exec(buildSchema(dimensions));
       db.prepare('INSERT OR REPLACE INTO db_meta (key, value) VALUES (?, ?)').run('dimensions', String(dimensions));
     }
 
+    runMigrations(db);
     return new VectorDB(db);
   }
 
@@ -93,8 +116,32 @@ export class VectorDB {
     return row ? parseInt(row.value, 10) : null;
   }
 
+  dimensionMismatchOccurred(): boolean {
+    const row = this.db.prepare("SELECT value FROM db_meta WHERE key = 'dim_reset'").get() as { value: string } | undefined;
+    return row?.value === '1';
+  }
+
+  getDocumentCount(): number {
+    const row = this.db.prepare('SELECT COUNT(*) as cnt FROM documents').get() as { cnt: number };
+    return row.cnt;
+  }
+
+  getDocumentCountByType(docType: 'doc' | 'code'): number {
+    const row = this.db.prepare('SELECT COUNT(*) as cnt FROM documents WHERE doc_type = ?').get(docType) as { cnt: number };
+    return row.cnt;
+  }
+
   listDocuments(): Map<string, Date> {
     const rows = this.db.prepare('SELECT filename, modified_at FROM documents').all() as { filename: string; modified_at: string }[];
+    const result = new Map<string, Date>();
+    for (const row of rows) {
+      result.set(row.filename, new Date(row.modified_at));
+    }
+    return result;
+  }
+
+  listDocumentsByType(docType: 'doc' | 'code'): Map<string, Date> {
+    const rows = this.db.prepare('SELECT filename, modified_at FROM documents WHERE doc_type = ?').all(docType) as { filename: string; modified_at: string }[];
     const result = new Map<string, Date>();
     for (const row of rows) {
       result.set(row.filename, new Date(row.modified_at));
@@ -114,20 +161,16 @@ export class VectorDB {
     }
 
     const insertDoc = this.db.prepare(
-      'INSERT OR REPLACE INTO documents (filename, modified_at, indexed_at) VALUES (?, ?, CURRENT_TIMESTAMP)'
+      'INSERT OR REPLACE INTO documents (filename, doc_type, modified_at, indexed_at) VALUES (?, \'doc\', ?, CURRENT_TIMESTAMP)'
     );
-    const insertChunk = this.db.prepare(
-      'INSERT INTO chunks (document_id, position, content) VALUES (?, ?, ?)'
-    );
+    const insertChunk = this.db.prepare('INSERT INTO chunks (document_id, position, content) VALUES (?, ?, ?)');
     const insertVec = this.db.prepare('INSERT INTO vec_chunks (rowid, embedding) VALUES (?, ?)');
     const deleteChunks = this.db.prepare('DELETE FROM chunks WHERE document_id = ?');
 
     const run = this.db.transaction(() => {
       const docResult = insertDoc.run(filename, modifiedAt.toISOString());
       const docId = Number(docResult.lastInsertRowid);
-
       deleteChunks.run(docId);
-
       for (let i = 0; i < chunks.length; i++) {
         const chunk = chunks[i];
         const embedding = embeddings[i];
@@ -137,7 +180,6 @@ export class VectorDB {
         insertVec.run(chunkId, serializeVector(embedding));
       }
     });
-
     run();
   }
 
@@ -147,11 +189,9 @@ export class VectorDB {
     }
 
     const insertDoc = this.db.prepare(
-      'INSERT OR REPLACE INTO documents (filename, modified_at, indexed_at) VALUES (?, ?, CURRENT_TIMESTAMP)'
+      'INSERT OR REPLACE INTO documents (filename, doc_type, modified_at, indexed_at) VALUES (?, \'code\', ?, CURRENT_TIMESTAMP)'
     );
-    const insertChunk = this.db.prepare(
-      'INSERT INTO chunks (document_id, position, content) VALUES (?, ?, ?)'
-    );
+    const insertChunk = this.db.prepare('INSERT INTO chunks (document_id, position, content) VALUES (?, ?, ?)');
     const insertVec = this.db.prepare('INSERT INTO vec_chunks (rowid, embedding) VALUES (?, ?)');
     const insertMeta = this.db.prepare(
       'INSERT INTO code_metadata (chunk_id, symbol_name, symbol_type, language, start_line, end_line, parent_symbol, signature) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
@@ -161,9 +201,7 @@ export class VectorDB {
     const run = this.db.transaction(() => {
       const docResult = insertDoc.run(filename, modifiedAt.toISOString());
       const docId = Number(docResult.lastInsertRowid);
-
       deleteChunks.run(docId);
-
       for (let i = 0; i < chunks.length; i++) {
         const chunk = chunks[i];
         const embedding = embeddings[i];
@@ -171,19 +209,9 @@ export class VectorDB {
         const chunkResult = insertChunk.run(docId, chunk.position, chunk.content);
         const chunkId = BigInt(chunkResult.lastInsertRowid);
         insertVec.run(chunkId, serializeVector(embedding));
-        insertMeta.run(
-          chunkId,
-          chunk.symbolName,
-          chunk.symbolType,
-          chunk.language,
-          chunk.startLine,
-          chunk.endLine,
-          chunk.parentSymbol,
-          chunk.signature,
-        );
+        insertMeta.run(chunkId, chunk.symbolName, chunk.symbolType, chunk.language, chunk.startLine, chunk.endLine, chunk.parentSymbol, chunk.signature);
       }
     });
-
     run();
   }
 
@@ -210,9 +238,53 @@ export class VectorDB {
     return row?.chunk_id ?? null;
   }
 
+  // ─── Rule storage ──────────────────────────────────────────────────────────
+
+  saveRules(globs: GlobConfig): void {
+    const del = this.db.prepare('DELETE FROM index_rules WHERE rule_type = ?');
+    const ins = this.db.prepare('INSERT INTO index_rules (rule_type, pattern) VALUES (?, ?)');
+    this.db.transaction(() => {
+      for (const type of ['docs_include', 'docs_exclude', 'code_include', 'code_exclude'] as const) {
+        del.run(type);
+      }
+      for (const p of globs.docsInclude) ins.run('docs_include', p);
+      for (const p of globs.docsExclude) ins.run('docs_exclude', p);
+      for (const p of globs.codeInclude) ins.run('code_include', p);
+      for (const p of globs.codeExclude) ins.run('code_exclude', p);
+    })();
+  }
+
+  getStoredRules(): GlobConfig | null {
+    if (!tableExists(this.db, 'index_rules')) return null;
+    const rows = this.db.prepare('SELECT rule_type, pattern FROM index_rules ORDER BY id').all() as { rule_type: string; pattern: string }[];
+    if (rows.length === 0) return null;
+    const result: GlobConfig = { docsInclude: [], docsExclude: [], codeInclude: [], codeExclude: [] };
+    for (const row of rows) {
+      if (row.rule_type === 'docs_include') result.docsInclude.push(row.pattern);
+      else if (row.rule_type === 'docs_exclude') result.docsExclude.push(row.pattern);
+      else if (row.rule_type === 'code_include') result.codeInclude.push(row.pattern);
+      else if (row.rule_type === 'code_exclude') result.codeExclude.push(row.pattern);
+    }
+    return result;
+  }
+
+  // ─── Sync timestamps ───────────────────────────────────────────────────────
+
+  getLastSyncAt(type: 'docs' | 'code'): Date | null {
+    const key = type === 'docs' ? 'last_docs_sync_at' : 'last_code_sync_at';
+    const row = this.db.prepare('SELECT value FROM db_meta WHERE key = ?').get(key) as { value: string } | undefined;
+    return row ? new Date(row.value) : null;
+  }
+
+  setLastSyncAt(type: 'docs' | 'code', date: Date): void {
+    const key = type === 'docs' ? 'last_docs_sync_at' : 'last_code_sync_at';
+    this.db.prepare('INSERT OR REPLACE INTO db_meta (key, value) VALUES (?, ?)').run(key, date.toISOString());
+  }
+
+  // ─── Search ────────────────────────────────────────────────────────────────
+
   searchWithFilter(queryVector: number[], topK: number, filter: SearchFilter | null): SearchResult[] {
     const blob = serializeVector(queryVector);
-
     let whereClause = '';
     const whereArgs: unknown[] = [];
 
@@ -228,47 +300,27 @@ export class VectorDB {
         conditions.push('(d.filename LIKE ? OR d.filename LIKE ?)');
         whereArgs.push(`%/${likePattern}`, likePattern);
       }
-      if (conditions.length > 0) {
-        whereClause = 'WHERE ' + conditions.join(' AND ');
-      }
+      if (conditions.length > 0) whereClause = 'WHERE ' + conditions.join(' AND ');
     }
 
     const sql = `
-      SELECT
-        d.filename,
-        c.content,
-        c.position,
-        c.id as chunk_id,
-        vec_distance_cosine(v.embedding, ?) as distance,
-        cm.symbol_name,
-        cm.symbol_type,
-        cm.language,
-        cm.start_line,
-        cm.end_line,
-        cm.parent_symbol,
-        cm.signature
+      SELECT d.filename, c.content, c.position, c.id as chunk_id,
+             vec_distance_cosine(v.embedding, ?) as distance,
+             cm.symbol_name, cm.symbol_type, cm.language,
+             cm.start_line, cm.end_line, cm.parent_symbol, cm.signature
       FROM vec_chunks v
       JOIN chunks c ON v.rowid = c.id
       JOIN documents d ON c.document_id = d.id
       LEFT JOIN code_metadata cm ON c.id = cm.chunk_id
       ${whereClause}
-      ORDER BY distance ASC
-      LIMIT ?
+      ORDER BY distance ASC LIMIT ?
     `;
 
     const rows = this.db.prepare(sql).all(blob, ...whereArgs, topK) as {
-      filename: string;
-      content: string;
-      position: number;
-      chunk_id: number;
-      distance: number | null;
-      symbol_name: string | null;
-      symbol_type: string | null;
-      language: string | null;
-      start_line: number | null;
-      end_line: number | null;
-      parent_symbol: string | null;
-      signature: string | null;
+      filename: string; content: string; position: number; chunk_id: number;
+      distance: number | null; symbol_name: string | null; symbol_type: string | null;
+      language: string | null; start_line: number | null; end_line: number | null;
+      parent_symbol: string | null; signature: string | null;
     }[];
 
     return rows
@@ -279,26 +331,18 @@ export class VectorDB {
         similarity: 1.0 - ((r.distance ?? 0) / 2.0),
         position: r.position,
         metadata: r.symbol_type
-          ? {
-              symbolName: r.symbol_name ?? '',
-              symbolType: r.symbol_type,
-              language: r.language ?? '',
-              startLine: r.start_line ?? 0,
-              endLine: r.end_line ?? 0,
-              parentSymbol: r.parent_symbol ?? '',
-              signature: r.signature ?? '',
-            }
+          ? { symbolName: r.symbol_name ?? '', symbolType: r.symbol_type, language: r.language ?? '',
+              startLine: r.start_line ?? 0, endLine: r.end_line ?? 0,
+              parentSymbol: r.parent_symbol ?? '', signature: r.signature ?? '' }
           : undefined,
       }));
   }
 
   searchSymbolsByKeywords(keywords: string[], limit: number): SearchResult[] {
     if (keywords.length === 0) return [];
-
     const conditions = keywords.map(() => 'LOWER(cm.symbol_name) LIKE ?').join(' OR ');
     const args: unknown[] = keywords.map((k) => `%${k.toLowerCase()}%`);
     args.push(limit);
-
     const sql = `
       SELECT d.filename, c.content, c.position, c.id as chunk_id,
              cm.symbol_name, cm.symbol_type, cm.language,
@@ -306,99 +350,61 @@ export class VectorDB {
       FROM code_metadata cm
       JOIN chunks c ON cm.chunk_id = c.id
       JOIN documents d ON c.document_id = d.id
-      WHERE (${conditions})
-      LIMIT ?
+      WHERE (${conditions}) LIMIT ?
     `;
-
     const rows = this.db.prepare(sql).all(...args) as {
       filename: string; content: string; position: number; chunk_id: number;
       symbol_name: string; symbol_type: string; language: string;
       start_line: number; end_line: number; parent_symbol: string; signature: string;
     }[];
-
     return rows.map((r) => ({
-      document: r.filename,
-      chunk: r.content,
-      similarity: 1.0,
-      position: r.position,
-      metadata: {
-        symbolName: r.symbol_name,
-        symbolType: r.symbol_type,
-        language: r.language,
-        startLine: r.start_line,
-        endLine: r.end_line,
-        parentSymbol: r.parent_symbol,
-        signature: r.signature,
-      },
+      document: r.filename, chunk: r.content, similarity: 1.0, position: r.position,
+      metadata: { symbolName: r.symbol_name, symbolType: r.symbol_type, language: r.language,
+                  startLine: r.start_line, endLine: r.end_line, parentSymbol: r.parent_symbol, signature: r.signature },
     }));
   }
 
   findSymbolRelations(symbol: string, direction: string, relationType: string): CodeRelation[] {
     let sql: string;
     const args: unknown[] = [];
-
     if (direction === 'incoming') {
-      sql = `
-        SELECT cr.id, cr.source_chunk_id, cr.target_chunk_id, cr.relation_type,
-               cr.target_name, cr.target_file, cr.confidence,
+      sql = `SELECT cr.id, cr.source_chunk_id, cr.target_chunk_id, cr.relation_type, cr.target_name, cr.target_file, cr.confidence,
                cm.symbol_name as source_name, d.filename as source_file
-        FROM code_relations cr
-        JOIN code_metadata cm ON cr.source_chunk_id = cm.chunk_id
-        JOIN chunks c ON cm.chunk_id = c.id
-        JOIN documents d ON c.document_id = d.id
-        WHERE cr.target_name = ?`;
+             FROM code_relations cr JOIN code_metadata cm ON cr.source_chunk_id = cm.chunk_id
+             JOIN chunks c ON cm.chunk_id = c.id JOIN documents d ON c.document_id = d.id
+             WHERE cr.target_name = ?`;
       args.push(symbol);
     } else if (direction === 'outgoing') {
-      sql = `
-        SELECT cr.id, cr.source_chunk_id, cr.target_chunk_id, cr.relation_type,
-               cr.target_name, cr.target_file, cr.confidence,
+      sql = `SELECT cr.id, cr.source_chunk_id, cr.target_chunk_id, cr.relation_type, cr.target_name, cr.target_file, cr.confidence,
                cm.symbol_name as source_name, d.filename as source_file
-        FROM code_relations cr
-        JOIN code_metadata cm ON cr.source_chunk_id = cm.chunk_id
-        JOIN chunks c ON cm.chunk_id = c.id
-        JOIN documents d ON c.document_id = d.id
-        WHERE cm.symbol_name = ?`;
+             FROM code_relations cr JOIN code_metadata cm ON cr.source_chunk_id = cm.chunk_id
+             JOIN chunks c ON cm.chunk_id = c.id JOIN documents d ON c.document_id = d.id
+             WHERE cm.symbol_name = ?`;
       args.push(symbol);
     } else {
-      sql = `
-        SELECT cr.id, cr.source_chunk_id, cr.target_chunk_id, cr.relation_type,
-               cr.target_name, cr.target_file, cr.confidence,
+      sql = `SELECT cr.id, cr.source_chunk_id, cr.target_chunk_id, cr.relation_type, cr.target_name, cr.target_file, cr.confidence,
                cm.symbol_name as source_name, d.filename as source_file
-        FROM code_relations cr
-        JOIN code_metadata cm ON cr.source_chunk_id = cm.chunk_id
-        JOIN chunks c ON cm.chunk_id = c.id
-        JOIN documents d ON c.document_id = d.id
-        WHERE cr.target_name = ? OR cm.symbol_name = ?`;
+             FROM code_relations cr JOIN code_metadata cm ON cr.source_chunk_id = cm.chunk_id
+             JOIN chunks c ON cm.chunk_id = c.id JOIN documents d ON c.document_id = d.id
+             WHERE cr.target_name = ? OR cm.symbol_name = ?`;
       args.push(symbol, symbol);
     }
-
-    if (relationType) {
-      sql += ' AND cr.relation_type = ?';
-      args.push(relationType);
-    }
-
+    if (relationType) { sql += ' AND cr.relation_type = ?'; args.push(relationType); }
     const rows = this.db.prepare(sql).all(...args) as {
       id: number; source_chunk_id: number; target_chunk_id: number | null;
       relation_type: string; target_name: string; target_file: string;
       confidence: number; source_name: string; source_file: string;
     }[];
-
     return rows.map((r) => ({
-      id: r.id,
-      sourceChunkId: r.source_chunk_id,
-      targetChunkId: r.target_chunk_id ?? undefined,
-      relationType: r.relation_type,
-      targetName: r.target_name,
-      targetFile: r.target_file,
-      confidence: r.confidence,
-      sourceName: r.source_name,
-      sourceFile: r.source_file,
+      id: r.id, sourceChunkId: r.source_chunk_id, targetChunkId: r.target_chunk_id ?? undefined,
+      relationType: r.relation_type, targetName: r.target_name, targetFile: r.target_file,
+      confidence: r.confidence, sourceName: r.source_name, sourceFile: r.source_file,
     }));
   }
 
   getAllDocumentRecords(): DocumentRecord[] {
-    const rows = this.db.prepare('SELECT filename, modified_at FROM documents').all() as { filename: string; modified_at: string }[];
-    return rows.map((r) => ({ filename: r.filename, modifiedAt: new Date(r.modified_at) }));
+    const rows = this.db.prepare('SELECT filename, modified_at, doc_type FROM documents').all() as { filename: string; modified_at: string; doc_type: string }[];
+    return rows.map((r) => ({ filename: r.filename, modifiedAt: new Date(r.modified_at), docType: r.doc_type as 'doc' | 'code' }));
   }
 }
 

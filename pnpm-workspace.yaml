@@ -17,6 +17,8 @@ catalog:
   '@types/which': ^3.0.4
   '@vscode/vsce': ^3.2.2
   gray-matter: ^4.0.3
+  micromatch: ^4.0.8
+  '@types/micromatch': ^4.0.10
   hono: ^4.6.0
   sqlite-vec: ^0.1.6
   tree-sitter: ^0.25.0

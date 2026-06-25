@@ -7,7 +7,10 @@ import { loadConfigFromVsCode, type VsCodeConfiguration } from './core/config.js
 import { Embedder } from './embedder/embedder.js';
 import { VectorDB } from './vectordb/db.js';
 import { Indexer } from './indexer/indexer.js';
+import { GlobMatcher } from './core/glob-utils.js';
 import { McpLogger } from './core/logger.js';
+import { SyncManager } from './indexer/sync-manager.js';
+import { runStartupSync } from './indexer/sync.js';
 import { createCodeRagServer } from './server/coderag-server.js';
 
 export interface CodeRagServerInstance {
@@ -16,33 +19,29 @@ export interface CodeRagServerInstance {
   indexer: Indexer;
   httpServer: Server;
   transports: Map<string, WebStandardStreamableHTTPServerTransport>;
+  syncManager: SyncManager;
 }
 
-async function resolveDimensions(embedder: Embedder, config: ReturnType<typeof loadConfigFromVsCode>): Promise<number> {
-  if (config.embeddingDim !== undefined) {
-    process.stderr.write(`[INFO] Using configured embedding dimensions: ${String(config.embeddingDim)}\n`);
-    return config.embeddingDim;
-  }
+function resolveDimensions(config: ReturnType<typeof loadConfigFromVsCode>): number {
   const stored = VectorDB.readStoredDimensions(config.dbPath);
   if (stored !== null) {
     process.stderr.write(`[INFO] Using stored embedding dimensions: ${String(stored)}\n`);
     return stored;
   }
-  process.stderr.write('[INFO] New database — detecting embedding dimensions...\n');
-  const dim = await embedder.detectDimensions();
-  process.stderr.write(`[INFO] Detected embedding dimensions: ${String(dim)}\n`);
-  return dim;
+  process.stderr.write(`[INFO] Using configured embedding dimensions: ${String(config.embeddingDim)}\n`);
+  return config.embeddingDim;
 }
 
-export async function activateCodeRagServer(
+export function activateCodeRagServer(
   vsCodeConfig: VsCodeConfiguration,
   workspaceFolders: string[],
   port = 3100
 ): Promise<CodeRagServerInstance> {
   const config = loadConfigFromVsCode(vsCodeConfig, workspaceFolders);
+  const cwd = workspaceFolders[0] ?? process.cwd();
 
   const embedder = new Embedder(config.embedding);
-  const dimensions = await resolveDimensions(embedder, config);
+  const dimensions = resolveDimensions(config);
   const db = VectorDB.open(config.dbPath, dimensions);
 
   const server = new McpServer(
@@ -50,14 +49,20 @@ export async function activateCodeRagServer(
     { capabilities: { tools: {}, logging: {} } }
   );
   const logger = new McpLogger(server, 'coderag');
+  const syncManager = new SyncManager();
 
-  const indexer = new Indexer(db, embedder, config.chunkSize, {
-    globalExclude: config.exclude,
-    useGitignore: config.useGitignore,
-    logger,
+  const docsMatcher = new GlobMatcher(config.globs.docsInclude, config.globs.docsExclude, cwd, config.useGitignore);
+  const codeMatcher = new GlobMatcher(config.globs.codeInclude, config.globs.codeExclude, cwd, config.useGitignore);
+
+  const indexer = new Indexer(db, embedder, config.chunkSize, { docsMatcher, codeMatcher, logger });
+
+  const includeDirs = config.globs.docsInclude.map((p) => {
+    const abs = p.startsWith('/') ? p : `${cwd}/${p}`;
+    const base = abs.replace(/[*?{[!].*$/, '').replace(/\/+$/, '');
+    return base || cwd;
   });
 
-  createCodeRagServer(server, db, embedder, indexer, config.topK, config.documentsDir, logger);
+  createCodeRagServer(server, db, embedder, indexer, config.topK, [...new Set(includeDirs)], syncManager, logger);
 
   const transports = new Map<string, WebStandardStreamableHTTPServerTransport>();
   const app = createMcpHonoApp({ host: '127.0.0.1' });
@@ -80,6 +85,13 @@ export async function activateCodeRagServer(
           if (sid) transports.delete(sid);
         };
         await server.connect(transport);
+
+        // Startup sync on first session connect
+        setImmediate(() => {
+          void runStartupSync(db, indexer, syncManager, config, cwd, logger).catch((err: unknown) => {
+            logger.error(`Startup sync failed: ${String(err)}`);
+          });
+        });
       }
       return await transport.handleRequest(c.req.raw);
     } catch (err) {
@@ -104,12 +116,10 @@ export async function activateCodeRagServer(
 
   const httpServer = serve(
     { fetch: app.fetch, port },
-    () => {
-      logger.info(`CodeRAG MCP Server running on port ${String(port)}`);
-    }
+    () => { logger.info(`CodeRAG MCP Server running on port ${String(port)}`); }
   ) as unknown as Server;
 
-  return { server, db, indexer, httpServer, transports };
+  return Promise.resolve({ server, db, indexer, httpServer, transports, syncManager });
 }
 
 export async function deactivateCodeRagServer(instance: CodeRagServerInstance): Promise<void> {

@@ -6,6 +6,7 @@ import { Indexer } from '../../../src/indexer/indexer.js';
 import { VectorDB } from '../../../src/vectordb/db.js';
 import { Embedder } from '../../../src/embedder/embedder.js';
 import type { EmbeddingConfig } from '../../../src/core/types.js';
+import { GlobMatcher } from '../../../src/core/glob-utils.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const tmpDir = path.join(__dirname, '../../../.tmp-indexer-test');
@@ -272,5 +273,134 @@ describe('Indexer.indexMarkdownDirectory', () => {
     const embedder = makeBatchEmbedder(DIM);
     const indexer = new Indexer(db, embedder, 500);
     await expect(indexer.indexMarkdownDirectory(path.join(tmpDir, 'noexist'), false)).resolves.not.toThrow();
+  });
+});
+
+describe('Indexer.isDocExcluded', () => {
+  it('returns false when no docsMatcher is configured', () => {
+    const indexer = new Indexer(db, makeBatchEmbedder(DIM), 500);
+    expect(indexer.isDocExcluded('/any/file.md')).toBe(false);
+  });
+
+  it('returns true for a file excluded by docsMatcher', () => {
+    const indexer = new Indexer(db, makeBatchEmbedder(DIM), 500, {
+      docsMatcher: new GlobMatcher(['**/*.md'], ['**/*.draft.md'], tmpDir),
+    });
+    expect(indexer.isDocExcluded(path.join(tmpDir, 'doc.draft.md'))).toBe(true);
+  });
+
+  it('returns false for a non-excluded file', () => {
+    const indexer = new Indexer(db, makeBatchEmbedder(DIM), 500, {
+      docsMatcher: new GlobMatcher(['**/*.md'], ['**/*.draft.md'], tmpDir),
+    });
+    expect(indexer.isDocExcluded(path.join(tmpDir, 'guide.md'))).toBe(false);
+  });
+});
+
+describe('Indexer.isCodeExcluded', () => {
+  it('returns false when no codeMatcher is configured', () => {
+    const indexer = new Indexer(db, makeBatchEmbedder(DIM), 500);
+    expect(indexer.isCodeExcluded('/any/file.ts')).toBe(false);
+  });
+
+  it('returns true for a file excluded by codeMatcher', () => {
+    const indexer = new Indexer(db, makeBatchEmbedder(DIM), 500, {
+      codeMatcher: new GlobMatcher(['**/*.ts'], ['**/*.test.ts'], tmpDir),
+    });
+    expect(indexer.isCodeExcluded(path.join(tmpDir, 'app.test.ts'))).toBe(true);
+  });
+
+  it('returns false for a non-excluded file', () => {
+    const indexer = new Indexer(db, makeBatchEmbedder(DIM), 500, {
+      codeMatcher: new GlobMatcher(['**/*.ts'], ['**/*.test.ts'], tmpDir),
+    });
+    expect(indexer.isCodeExcluded(path.join(tmpDir, 'app.ts'))).toBe(false);
+  });
+});
+
+describe('Indexer.scanDocs', () => {
+  it('returns zero counts when no docsMatcher is set', async () => {
+    const indexer = new Indexer(db, makeBatchEmbedder(DIM), 500);
+    const result = await indexer.scanDocs();
+    expect(result).toEqual({ indexed: 0, skipped: 0, failed: 0, added: 0, updated: 0 });
+  });
+
+  it('finds and indexes markdown files via docsMatcher', async () => {
+    writeFileSync(path.join(tmpDir, 'guide.md'), '# Guide\n\nContent.');
+    writeFileSync(path.join(tmpDir, 'app.ts'), 'function x() {}');
+    const tmpFwd = tmpDir.replace(/\\/g, '/');
+    const indexer = new Indexer(db, makeBatchEmbedder(DIM), 500, {
+      docsMatcher: new GlobMatcher([`${tmpFwd}/**/*.md`], [], tmpDir),
+    });
+    const result = await indexer.scanDocs();
+    expect(result.indexed).toBe(1);
+    expect(db.listDocumentsByType('doc').size).toBe(1);
+  });
+
+  it('skips unchanged files on second scan', async () => {
+    writeFileSync(path.join(tmpDir, 'stable.md'), '# Stable\n\nContent.');
+    const tmpFwd = tmpDir.replace(/\\/g, '/');
+    const indexer = new Indexer(db, makeBatchEmbedder(DIM), 500, {
+      docsMatcher: new GlobMatcher([`${tmpFwd}/**/*.md`], [], tmpDir),
+    });
+    await indexer.scanDocs();
+    const result2 = await indexer.scanDocs();
+    expect(result2.indexed).toBe(0);
+    expect(result2.skipped).toBeGreaterThanOrEqual(1);
+  });
+
+  it('re-indexes all files when force = true', async () => {
+    writeFileSync(path.join(tmpDir, 'doc.md'), '# Doc\n\nContent.');
+    const tmpFwd = tmpDir.replace(/\\/g, '/');
+    const indexer = new Indexer(db, makeBatchEmbedder(DIM), 500, {
+      docsMatcher: new GlobMatcher([`${tmpFwd}/**/*.md`], [], tmpDir),
+    });
+    await indexer.scanDocs();
+    const result2 = await indexer.scanDocs(true);
+    expect(result2.indexed).toBe(1);
+    expect(result2.skipped).toBe(0);
+  });
+});
+
+describe('Indexer.scanCode', () => {
+  it('returns zero counts when no codeMatcher is set', async () => {
+    const indexer = new Indexer(db, makeBatchEmbedder(DIM), 500);
+    const result = await indexer.scanCode();
+    expect(result).toEqual({ indexed: 0, skipped: 0, failed: 0, added: 0, updated: 0 });
+  });
+
+  it('finds and indexes TypeScript files via codeMatcher', async () => {
+    writeFileSync(path.join(tmpDir, 'fn.ts'), 'export function fn() { return 1; }');
+    const tmpFwd = tmpDir.replace(/\\/g, '/');
+    const indexer = new Indexer(db, makeBatchEmbedder(DIM), 500, {
+      codeMatcher: new GlobMatcher([`${tmpFwd}/**/*.ts`], [], tmpDir),
+    });
+    const result = await indexer.scanCode();
+    expect(result.indexed).toBe(1);
+    expect(db.listDocumentsByType('code').size).toBe(1);
+  });
+
+  it('skips unchanged files on second scan', async () => {
+    writeFileSync(path.join(tmpDir, 'fn.ts'), 'export function fn() {}');
+    const tmpFwd = tmpDir.replace(/\\/g, '/');
+    const indexer = new Indexer(db, makeBatchEmbedder(DIM), 500, {
+      codeMatcher: new GlobMatcher([`${tmpFwd}/**/*.ts`], [], tmpDir),
+    });
+    await indexer.scanCode();
+    const result2 = await indexer.scanCode();
+    expect(result2.indexed).toBe(0);
+    expect(result2.skipped).toBeGreaterThanOrEqual(1);
+  });
+
+  it('re-indexes all files when force = true', async () => {
+    writeFileSync(path.join(tmpDir, 'fn2.ts'), 'export function fn2() {}');
+    const tmpFwd = tmpDir.replace(/\\/g, '/');
+    const indexer = new Indexer(db, makeBatchEmbedder(DIM), 500, {
+      codeMatcher: new GlobMatcher([`${tmpFwd}/**/*.ts`], [], tmpDir),
+    });
+    await indexer.scanCode();
+    const result2 = await indexer.scanCode(true);
+    expect(result2.indexed).toBe(1);
+    expect(result2.skipped).toBe(0);
   });
 });

@@ -12,7 +12,7 @@ export class McpLogger {
   log(level: LoggingLevel, data: unknown): void {
     const msg = typeof data === 'string' ? data : JSON.stringify(data);
     process.stderr.write(`[${level.toUpperCase()}] [${this.name}] ${msg}\n`);
-    void this.server.sendLoggingMessage({ level, logger: this.name, data }).catch(() => {});
+    void this.server.sendLoggingMessage({ level, logger: this.name, data }).catch((_e: unknown) => { /* fire-and-forget */ });
   }
 
   debug(data: unknown): void { this.log('debug', data); }

@@ -7,6 +7,7 @@ export default defineConfig({
     pool: 'forks',
     clearMocks: true,
     restoreMocks: true,
+    exclude: ['**/.tmp-*/**', '**/node_modules/**', '**/dist/**'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'lcov', 'html'],

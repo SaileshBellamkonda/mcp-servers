@@ -3,6 +3,7 @@ import type { VectorDB } from '../vectordb/db.js';
 import type { Embedder } from '../embedder/embedder.js';
 import type { Indexer } from '../indexer/indexer.js';
 import type { McpLogger } from '../core/logger.js';
+import type { SyncManager } from '../indexer/sync-manager.js';
 import { registerSearch } from '../tools/search.js';
 import { registerIndexMarkdown } from '../tools/index-markdown.js';
 import { registerListDocuments } from '../tools/list-documents.js';
@@ -20,17 +21,18 @@ export function createCodeRagServer(
   embedder: Embedder,
   indexer: Indexer,
   defaultTopK: number,
-  documentsDir: string,
+  includeDirs: string[],
+  syncManager: SyncManager,
   logger?: McpLogger,
 ): void {
   registerSearch(server, db, embedder, defaultTopK);
-  registerIndexMarkdown(server, indexer);
+  registerIndexMarkdown(server, indexer, syncManager);
   registerListDocuments(server, db);
-  registerDeleteDocument(server, db);
-  registerReindexDocument(server, db, indexer);
+  registerDeleteDocument(server, db, syncManager);
+  registerReindexDocument(server, db, indexer, syncManager);
   registerAddFrontmatter(server);
   registerUpdateFrontmatter(server);
-  registerIndexCode(server, indexer);
+  registerIndexCode(server, indexer, syncManager);
   registerSearchRelations(server, db);
-  registerSyncDocuments(server, db, indexer, documentsDir, logger);
+  registerSyncDocuments(server, db, indexer, includeDirs, syncManager, logger);
 }

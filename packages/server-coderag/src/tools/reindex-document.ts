@@ -3,17 +3,19 @@ import { z } from 'zod';
 import path from 'node:path';
 import type { VectorDB } from '../vectordb/db.js';
 import type { Indexer } from '../indexer/indexer.js';
+import type { SyncManager } from '../indexer/sync-manager.js';
+import { syncLockedResponse } from '../indexer/sync-manager.js';
 import { isSupportedExtension } from '../indexer/languages.js';
 
 const ReindexDocumentSchema = z.object({
-  filename: z.string().min(1).describe('Full path of the file to delete and re-index'),
+  filename: z.string().min(1),
 });
 
-export function registerReindexDocument(server: McpServer, db: VectorDB, indexer: Indexer): void {
+export function registerReindexDocument(server: McpServer, db: VectorDB, indexer: Indexer, syncManager: SyncManager): void {
   server.registerTool(
     'reindex_document',
     {
-      description: 'Delete and re-index a file. Works for both markdown and source code files.',
+      description: 'Delete and re-index a file. Works for both markdown and source code files. Returns { locked: true } if a sync is in progress.',
       inputSchema: fromJsonSchema({
         type: 'object',
         properties: {
@@ -23,25 +25,28 @@ export function registerReindexDocument(server: McpServer, db: VectorDB, indexer
       }),
     },
     async (input: unknown) => {
-      const { filename } = ReindexDocumentSchema.parse(input);
+      if (syncManager.inProgress) return syncLockedResponse(syncManager.status);
 
-      // Delete existing index entry if present
-      try {
-        db.deleteDocument(filename);
-      } catch {
-        // Not previously indexed — that's fine, just index fresh
+      const { filename } = ReindexDocumentSchema.parse(input);
+      const ext = path.extname(filename).toLowerCase();
+      const isCode = isSupportedExtension(ext);
+
+      if (isCode && indexer.isCodeExcluded(filename)) {
+        return { content: [{ type: 'text', text: JSON.stringify({ success: false, excluded: true, filename, error: 'File is excluded by configured code exclusion patterns' }) }] };
+      }
+      if (!isCode && indexer.isDocExcluded(filename)) {
+        return { content: [{ type: 'text', text: JSON.stringify({ success: false, excluded: true, filename, error: 'File is excluded by configured docs exclusion patterns' }) }] };
       }
 
-      const ext = path.extname(filename).toLowerCase();
-      if (isSupportedExtension(ext)) {
+      try { db.deleteDocument(filename); } catch { /* not previously indexed */ }
+
+      if (isCode) {
         await indexer.indexCodeFile(filename);
       } else {
         await indexer.indexFile(filename);
       }
 
-      return {
-        content: [{ type: 'text', text: JSON.stringify({ success: true, filename }) }],
-      };
+      return { content: [{ type: 'text', text: JSON.stringify({ success: true, filename }) }] };
     }
   );
 }

@@ -57,11 +57,13 @@
     "tree-sitter-ruby": "catalog:",
     "tree-sitter-bash": "catalog:",
     "gray-matter": "catalog:",
+    "micromatch": "catalog:",
     "zod": "catalog:"
   },
   "devDependencies": {
     "@tsconfig/node22": "catalog:",
     "@types/better-sqlite3": "catalog:",
+    "@types/micromatch": "catalog:",
     "@types/node": "catalog:",
     "@vitest/coverage-v8": "catalog:",
     "tsx": "catalog:",

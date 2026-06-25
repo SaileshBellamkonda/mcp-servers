@@ -248,3 +248,156 @@ describe('getAllDocumentRecords', () => {
     expect(records.some((r) => r.filename === '/docs/a.md')).toBe(true);
   });
 });
+
+describe('listDocumentsByType', () => {
+  it('returns only doc entries when filtering by "doc"', () => {
+    db.insertDocument('/docs/a.md', new Date(), makeMarkdownChunks(['doc']), [[0.1, 0.2, 0.3, 0.4]]);
+    db.insertCodeDocument('/src/b.ts', new Date(), [makeCodeChunk()], [[0.5, 0.6, 0.7, 0.8]]);
+    const docs = db.listDocumentsByType('doc');
+    expect(docs.has('/docs/a.md')).toBe(true);
+    expect(docs.has('/src/b.ts')).toBe(false);
+  });
+
+  it('returns only code entries when filtering by "code"', () => {
+    db.insertDocument('/docs/a.md', new Date(), makeMarkdownChunks(['doc']), [[0.1, 0.2, 0.3, 0.4]]);
+    db.insertCodeDocument('/src/b.ts', new Date(), [makeCodeChunk()], [[0.5, 0.6, 0.7, 0.8]]);
+    const code = db.listDocumentsByType('code');
+    expect(code.has('/src/b.ts')).toBe(true);
+    expect(code.has('/docs/a.md')).toBe(false);
+  });
+
+  it('returns empty map when no documents of that type exist', () => {
+    db.insertDocument('/docs/a.md', new Date(), makeMarkdownChunks(['doc']), [[0.1, 0.2, 0.3, 0.4]]);
+    expect(db.listDocumentsByType('code').size).toBe(0);
+  });
+
+  it('includes modification timestamps', () => {
+    const modTime = new Date('2024-03-01T00:00:00Z');
+    db.insertDocument('/docs/dated.md', modTime, makeMarkdownChunks(['x']), [[0.1, 0.2, 0.3, 0.4]]);
+    const docs = db.listDocumentsByType('doc');
+    const stored = docs.get('/docs/dated.md');
+    expect(stored).toBeDefined();
+    expect(stored!.getTime()).toBeCloseTo(modTime.getTime(), -3);
+  });
+});
+
+describe('getDocumentCountByType', () => {
+  it('returns 0 when DB is empty', () => {
+    expect(db.getDocumentCountByType('doc')).toBe(0);
+    expect(db.getDocumentCountByType('code')).toBe(0);
+  });
+
+  it('counts only doc-type entries', () => {
+    db.insertDocument('/a.md', new Date(), makeMarkdownChunks(['a']), [[0.1, 0.2, 0.3, 0.4]]);
+    db.insertDocument('/b.md', new Date(), makeMarkdownChunks(['b']), [[0.5, 0.6, 0.7, 0.8]]);
+    db.insertCodeDocument('/c.ts', new Date(), [makeCodeChunk()], [[0.9, 0.1, 0.2, 0.3]]);
+    expect(db.getDocumentCountByType('doc')).toBe(2);
+    expect(db.getDocumentCountByType('code')).toBe(1);
+  });
+});
+
+describe('saveRules and getStoredRules', () => {
+  it('getStoredRules returns null when no rules have been saved', () => {
+    expect(db.getStoredRules()).toBeNull();
+  });
+
+  it('round-trips all four glob arrays', () => {
+    const globs = {
+      docsInclude: ['**/*.md', 'docs/**/*.txt'],
+      docsExclude: ['drafts/**'],
+      codeInclude: ['**/*.ts', '**/*.py'],
+      codeExclude: ['**/*.test.ts', 'dist/**'],
+    };
+    db.saveRules(globs);
+    const stored = db.getStoredRules();
+    expect(stored?.docsInclude).toEqual(globs.docsInclude);
+    expect(stored?.docsExclude).toEqual(globs.docsExclude);
+    expect(stored?.codeInclude).toEqual(globs.codeInclude);
+    expect(stored?.codeExclude).toEqual(globs.codeExclude);
+  });
+
+  it('overwrites previous rules on second save', () => {
+    db.saveRules({ docsInclude: ['**/*.md'], docsExclude: [], codeInclude: [], codeExclude: [] });
+    db.saveRules({ docsInclude: ['**/*.txt'], docsExclude: ['drafts/**'], codeInclude: ['**/*.ts'], codeExclude: [] });
+    const stored = db.getStoredRules();
+    expect(stored?.docsInclude).toEqual(['**/*.txt']);
+    expect(stored?.docsExclude).toEqual(['drafts/**']);
+  });
+
+  it('returns null after saving only empty arrays', () => {
+    db.saveRules({ docsInclude: [], docsExclude: [], codeInclude: [], codeExclude: [] });
+    expect(db.getStoredRules()).toBeNull();
+  });
+
+  it('preserves pattern order', () => {
+    const patterns = ['z/**/*.md', 'a/**/*.md', 'm/**/*.md'];
+    db.saveRules({ docsInclude: patterns, docsExclude: [], codeInclude: [], codeExclude: [] });
+    expect(db.getStoredRules()?.docsInclude).toEqual(patterns);
+  });
+});
+
+describe('getLastSyncAt and setLastSyncAt', () => {
+  it('returns null before any sync timestamp is stored', () => {
+    expect(db.getLastSyncAt('docs')).toBeNull();
+    expect(db.getLastSyncAt('code')).toBeNull();
+  });
+
+  it('round-trips docs sync timestamp', () => {
+    const date = new Date('2024-06-01T10:00:00.000Z');
+    db.setLastSyncAt('docs', date);
+    expect(db.getLastSyncAt('docs')?.toISOString()).toBe(date.toISOString());
+  });
+
+  it('round-trips code sync timestamp', () => {
+    const date = new Date('2024-07-15T08:30:00.000Z');
+    db.setLastSyncAt('code', date);
+    expect(db.getLastSyncAt('code')?.toISOString()).toBe(date.toISOString());
+  });
+
+  it('docs and code timestamps are stored independently', () => {
+    const d1 = new Date('2024-01-01T00:00:00.000Z');
+    const d2 = new Date('2024-06-01T00:00:00.000Z');
+    db.setLastSyncAt('docs', d1);
+    db.setLastSyncAt('code', d2);
+    expect(db.getLastSyncAt('docs')?.toISOString()).toBe(d1.toISOString());
+    expect(db.getLastSyncAt('code')?.toISOString()).toBe(d2.toISOString());
+  });
+
+  it('updates the timestamp on a second call', () => {
+    const d1 = new Date('2024-01-01T00:00:00.000Z');
+    const d2 = new Date('2024-12-31T00:00:00.000Z');
+    db.setLastSyncAt('docs', d1);
+    db.setLastSyncAt('docs', d2);
+    expect(db.getLastSyncAt('docs')?.toISOString()).toBe(d2.toISOString());
+  });
+});
+
+describe('getAllDocumentRecords docType field', () => {
+  it('returns docType "doc" for markdown documents', () => {
+    db.insertDocument('/docs/a.md', new Date(), makeMarkdownChunks(['a']), [[0.1, 0.2, 0.3, 0.4]]);
+    const rec = db.getAllDocumentRecords().find((r) => r.filename === '/docs/a.md');
+    expect(rec?.docType).toBe('doc');
+  });
+
+  it('returns docType "code" for code documents', () => {
+    db.insertCodeDocument('/src/app.ts', new Date(), [makeCodeChunk()], [[0.1, 0.2, 0.3, 0.4]]);
+    const rec = db.getAllDocumentRecords().find((r) => r.filename === '/src/app.ts');
+    expect(rec?.docType).toBe('code');
+  });
+});
+
+describe('dimension mismatch auto-repair', () => {
+  it('resets stored dim and clears sync timestamps when dim changes', () => {
+    const dbPath = path.join(tmpDir, 'mismatch.db');
+    const db1 = VectorDB.open(dbPath, 4);
+    db1.insertDocument('/doc.md', new Date(), makeMarkdownChunks(['hello']), [[0.1, 0.2, 0.3, 0.4]]);
+    db1.setLastSyncAt('docs', new Date('2024-01-01T00:00:00.000Z'));
+    db1.close();
+
+    const db2 = VectorDB.open(dbPath, 8);
+    expect(db2.getStoredDimensions()).toBe(8);
+    expect(db2.listDocuments().has('/doc.md')).toBe(true);
+    expect(db2.getLastSyncAt('docs')).toBeNull();
+    db2.close();
+  });
+});
