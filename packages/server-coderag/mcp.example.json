@@ -1,0 +1,45 @@
+{
+  "mcpServers": {
+    "coderag-ollama": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["dist/standalone.js"],
+      "env": {
+        "CODERAG_EMBEDDING_URL": "http://localhost:11434/v1",
+        "CODERAG_EMBEDDING_MODEL": "nomic-embed-text",
+        "CODERAG_DB_PATH": "/path/to/coderag.db"
+      }
+    },
+    "coderag-openai": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["dist/standalone.js"],
+      "env": {
+        "CODERAG_EMBEDDING_URL": "https://api.openai.com/v1",
+        "CODERAG_EMBEDDING_MODEL": "text-embedding-3-small",
+        "CODERAG_EMBEDDING_API_KEY": "sk-...",
+        "CODERAG_EMBEDDING_DIM": "1536",
+        "CODERAG_DB_PATH": "/path/to/coderag.db"
+      }
+    },
+    "coderag-full": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["dist/standalone.js"],
+      "env": {
+        "CODERAG_EMBEDDING_URL": "http://localhost:11434/v1",
+        "CODERAG_EMBEDDING_MODEL": "nomic-embed-text",
+        "CODERAG_EMBEDDING_API_KEY": "",
+        "CODERAG_EMBEDDING_DIM": "768",
+        "CODERAG_DB_PATH": "/path/to/coderag.db",
+        "CODERAG_CHUNK_SIZE": "500",
+        "CODERAG_TOP_K": "5",
+        "CODERAG_USE_GITIGNORE": "true",
+        "CODERAG_DOCS_INCLUDE": "**/*.md",
+        "CODERAG_DOCS_EXCLUDE": "drafts/**;**/*.draft.md",
+        "CODERAG_CODE_INCLUDE": "**/*.{ts,tsx};**/*.{js,jsx};**/*.py;**/*.go;**/*.rs;**/*.java;**/*.cs;**/*.{cpp,c};**/*.rb;**/*.php;**/*.sh;**/*.vue",
+        "CODERAG_CODE_EXCLUDE": "**/*.test.ts;**/*.spec.ts;dist/**;build/**"
+      }
+    }
+  }
+}
