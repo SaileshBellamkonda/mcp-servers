@@ -2,6 +2,7 @@ import { execFile } from 'node:child_process';
 import which from 'which';
 import { GitMcpError, ErrorCode } from './types.js';
 import type { GitCommandResult, ExecuteOptions } from './types.js';
+import type { McpLogger } from './logger.js';
 
 /**
  * Executes Git commands safely with timeout protection
@@ -9,6 +10,11 @@ import type { GitCommandResult, ExecuteOptions } from './types.js';
 export class GitExecutor {
   private static readonly DEFAULT_TIMEOUT = 30000; // 30 seconds
   private static gitPath: string | null = null;
+  private readonly logger: McpLogger | undefined;
+
+  constructor(logger?: McpLogger) {
+    this.logger = logger;
+  }
 
   /**
    * Find git executable path
@@ -48,6 +54,7 @@ export class GitExecutor {
   ): Promise<GitCommandResult> {
     const timeout = options.timeout ?? GitExecutor.DEFAULT_TIMEOUT;
     const gitPath = await GitExecutor.findGit();
+    this.logger?.debug({ cmd: `git ${args.join(' ')}`, cwd: repoPath });
 
     return new Promise((resolve, reject) => {
       let timedOut = false;
@@ -70,7 +77,7 @@ export class GitExecutor {
           // Timeout error
           reject(new GitMcpError(
             ErrorCode.GIT_ERROR,
-            `Git command timed out after ${timeout}ms`,
+            `Git command timed out after ${String(timeout)}ms`,
             { args, timeout }
           ));
           return;

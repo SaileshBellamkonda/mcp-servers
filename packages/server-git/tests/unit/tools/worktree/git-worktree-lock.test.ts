@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { McpServer } from '@modelcontextprotocol/server';
 import { registerGitWorktreeLock } from '../../../../src/tools/worktree/git-worktree-lock.js';
 import { RepositoryManager } from '../../../../src/core/repository-manager.js';
 import { PathValidator } from '../../../../src/core/path-validator.js';

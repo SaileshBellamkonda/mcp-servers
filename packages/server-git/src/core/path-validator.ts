@@ -17,7 +17,11 @@ export class PathValidator {
     /^C:\\Program Files/i,
   ];
 
-  constructor(private repoManager: RepositoryManager) {}
+  private readonly repoManager: RepositoryManager;
+
+  constructor(repoManager: RepositoryManager) {
+    this.repoManager = repoManager;
+  }
 
   /**
    * Validate a path is safe and within an allowed repository.
@@ -25,10 +29,10 @@ export class PathValidator {
    * @throws GitMcpError if path is invalid or unsafe
    */
   validatePath(repoPath: string, filePath: string): string {
-    // Validate repository first
+    // validateRepository returns a path already normalized with path.normalize()
     const validatedRepo = this.repoManager.validateRepository(repoPath);
 
-    // Check for dangerous patterns
+    // Check for dangerous patterns before resolution
     if (!this.isSafePath(filePath)) {
       throw new GitMcpError(
         ErrorCode.SECURITY_ERROR,
@@ -37,25 +41,19 @@ export class PathValidator {
       );
     }
 
-    // Convert validatedRepo (stored with forward slashes) to platform-specific form
-    const validatedRepoPlatform = validatedRepo.split('/').join(path.sep);
-    const resolvedPlatform = path.resolve(validatedRepoPlatform, filePath);
-    // Normalize both for robust comparison
-    const normalizedRepo = path.normalize(validatedRepoPlatform);
-    const normalizedResolved = path.normalize(resolvedPlatform);
-
-    // Ensure resolved path is within repository (OWASP A01 — path traversal prevention)
-    const relativeToRepo = path.relative(normalizedRepo, normalizedResolved);
+    // Resolve and normalize using native path APIs (OWASP A01 — path traversal prevention)
+    const resolved = path.normalize(path.resolve(validatedRepo, filePath));
+    const relativeToRepo = path.relative(validatedRepo, resolved);
     const isInside = relativeToRepo === '' || (!relativeToRepo.startsWith('..' + path.sep) && relativeToRepo !== '..');
     if (!isInside) {
       throw new GitMcpError(
         ErrorCode.SECURITY_ERROR,
         `Path outside repository: ${filePath}`,
-        { path: filePath, repository: repoPath, resolved: normalizedResolved }
+        { path: filePath, repository: repoPath, resolved }
       );
     }
 
-    return normalizedResolved;
+    return resolved;
   }
 
   /**

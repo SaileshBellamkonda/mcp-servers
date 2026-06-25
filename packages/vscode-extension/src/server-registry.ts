@@ -14,7 +14,7 @@ export class ServerRegistry implements vscode.Disposable {
   readonly onDidChange: vscode.Event<void> = this._onDidChange.event;
 
   /** Read-only snapshot of all registered servers in insertion order. */
-  get servers(): ReadonlyArray<IManagedServer> {
+  get servers(): readonly IManagedServer[] {
     return Array.from(this._servers.values());
   }
 
@@ -24,8 +24,8 @@ export class ServerRegistry implements vscode.Disposable {
    */
   register(server: IManagedServer): void {
     this._servers.set(server.id, server);
-    const sub = server.onDidChangeStatus(() => this._onDidChange.fire());
-    this._subscriptions.push(sub as vscode.Disposable);
+    const sub = server.onDidChangeStatus(() => { this._onDidChange.fire(); });
+    this._subscriptions.push(sub);
   }
 
   /** Start the server with the given id. Throws if id is not registered. */
@@ -52,6 +52,6 @@ export class ServerRegistry implements vscode.Disposable {
 
   dispose(): void {
     this._onDidChange.dispose();
-    this._subscriptions.forEach(s => s.dispose());
+    this._subscriptions.forEach(s => { s.dispose(); });
   }
 }

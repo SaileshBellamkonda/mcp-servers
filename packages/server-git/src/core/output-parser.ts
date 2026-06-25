@@ -17,8 +17,8 @@ export class OutputParser {
         const statusCode = line.substring(0, 2);
         const path = line.substring(3);
         
-        const staged = statusCode[0] !== ' ' && statusCode[0] !== '?';
-        const unstaged = statusCode[1] !== ' ' || statusCode[0] === '?';
+        const staged = !statusCode.startsWith(' ') && !statusCode.startsWith('?');
+        const unstaged = statusCode[1] !== ' ' || statusCode.startsWith('?');
 
         return {
           path,

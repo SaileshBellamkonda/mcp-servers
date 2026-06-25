@@ -1,9 +1,9 @@
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { type McpServer, fromJsonSchema } from '@modelcontextprotocol/server';
 import { z } from 'zod';
 import type { Services } from '../core/types.js';
 
 const GitStatusSchema = z.object({
-  repository: z.string().describe('Repository path')
+  repository: z.string().describe('Repository path'),
 });
 
 export function registerGitStatus(server: McpServer, services: Services): void {
@@ -11,50 +11,40 @@ export function registerGitStatus(server: McpServer, services: Services): void {
     'git_status',
     {
       description: 'Get the current status of a Git repository',
-      inputSchema: GitStatusSchema
+      inputSchema: fromJsonSchema({
+        type: 'object',
+        properties: {
+          repository: { type: 'string', description: 'Repository path' },
+        },
+        required: ['repository'],
+      }),
     },
-    async (input) => {
+    async (input: unknown) => {
       const { repository } = GitStatusSchema.parse(input);
-      
-      // Validate repository
+
       services.repoManager.validateRepository(repository);
-      
-      // Execute git status
+
       const result = await services.gitExecutor.execute(
         repository,
         ['status', '--porcelain', '--branch']
       );
-      
+
       if (!result.success) {
+        services.logger?.error({ tool: 'git_status', repository, error: result.stderr });
         throw new Error(`Git status failed: ${result.stderr}`);
       }
-      
-      // Parse output
+
       const lines = result.stdout.split('\n');
       const branchLine = lines[0] ?? '';
       const fileLines = lines.slice(1).join('\n');
-      
-      // Extract branch info
-      const branchMatch = branchLine.match(/## ([^\s.]+)/);
+
+      const branchMatch = /## ([^\s.]+)/.exec(branchLine);
       const branch = branchMatch ? branchMatch[1] : 'unknown';
-      
-      // Parse file statuses
+
       const files = services.outputParser.parseStatus(fileLines);
-      
-      const status = {
-        branch,
-        ahead: 0,
-        behind: 0,
-        files
-      };
 
       return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify(status, null, 2)
-          }
-        ]
+        content: [{ type: 'text', text: JSON.stringify({ branch, ahead: 0, behind: 0, files }, null, 2) }],
       };
     }
   );

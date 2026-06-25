@@ -19,15 +19,15 @@ export class RepositoryManager {
 
   validateRepository(repoPath: string): string {
     const normalized = this.normalizePath(repoPath);
-    
-    if (!this.isRepositoryAllowed(normalized)) {
+
+    if (!this.allowedRepos.includes(normalized)) {
       throw new GitMcpError(
         ErrorCode.SECURITY_ERROR,
         `Repository not allowed: ${repoPath}`,
         { repository: repoPath, allowed: this.allowedRepos }
       );
     }
-    
+
     return normalized;
   }
 

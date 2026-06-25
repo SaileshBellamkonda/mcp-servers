@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { McpServer } from '@modelcontextprotocol/server';
 import { createGitServer } from '../../src/server/git-server.js';
 import { RepositoryManager } from '../../src/core/repository-manager.js';
 import { TestRepository } from '../fixtures/test-repo.js';

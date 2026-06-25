@@ -3,6 +3,7 @@
   "files": [],
   "references": [
     { "path": "packages/server-git" },
+    { "path": "packages/server-coderag" },
     { "path": "packages/vscode-extension" }
   ]
 }

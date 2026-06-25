@@ -1,9 +1,10 @@
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { McpServer } from '@modelcontextprotocol/server';
 import { RepositoryManager } from '../core/repository-manager.js';
 import { PathValidator } from '../core/path-validator.js';
 import { GitExecutor } from '../core/git-executor.js';
 import { OutputParser } from '../core/output-parser.js';
 import type { Services } from '../core/types.js';
+import type { McpLogger } from '../core/logger.js';
 
 // Import all tool registration functions
 import { registerGitWorkspaces } from '../tools/git-workspaces.js';
@@ -26,11 +27,12 @@ import { registerGitWorktreeUnlock } from '../tools/worktree/git-worktree-unlock
  */
 export function createGitServer(
   server: McpServer,
-  repoManager: RepositoryManager
+  repoManager: RepositoryManager,
+  logger?: McpLogger,
 ): void {
   // Create core services
   const pathValidator = new PathValidator(repoManager);
-  const gitExecutor = new GitExecutor();
+  const gitExecutor = new GitExecutor(logger);
   const outputParser = new OutputParser();
 
   const services: Services = {
@@ -38,6 +40,7 @@ export function createGitServer(
     pathValidator,
     gitExecutor,
     outputParser,
+    ...(logger !== undefined && { logger }),
   };
 
   // Register all tools

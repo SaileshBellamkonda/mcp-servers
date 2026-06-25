@@ -60,21 +60,21 @@ export class GitServerAdapter implements IManagedServer {
         '@mcp-servers/server-git/embedded'
       );
       const paths = folders.map(f => f.uri.fsPath);
-      const instance = await activateGitServer(paths, port);
+      const instance = await activateGitServer(paths, port) as { httpServer: HttpServerLike };
 
       this._httpServer = instance.httpServer;
       this._port = port;
       this.setStatus('running');
       this._outputChannel.appendLine(
-        `Git MCP Server started on port ${port}`
+        `Git MCP Server started on port ${String(port)}`
       );
-    } catch (err) {
+    } catch (err: unknown) {
       this.setStatus('error');
       this._outputChannel.appendLine(
         `Git MCP Server failed to start: ${String(err)}`
       );
       vscode.window.showErrorMessage(
-        `Git MCP Server failed to start: port ${port} in use.`
+        `Git MCP Server failed to start: port ${String(port)} in use.`
       );
     }
   }
@@ -82,8 +82,9 @@ export class GitServerAdapter implements IManagedServer {
   async stop(): Promise<void> {
     if (this._status !== 'running') return;
 
+    const httpServer = this._httpServer;
     await new Promise<void>(resolve => {
-      this._httpServer!.close(() => resolve());
+      httpServer?.close(() => { resolve(); });
     });
 
     this._httpServer = undefined;

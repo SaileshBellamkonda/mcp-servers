@@ -75,4 +75,22 @@ describe('RepositoryManager', () => {
       expect(manager.getAllowedRepositories()).toEqual([]);
     });
   });
+
+  describe('validateRepository returns normalized path', () => {
+    it('should normalize trailing slashes on validate', () => {
+      const result = manager.validateRepository('/repo1/');
+      expect(normalize(result)).toBe(normalize('/repo1'));
+    });
+
+    it('should normalize dot segments on validate', () => {
+      const result = manager.validateRepository('/repo1/.');
+      expect(normalize(result)).toBe(normalize('/repo1'));
+    });
+
+    it('should not double-normalize already-normalized paths', () => {
+      const first = manager.validateRepository('/repo1');
+      const second = manager.validateRepository(first);
+      expect(first).toBe(second);
+    });
+  });
 });

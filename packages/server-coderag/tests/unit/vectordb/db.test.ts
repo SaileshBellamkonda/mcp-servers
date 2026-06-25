@@ -1,0 +1,250 @@
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { mkdirSync, rmSync } from 'node:fs';
+import { VectorDB } from '../../../src/vectordb/db.js';
+import type { MarkdownChunk, CodeChunk } from '../../../src/core/types.js';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const tmpDir = path.join(__dirname, '../../../.tmp-db-test');
+
+const DIM = 4;
+
+function makeEmbedding(values: number[]): number[] {
+  return values;
+}
+
+function makeMarkdownChunks(texts: string[]): MarkdownChunk[] {
+  return texts.map((content, i) => ({ content, position: i }));
+}
+
+function makeCodeChunk(overrides: Partial<CodeChunk> = {}): CodeChunk {
+  return {
+    content: 'function foo() {}',
+    position: 0,
+    symbolName: 'foo',
+    symbolType: 'function',
+    language: 'typescript',
+    startLine: 1,
+    endLine: 1,
+    parentSymbol: '',
+    signature: 'function foo()',
+    ...overrides,
+  };
+}
+
+let db: VectorDB;
+
+beforeEach(() => {
+  mkdirSync(tmpDir, { recursive: true });
+  db = VectorDB.open(':memory:', DIM);
+});
+
+afterEach(() => {
+  db.close();
+  rmSync(tmpDir, { recursive: true, force: true });
+});
+
+describe('VectorDB.open', () => {
+  it('opens without error', () => {
+    expect(db).toBeDefined();
+  });
+
+  it('stores dimension in db_meta', () => {
+    const stored = db.getStoredDimensions();
+    expect(stored).toBe(DIM);
+  });
+});
+
+describe('VectorDB.readStoredDimensions', () => {
+  it('returns null for :memory:', () => {
+    expect(VectorDB.readStoredDimensions(':memory:')).toBeNull();
+  });
+
+  it('returns null when DB file does not exist', () => {
+    expect(VectorDB.readStoredDimensions(path.join(tmpDir, 'nonexistent.db'))).toBeNull();
+  });
+
+  it('reads dimensions from an existing DB file without loading sqlite-vec', () => {
+    const dbPath = path.join(tmpDir, 'test.db');
+    const created = VectorDB.open(dbPath, DIM);
+    created.close();
+    expect(VectorDB.readStoredDimensions(dbPath)).toBe(DIM);
+  });
+
+  it('allows warm-start VectorDB.open using stored dimensions', () => {
+    const dbPath = path.join(tmpDir, 'warm.db');
+    const first = VectorDB.open(dbPath, DIM);
+    first.close();
+    const stored = VectorDB.readStoredDimensions(dbPath);
+    expect(stored).toBe(DIM);
+    const second = VectorDB.open(dbPath, stored!);
+    expect(second.getStoredDimensions()).toBe(DIM);
+    second.close();
+  });
+});
+
+describe('insertDocument and listDocuments', () => {
+  it('inserts a markdown document and returns it in list', () => {
+    const chunks = makeMarkdownChunks(['Hello world']);
+    const embeddings = [makeEmbedding([0.1, 0.2, 0.3, 0.4])];
+    db.insertDocument('/docs/test.md', new Date('2024-01-01'), chunks, embeddings);
+    const docs = db.listDocuments();
+    expect(docs.has('/docs/test.md')).toBe(true);
+  });
+
+  it('replaces existing document on re-insert', () => {
+    const chunks = makeMarkdownChunks(['v1']);
+    db.insertDocument('/docs/test.md', new Date('2024-01-01'), chunks, [[0.1, 0.2, 0.3, 0.4]]);
+    const chunks2 = makeMarkdownChunks(['v2']);
+    db.insertDocument('/docs/test.md', new Date('2024-01-02'), chunks2, [[0.5, 0.6, 0.7, 0.8]]);
+    const docs = db.listDocuments();
+    expect(docs.size).toBe(1);
+  });
+
+  it('throws when chunk and embedding counts differ', () => {
+    const chunks = makeMarkdownChunks(['a', 'b']);
+    expect(() => db.insertDocument('/docs/mismatch.md', new Date(), chunks, [[0.1, 0.2, 0.3, 0.4]])).toThrow('count mismatch');
+  });
+});
+
+describe('insertCodeDocument error cases', () => {
+  it('throws when chunk and embedding counts differ', () => {
+    const chunks = [makeCodeChunk(), makeCodeChunk({ symbolName: 'bar', position: 1 })];
+    expect(() => db.insertCodeDocument('/src/mismatch.ts', new Date(), chunks, [[0.1, 0.2, 0.3, 0.4]])).toThrow('count mismatch');
+  });
+});
+
+describe('deleteDocument', () => {
+  it('removes the document and its chunks', () => {
+    db.insertDocument('/docs/del.md', new Date(), makeMarkdownChunks(['bye']), [[0.1, 0.2, 0.3, 0.4]]);
+    db.deleteDocument('/docs/del.md');
+    expect(db.listDocuments().has('/docs/del.md')).toBe(false);
+  });
+
+  it('throws when document not found', () => {
+    expect(() => db.deleteDocument('/nonexistent.md')).toThrow();
+  });
+});
+
+describe('insertCodeDocument and searchWithFilter', () => {
+  it('inserts code symbols and finds them by vector similarity', () => {
+    const chunk = makeCodeChunk({ symbolName: 'createUser' });
+    db.insertCodeDocument('/src/user.ts', new Date(), [chunk], [[0.1, 0.2, 0.3, 0.4]]);
+    const results = db.searchWithFilter([0.1, 0.2, 0.3, 0.4], 5, null);
+    expect(results.length).toBeGreaterThan(0);
+    expect(results[0]?.document).toBe('/src/user.ts');
+  });
+
+  it('returns code metadata in results', () => {
+    const chunk = makeCodeChunk({ symbolName: 'doThing', language: 'typescript' });
+    db.insertCodeDocument('/src/thing.ts', new Date(), [chunk], [[0.9, 0.8, 0.1, 0.2]]);
+    const results = db.searchWithFilter([0.9, 0.8, 0.1, 0.2], 5, null);
+    const withMeta = results.find((r) => r.metadata !== undefined);
+    expect(withMeta?.metadata?.symbolName).toBe('doThing');
+  });
+});
+
+describe('searchWithFilter - filters', () => {
+  beforeEach(() => {
+    db.insertDocument('/docs/api/auth.md', new Date(), makeMarkdownChunks(['auth doc']), [[0.1, 0.2, 0.3, 0.4]]);
+    db.insertDocument('/docs/guide.md', new Date(), makeMarkdownChunks(['guide doc']), [[0.5, 0.6, 0.7, 0.8]]);
+  });
+
+  it('filters by directory prefix', () => {
+    const results = db.searchWithFilter([0.1, 0.2, 0.3, 0.4], 5, { directory: '/docs/api' });
+    expect(results.every((r) => r.document.startsWith('/docs/api'))).toBe(true);
+  });
+
+  it('filters by file pattern', () => {
+    const results = db.searchWithFilter([0.1, 0.2, 0.3, 0.4], 5, { filePattern: 'guide.md' });
+    expect(results.every((r) => r.document.endsWith('guide.md'))).toBe(true);
+  });
+});
+
+describe('searchSymbolsByKeywords', () => {
+  beforeEach(() => {
+    const chunk = makeCodeChunk({ symbolName: 'handleRequest' });
+    db.insertCodeDocument('/src/handler.ts', new Date(), [chunk], [[0.1, 0.2, 0.3, 0.4]]);
+  });
+
+  it('returns empty array for empty keywords', () => {
+    expect(db.searchSymbolsByKeywords([], 10)).toEqual([]);
+  });
+
+  it('finds symbols matching keyword', () => {
+    const results = db.searchSymbolsByKeywords(['handle'], 10);
+    expect(results.length).toBeGreaterThan(0);
+    expect(results[0]?.metadata?.symbolName).toBe('handleRequest');
+  });
+
+  it('returns empty array when no match', () => {
+    const results = db.searchSymbolsByKeywords(['zzznomatch'], 10);
+    expect(results).toEqual([]);
+  });
+});
+
+describe('insertRelations and findSymbolRelations', () => {
+  let chunkId: number;
+
+  beforeEach(() => {
+    const chunk = makeCodeChunk({ symbolName: 'caller' });
+    db.insertCodeDocument('/src/caller.ts', new Date(), [chunk], [[0.1, 0.2, 0.3, 0.4]]);
+    chunkId = db.getChunkIdBySymbol('/src/caller.ts', 'caller')!;
+    db.insertRelations([
+      { sourceChunkId: chunkId, targetChunkId: undefined, relationType: 'calls', targetName: 'callee', targetFile: '/src/callee.ts', confidence: 1.0 },
+    ]);
+  });
+
+  it('finds outgoing relations', () => {
+    const results = db.findSymbolRelations('caller', 'outgoing', '');
+    expect(results.length).toBeGreaterThan(0);
+    expect(results[0]?.targetName).toBe('callee');
+  });
+
+  it('finds incoming relations', () => {
+    const results = db.findSymbolRelations('callee', 'incoming', '');
+    expect(results.length).toBeGreaterThan(0);
+    expect(results[0]?.sourceName).toBe('caller');
+  });
+
+  it('finds both directions', () => {
+    const results = db.findSymbolRelations('caller', 'both', '');
+    expect(results.length).toBeGreaterThan(0);
+  });
+
+  it('filters by relationType', () => {
+    const results = db.findSymbolRelations('caller', 'outgoing', 'calls');
+    expect(results.length).toBeGreaterThan(0);
+    const none = db.findSymbolRelations('caller', 'outgoing', 'imports');
+    expect(none.length).toBe(0);
+  });
+
+  it('returns empty array when no relations exist', () => {
+    const results = db.findSymbolRelations('foo', 'both', '');
+    expect(results).toEqual([]);
+  });
+});
+
+describe('getChunkIdBySymbol', () => {
+  it('returns chunk id when symbol exists', () => {
+    const chunk = makeCodeChunk({ symbolName: 'myFunc' });
+    db.insertCodeDocument('/src/my.ts', new Date(), [chunk], [[0.1, 0.2, 0.3, 0.4]]);
+    const id = db.getChunkIdBySymbol('/src/my.ts', 'myFunc');
+    expect(id).toBeGreaterThan(0);
+  });
+
+  it('returns null when symbol not found', () => {
+    expect(db.getChunkIdBySymbol('/src/my.ts', 'nosuchfn')).toBeNull();
+  });
+});
+
+describe('getAllDocumentRecords', () => {
+  it('returns all document records with timestamps', () => {
+    db.insertDocument('/docs/a.md', new Date('2024-01-01'), makeMarkdownChunks(['a']), [[0.1, 0.2, 0.3, 0.4]]);
+    db.insertDocument('/docs/b.md', new Date('2024-02-01'), makeMarkdownChunks(['b']), [[0.5, 0.6, 0.7, 0.8]]);
+    const records = db.getAllDocumentRecords();
+    expect(records.length).toBe(2);
+    expect(records.some((r) => r.filename === '/docs/a.md')).toBe(true);
+  });
+});

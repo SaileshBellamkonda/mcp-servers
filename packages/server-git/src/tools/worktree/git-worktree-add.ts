@@ -1,4 +1,4 @@
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { type McpServer, fromJsonSchema } from '@modelcontextprotocol/server';
 import { z } from 'zod';
 import type { Services } from '../../core/types.js';
 
@@ -6,7 +6,7 @@ const GitWorktreeAddSchema = z.object({
   repository: z.string().describe('Repository path'),
   path: z.string().describe('Path for new worktree'),
   branch: z.string().optional().describe('Branch name'),
-  commitish: z.string().optional().describe('Commit-ish reference')
+  commitish: z.string().optional().describe('Commit-ish reference'),
 });
 
 export function registerGitWorktreeAdd(server: McpServer, services: Services): void {
@@ -14,21 +14,37 @@ export function registerGitWorktreeAdd(server: McpServer, services: Services): v
     'git_worktree_add',
     {
       description: 'Create a new worktree',
-      inputSchema: GitWorktreeAddSchema
+      inputSchema: fromJsonSchema({
+        type: 'object',
+        properties: {
+          repository: { type: 'string', description: 'Repository path' },
+          path: { type: 'string', description: 'Path for new worktree' },
+          branch: { type: 'string', description: 'Branch name' },
+          commitish: { type: 'string', description: 'Commit-ish reference' },
+        },
+        required: ['repository', 'path'],
+      }),
     },
-    async (input) => {
-      const { repository, path, branch, commitish } = GitWorktreeAddSchema.parse(input);
+    async (input: unknown) => {
+      const { repository, path: worktreePath, branch, commitish } = GitWorktreeAddSchema.parse(input);
+
       services.repoManager.validateRepository(repository);
-      services.pathValidator.validatePath(repository, path);
-      
-      const args = ['worktree', 'add', path];
+      services.pathValidator.validatePath(repository, worktreePath);
+
+      const args = ['worktree', 'add', worktreePath];
       if (branch) args.push('-b', branch);
       if (commitish) args.push(commitish);
-      
+
       const result = await services.gitExecutor.execute(repository, args);
-      if (!result.success) throw new Error(`Git worktree add failed: ${result.stderr}`);
-      
-      return { content: [{ type: 'text', text: JSON.stringify({ success: true, path, branch }, null, 2) }] };
+
+      if (!result.success) {
+        services.logger?.error({ tool: 'git_worktree_add', repository, error: result.stderr });
+        throw new Error(`Git worktree add failed: ${result.stderr}`);
+      }
+
+      return {
+        content: [{ type: 'text', text: JSON.stringify({ success: true, path: worktreePath, branch }, null, 2) }],
+      };
     }
   );
 }

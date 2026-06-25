@@ -5,18 +5,18 @@ import { McpServersTreeProvider } from './tree-provider';
 import { StatusBarController } from './status-bar';
 import { registerCommands } from './commands';
 
-export async function activate(context: vscode.ExtensionContext): Promise<void> {
+export function activate(context: vscode.ExtensionContext): void {
   const output = vscode.window.createOutputChannel('MCP Servers');
   context.subscriptions.push(output);
 
   const registry = new ServerRegistry();
-  context.subscriptions.push(registry as unknown as vscode.Disposable);
+  context.subscriptions.push(registry);
 
   const gitAdapter = new GitServerAdapter(output);
   registry.register(gitAdapter);
 
   const treeProvider = new McpServersTreeProvider(registry);
-  context.subscriptions.push(treeProvider as unknown as vscode.Disposable);
+  context.subscriptions.push(treeProvider);
   vscode.window.createTreeView('mcpServers', { treeDataProvider: treeProvider });
 
   const statusBar = new StatusBarController(registry);
@@ -28,10 +28,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const autoStart = config.get('autoStart', true) as boolean;
   if (autoStart) {
     // best-effort start; ignore errors here
-    registry.start('git').catch(() => {});
+    registry.start('git').catch(() => { /* intentional no-op */ });
   }
 }
 
 export function deactivate(): void {
-  // noop; disposables will be cleaned by VS Code
+  // intentional no-op; disposables will be cleaned by VS Code
 }

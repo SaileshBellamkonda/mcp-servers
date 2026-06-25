@@ -29,11 +29,11 @@ export function registerCommands(context: vscode.ExtensionContext, registry: Ser
 
   const copyUrl = vscode.commands.registerCommand('mcpServers.copyServerUrl', async (id: string) => {
     const server = registry.servers.find(s => s.id === id);
-    if (!server || !server.port) {
+    if (!server?.port) {
       vscode.window.showErrorMessage('Server is not running');
       return;
     }
-    const url = `http://localhost:${server.port}`;
+    const url = `http://localhost:${String(server.port)}`;
     await vscode.env.clipboard.writeText(url);
     vscode.window.showInformationMessage('Server URL copied to clipboard');
   });

@@ -3,6 +3,7 @@ import { McpServer } from '@modelcontextprotocol/server';
 import { StdioServerTransport } from '@modelcontextprotocol/server';
 import { createGitServer } from './server/git-server.js';
 import { RepositoryManager } from './core/repository-manager.js';
+import { McpLogger } from './core/logger.js';
 
 async function main() {
   // Parse allowed repositories from environment
@@ -33,22 +34,30 @@ async function main() {
     {
       capabilities: {
         tools: {},
+        logging: {},
       },
     }
   );
-  
+  const logger = new McpLogger(server, 'git-server');
+
   // Register tools
-  createGitServer(server, repoManager);
-  
+  createGitServer(server, repoManager, logger);
+
   // Connect stdio transport
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  
-  console.error('Git MCP Server running on stdio');
-  console.error(`Allowed repositories: ${allowedRepos.join(', ')}`);
+
+  logger.info(`Git MCP Server ready. Allowed repositories: ${allowedRepos.join(', ')}`);
+
+  const shutdown = async (): Promise<void> => {
+    await server.close();
+    process.exit(0);
+  };
+  process.on('SIGINT', () => { void shutdown(); });
+  process.on('SIGTERM', () => { void shutdown(); });
 }
 
-main().catch((error) => {
-  console.error('Fatal error:', error);
+main().catch((error: unknown) => {
+  process.stderr.write(`[FATAL] ${String(error)}\n`);
   process.exit(1);
 });

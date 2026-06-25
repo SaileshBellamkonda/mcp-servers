@@ -8,7 +8,7 @@ export class McpServersTreeProvider implements vscode.TreeDataProvider<IManagedS
 
   constructor(private readonly _registry: ServerRegistry) {
     // Propagate registry change events to the tree view
-    this._registry.onDidChange(() => this._onDidChange.fire());
+    this._registry.onDidChange(() => { this._onDidChange.fire(); });
   }
 
   getChildren(element?: IManagedServer): vscode.ProviderResult<IManagedServer[]> {

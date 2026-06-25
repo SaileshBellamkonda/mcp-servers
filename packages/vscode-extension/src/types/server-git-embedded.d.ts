@@ -1,11 +1,13 @@
 declare module '@mcp-servers/server-git/embedded' {
+  import type { Server } from 'node:http';
+
   export function activateGitServer(
     paths: string[],
     port?: number
   ): Promise<{
-    server: any;
-    app: any;
-    httpServer: { close(cb?: () => void): void };
-    transports: Map<any, any>;
+    server: object;
+    app: object;
+    httpServer: Server;
+    transports: Map<string, object>;
   }>;
 }

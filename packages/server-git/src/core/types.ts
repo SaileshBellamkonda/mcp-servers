@@ -2,6 +2,7 @@ import type { RepositoryManager } from './repository-manager.js';
 import type { PathValidator } from './path-validator.js';
 import type { GitExecutor } from './git-executor.js';
 import type { OutputParser } from './output-parser.js';
+import type { McpLogger } from './logger.js';
 
 /**
  * Result of a Git command execution
@@ -77,28 +78,31 @@ export interface Services {
   pathValidator: PathValidator;
   gitExecutor: GitExecutor;
   outputParser: OutputParser;
+  logger?: McpLogger;
 }
 
 /**
  * Error codes
  */
-export enum ErrorCode {
-  VALIDATION_ERROR = 'VALIDATION_ERROR',
-  GIT_ERROR = 'GIT_ERROR',
-  SECURITY_ERROR = 'SECURITY_ERROR',
-  NOT_FOUND = 'NOT_FOUND'
-}
+export const ErrorCode = {
+  VALIDATION_ERROR: 'VALIDATION_ERROR',
+  GIT_ERROR: 'GIT_ERROR',
+  SECURITY_ERROR: 'SECURITY_ERROR',
+  NOT_FOUND: 'NOT_FOUND',
+} as const;
+export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode];
 
 /**
  * Base error class
  */
 export class GitMcpError extends Error {
-  constructor(
-    public code: ErrorCode,
-    message: string,
-    public details?: Record<string, unknown>
-  ) {
+  readonly code: ErrorCode;
+  readonly details: Record<string, unknown> | undefined;
+
+  constructor(code: ErrorCode, message: string, details?: Record<string, unknown>) {
     super(message);
     this.name = 'GitMcpError';
+    this.code = code;
+    this.details = details;
   }
 }

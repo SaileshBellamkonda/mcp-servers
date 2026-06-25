@@ -17,19 +17,19 @@ describe('PathValidator', () => {
     it('should accept valid relative paths', () => {
       const repo = repoManager.getAllowedRepositories()[0];
       const result = validator.validatePath(repo, 'src/file.ts');
-      const relative = path.relative(repo, result);
-      const parts = relative.split(path.sep);
-      expect(parts).toContain('src');
-      expect(path.basename(result)).toBe('file.ts');
+      expect(result).toBe(path.resolve(repo, 'src/file.ts'));
     });
 
     it('should accept paths with ./ prefix', () => {
       const repo = repoManager.getAllowedRepositories()[0];
       const result = validator.validatePath(repo, './src/file.ts');
-      const relative = path.relative(repo, result);
-      const parts = relative.split(path.sep);
-      expect(parts).toContain('src');
-      expect(path.basename(result)).toBe('file.ts');
+      expect(result).toBe(path.resolve(repo, 'src/file.ts'));
+    });
+
+    it('should accept a path that resolves to the repository root', () => {
+      const repo = repoManager.getAllowedRepositories()[0];
+      const result = validator.validatePath(repo, '.');
+      expect(result).toBe(path.resolve(repo));
     });
 
     it('should reject parent directory traversal', () => {
@@ -48,10 +48,26 @@ describe('PathValidator', () => {
       expect(() => validator.validatePath(repo, '/etc/passwd')).toThrow(GitMcpError);
     });
 
+    it('should reject absolute paths to unrelated directories', () => {
+      const repo = repoManager.getAllowedRepositories()[0];
+      expect(() => validator.validatePath(repo, '/other/path')).toThrow(GitMcpError);
+    });
+
     it('should throw SECURITY_ERROR for dangerous paths', () => {
       const repo = repoManager.getAllowedRepositories()[0];
       try {
         validator.validatePath(repo, '../etc/passwd');
+        expect.fail('Should have thrown error');
+      } catch (error) {
+        expect(error).toBeInstanceOf(GitMcpError);
+        expect((error as GitMcpError).code).toBe(ErrorCode.SECURITY_ERROR);
+      }
+    });
+
+    it('should throw SECURITY_ERROR for paths outside repository', () => {
+      const repo = repoManager.getAllowedRepositories()[0];
+      try {
+        validator.validatePath(repo, '/other/path');
         expect.fail('Should have thrown error');
       } catch (error) {
         expect(error).toBeInstanceOf(GitMcpError);
