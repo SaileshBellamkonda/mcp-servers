@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { McpServer } from '@modelcontextprotocol/server';
 import { registerGitCommit } from '../../../src/tools/git-commit.js';
 import { RepositoryManager } from '../../../src/core/repository-manager.js';
@@ -28,6 +28,11 @@ describe('git_commit tool', () => {
     registerGitCommit(server, services);
   });
 
+  afterEach(() => {
+    delete process.env['GIT_COMMIT_NAME'];
+    delete process.env['GIT_COMMIT_EMAIL'];
+  });
+
   it('should register git_commit tool', () => {
     const tools = Object.keys((server as any)._registeredTools);
     expect(tools).toContain('git_commit');
@@ -42,5 +47,60 @@ describe('git_commit tool', () => {
     const tool = (server as any)._registeredTools['git_commit'];
     const longMessage = 'a'.repeat(501);
     await expect(tool.handler({ repository: '/repo', message: longMessage })).rejects.toThrow();
+  });
+
+  it('calls executor with identity args when GIT_COMMIT_NAME and GIT_COMMIT_EMAIL are set', async () => {
+    process.env['GIT_COMMIT_NAME'] = 'Bot';
+    process.env['GIT_COMMIT_EMAIL'] = 'bot@example.com';
+
+    const executeSpy = vi.spyOn(services.gitExecutor, 'execute').mockResolvedValue({
+      stdout: '[main abc1234] test commit',
+      stderr: '',
+      exitCode: 0,
+      success: true,
+    });
+
+    const tool = (server as any)._registeredTools['git_commit'];
+    await tool.handler({ repository: '/repo', message: 'test commit' });
+
+    expect(executeSpy).toHaveBeenCalledWith('/repo', [
+      '-c', 'user.name=Bot',
+      '-c', 'user.email=bot@example.com',
+      'commit', '-m', 'test commit',
+    ]);
+  });
+
+  it('calls executor without identity args when no env vars set', async () => {
+    const executeSpy = vi.spyOn(services.gitExecutor, 'execute').mockResolvedValue({
+      stdout: '[main abc1234] test commit',
+      stderr: '',
+      exitCode: 0,
+      success: true,
+    });
+
+    const tool = (server as any)._registeredTools['git_commit'];
+    await tool.handler({ repository: '/repo', message: 'test commit' });
+
+    expect(executeSpy).toHaveBeenCalledWith('/repo', ['commit', '-m', 'test commit']);
+  });
+
+  it('calls executor with identity args including empty email when only name set', async () => {
+    process.env['GIT_COMMIT_NAME'] = 'Bot';
+
+    const executeSpy = vi.spyOn(services.gitExecutor, 'execute').mockResolvedValue({
+      stdout: '[main abc1234] test commit',
+      stderr: '',
+      exitCode: 0,
+      success: true,
+    });
+
+    const tool = (server as any)._registeredTools['git_commit'];
+    await tool.handler({ repository: '/repo', message: 'test commit' });
+
+    expect(executeSpy).toHaveBeenCalledWith('/repo', [
+      '-c', 'user.name=Bot',
+      '-c', 'user.email=',
+      'commit', '-m', 'test commit',
+    ]);
   });
 });

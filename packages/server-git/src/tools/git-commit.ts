@@ -29,7 +29,19 @@ export function registerGitCommit(server: McpServer, services: Services): void {
       // eslint-disable-next-line no-control-regex
       const sanitized = message.replace(/[\x00-\x1F\x7F]/g, '');
 
-      const result = await services.gitExecutor.execute(repository, ['commit', '-m', sanitized]);
+      const commitName = process.env['GIT_COMMIT_NAME'];
+      const commitEmail = process.env['GIT_COMMIT_EMAIL'];
+      const identityArgs =
+        commitName !== undefined || commitEmail !== undefined
+          ? ['-c', `user.name=${commitName ?? ''}`, '-c', `user.email=${commitEmail ?? ''}`]
+          : [];
+
+      const result = await services.gitExecutor.execute(repository, [
+        ...identityArgs,
+        'commit',
+        '-m',
+        sanitized,
+      ]);
 
       if (!result.success) {
         services.logger?.error({ tool: 'git_commit', repository, error: result.stderr });

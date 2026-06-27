@@ -14,6 +14,7 @@ import { registerUpdateFrontmatter } from '../tools/update-frontmatter.js';
 import { registerIndexCode } from '../tools/index-code.js';
 import { registerSearchRelations } from '../tools/search-relations.js';
 import { registerSyncDocuments } from '../tools/sync-documents.js';
+import { registerIndexStatus } from '../tools/index-status.js';
 
 export function createCodeRagServer(
   server: McpServer,
@@ -24,6 +25,8 @@ export function createCodeRagServer(
   includeDirs: string[],
   syncManager: SyncManager,
   logger?: McpLogger,
+  dbPath?: string,
+  embeddingModel?: string,
 ): void {
   registerSearch(server, db, embedder, defaultTopK);
   registerIndexMarkdown(server, indexer, syncManager);
@@ -35,4 +38,5 @@ export function createCodeRagServer(
   registerIndexCode(server, indexer, syncManager);
   registerSearchRelations(server, db);
   registerSyncDocuments(server, db, indexer, includeDirs, syncManager, logger);
+  registerIndexStatus(server, db, { model: embeddingModel ?? 'unknown' }, syncManager, dbPath ?? '');
 }

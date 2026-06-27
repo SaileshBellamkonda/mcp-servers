@@ -62,7 +62,7 @@ export function activateCodeRagServer(
     return base || cwd;
   });
 
-  createCodeRagServer(server, db, embedder, indexer, config.topK, [...new Set(includeDirs)], syncManager, logger);
+  createCodeRagServer(server, db, embedder, indexer, config.topK, [...new Set(includeDirs)], syncManager, logger, config.dbPath, config.embedding.model);
 
   const transports = new Map<string, WebStandardStreamableHTTPServerTransport>();
   const app = createMcpHonoApp({ host: '127.0.0.1' });

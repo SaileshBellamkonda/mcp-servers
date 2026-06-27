@@ -21,6 +21,20 @@ import { registerGitWorktreePrune } from '../tools/worktree/git-worktree-prune.j
 import { registerGitWorktreeMove } from '../tools/worktree/git-worktree-move.js';
 import { registerGitWorktreeLock } from '../tools/worktree/git-worktree-lock.js';
 import { registerGitWorktreeUnlock } from '../tools/worktree/git-worktree-unlock.js';
+import { registerGitFetch } from '../tools/git-fetch.js';
+import { registerGitPull } from '../tools/git-pull.js';
+import { registerGitPush } from '../tools/git-push.js';
+import { registerGitMerge } from '../tools/git-merge.js';
+import { registerGitRebase } from '../tools/git-rebase.js';
+import { registerGitStash } from '../tools/git-stash.js';
+import { registerGitCherryPick } from '../tools/git-cherry-pick.js';
+import { registerGitTag } from '../tools/git-tag.js';
+import { registerGitBlame } from '../tools/git-blame.js';
+import { registerGitShow } from '../tools/git-show.js';
+import { registerGitReflog } from '../tools/git-reflog.js';
+import { registerGitSearch } from '../tools/git-search.js';
+import { registerGitFileHistory } from '../tools/git-file-history.js';
+import { registerGitRemoteList, registerGitRemoteAdd, registerGitRemoteRemove } from '../tools/git-remote.js';
 
 /**
  * Create and configure Git MCP server with all tools
@@ -58,4 +72,20 @@ export function createGitServer(
   registerGitWorktreeMove(server, services);
   registerGitWorktreeLock(server, services);
   registerGitWorktreeUnlock(server, services);
+  registerGitFetch(server, services);
+  registerGitPull(server, services);
+  registerGitPush(server, services);
+  registerGitMerge(server, services);
+  registerGitRebase(server, services);
+  registerGitStash(server, services);
+  registerGitCherryPick(server, services);
+  registerGitTag(server, services);
+  registerGitBlame(server, services);
+  registerGitShow(server, services);
+  registerGitReflog(server, services);
+  registerGitSearch(server, services);
+  registerGitFileHistory(server, services);
+  registerGitRemoteList(server, services);
+  registerGitRemoteAdd(server, services);
+  registerGitRemoteRemove(server, services);
 }

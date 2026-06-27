@@ -70,11 +70,11 @@ afterEach(() => {
 });
 
 describe('coderag-server tool registration', () => {
-  it('registers all 10 tools', () => {
+  it('registers all 11 tools', () => {
     const tools = Object.keys(
       (server as unknown as { _registeredTools: Record<string, unknown> })._registeredTools
     );
-    expect(tools).toHaveLength(10);
+    expect(tools).toHaveLength(11);
     expect(tools).toContain('search');
     expect(tools).toContain('index_markdown');
     expect(tools).toContain('list_documents');
@@ -85,6 +85,7 @@ describe('coderag-server tool registration', () => {
     expect(tools).toContain('index_code');
     expect(tools).toContain('search_relations');
     expect(tools).toContain('sync_documents');
+    expect(tools).toContain('get_index_status');
   });
 });
 

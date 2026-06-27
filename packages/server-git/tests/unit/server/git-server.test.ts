@@ -15,11 +15,12 @@ describe('createGitServer', () => {
     repoManager = new RepositoryManager(['/repo']);
   });
 
-  it('should register all 14 tools', () => {
+  it('should register all 30 tools', () => {
     createGitServer(server, repoManager);
-    
+
     const tools = Object.keys((server as any)._registeredTools);
-    expect(tools).toHaveLength(14);
+    expect(tools).toHaveLength(30);
+    // Original 14
     expect(tools).toContain('git_workspaces');
     expect(tools).toContain('git_status');
     expect(tools).toContain('git_log');
@@ -34,6 +35,25 @@ describe('createGitServer', () => {
     expect(tools).toContain('git_worktree_move');
     expect(tools).toContain('git_worktree_lock');
     expect(tools).toContain('git_worktree_unlock');
+    // Remote operations (8)
+    expect(tools).toContain('git_fetch');
+    expect(tools).toContain('git_pull');
+    expect(tools).toContain('git_push');
+    expect(tools).toContain('git_merge');
+    expect(tools).toContain('git_rebase');
+    expect(tools).toContain('git_stash');
+    expect(tools).toContain('git_cherry_pick');
+    expect(tools).toContain('git_tag');
+    // History tools (5)
+    expect(tools).toContain('git_blame');
+    expect(tools).toContain('git_show');
+    expect(tools).toContain('git_reflog');
+    expect(tools).toContain('git_search');
+    expect(tools).toContain('git_file_history');
+    // Remote management (3)
+    expect(tools).toContain('git_remote_list');
+    expect(tools).toContain('git_remote_add');
+    expect(tools).toContain('git_remote_remove');
   });
 
   it('should create core services', () => {

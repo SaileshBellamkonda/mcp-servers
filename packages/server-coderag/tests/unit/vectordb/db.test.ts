@@ -386,6 +386,71 @@ describe('getAllDocumentRecords docType field', () => {
   });
 });
 
+describe('searchByKeyword (FTS5)', () => {
+  beforeEach(() => {
+    db.insertDocument('/docs/auth.md', new Date(), makeMarkdownChunks(['Authentication guide for OAuth2']), [[0.1, 0.2, 0.3, 0.4]]);
+    db.insertDocument('/docs/guide.md', new Date(), makeMarkdownChunks(['Getting started with the SDK']), [[0.5, 0.6, 0.7, 0.8]]);
+    const chunk = makeCodeChunk({ symbolName: 'UserAuthService', content: 'class UserAuthService { login() {} }' });
+    db.insertCodeDocument('/src/auth.ts', new Date(), [chunk], [[0.9, 0.1, 0.2, 0.3]]);
+  });
+
+  it('returns results matching query term', () => {
+    const results = db.searchByKeyword('Authentication', 5, null);
+    expect(results.length).toBeGreaterThan(0);
+    expect(results[0]?.document).toBe('/docs/auth.md');
+  });
+
+  it('finds by symbol_name', () => {
+    const results = db.searchByKeyword('UserAuthService', 5, null);
+    expect(results.length).toBeGreaterThan(0);
+    expect(results[0]?.document).toBe('/src/auth.ts');
+  });
+
+  it('returns empty array when no match', () => {
+    const results = db.searchByKeyword('zzznomatchtoken', 5, null);
+    expect(results).toEqual([]);
+  });
+
+  it('respects topK limit', () => {
+    const results = db.searchByKeyword('auth', 1, null);
+    expect(results.length).toBeLessThanOrEqual(1);
+  });
+
+  it('filters by directory', () => {
+    const results = db.searchByKeyword('auth', 5, { directory: '/docs', filePattern: '' });
+    expect(results.every((r) => r.document.startsWith('/docs'))).toBe(true);
+  });
+
+  it('similarity scores are positive', () => {
+    const results = db.searchByKeyword('Authentication', 5, null);
+    expect(results.every((r) => r.similarity > 0)).toBe(true);
+  });
+});
+
+describe('searchHybrid', () => {
+  beforeEach(() => {
+    db.insertDocument('/docs/auth.md', new Date(), makeMarkdownChunks(['Authentication guide']), [[0.9, 0.1, 0.1, 0.1]]);
+    db.insertDocument('/docs/guide.md', new Date(), makeMarkdownChunks(['Getting started guide']), [[0.1, 0.9, 0.1, 0.1]]);
+  });
+
+  it('returns results from both semantic and keyword', () => {
+    const results = db.searchHybrid([0.9, 0.1, 0.1, 0.1], 'Authentication', 5, null);
+    expect(results.length).toBeGreaterThan(0);
+  });
+
+  it('returns at most topK results', () => {
+    const results = db.searchHybrid([0.9, 0.1, 0.1, 0.1], 'guide', 2, null);
+    expect(results.length).toBeLessThanOrEqual(2);
+  });
+
+  it('returns empty array when db is empty and query matches nothing', () => {
+    const emptyDb = VectorDB.open(':memory:', DIM);
+    const results = emptyDb.searchHybrid([0.1, 0.2, 0.3, 0.4], 'zzz', 5, null);
+    expect(results).toEqual([]);
+    emptyDb.close();
+  });
+});
+
 describe('dimension mismatch auto-repair', () => {
   it('resets stored dim and clears sync timestamps when dim changes', () => {
     const dbPath = path.join(tmpDir, 'mismatch.db');

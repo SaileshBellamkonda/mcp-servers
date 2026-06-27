@@ -44,6 +44,13 @@ function tableExists(db: Database.Database, table: string): boolean {
   return row.cnt > 0;
 }
 
+function virtualTableExists(db: Database.Database, table: string): boolean {
+  const row = db
+    .prepare(`SELECT COUNT(*) as cnt FROM sqlite_master WHERE type='table' AND name=?`)
+    .get(table) as { cnt: number };
+  return row.cnt > 0;
+}
+
 function runMigrations(db: Database.Database): void {
   const migrations = buildMigrations();
   // Migration 1: add doc_type column
@@ -54,6 +61,12 @@ function runMigrations(db: Database.Database): void {
   // Migration 2: create index_rules table
   if (!tableExists(db, 'index_rules')) {
     if (migrations[2]) db.exec(migrations[2]);
+  }
+  // Migration 3: create FTS5 table, trigger, and backfill
+  if (!virtualTableExists(db, 'fts_chunks')) {
+    if (migrations[3]) db.exec(migrations[3]);
+    if (migrations[4]) db.exec(migrations[4]);
+    if (migrations[5]) db.exec(migrations[5]);
   }
 }
 
@@ -165,6 +178,7 @@ export class VectorDB {
     );
     const insertChunk = this.db.prepare('INSERT INTO chunks (document_id, position, content) VALUES (?, ?, ?)');
     const insertVec = this.db.prepare('INSERT INTO vec_chunks (rowid, embedding) VALUES (?, ?)');
+    const insertFts = this.db.prepare('INSERT INTO fts_chunks(rowid, content, symbol_name) VALUES (?, ?, ?)');
     const deleteChunks = this.db.prepare('DELETE FROM chunks WHERE document_id = ?');
 
     const run = this.db.transaction(() => {
@@ -178,6 +192,7 @@ export class VectorDB {
         const chunkResult = insertChunk.run(docId, chunk.position, chunk.content);
         const chunkId = BigInt(chunkResult.lastInsertRowid);
         insertVec.run(chunkId, serializeVector(embedding));
+        insertFts.run(chunkId, chunk.content, '');
       }
     });
     run();
@@ -193,6 +208,7 @@ export class VectorDB {
     );
     const insertChunk = this.db.prepare('INSERT INTO chunks (document_id, position, content) VALUES (?, ?, ?)');
     const insertVec = this.db.prepare('INSERT INTO vec_chunks (rowid, embedding) VALUES (?, ?)');
+    const insertFts = this.db.prepare('INSERT INTO fts_chunks(rowid, content, symbol_name) VALUES (?, ?, ?)');
     const insertMeta = this.db.prepare(
       'INSERT INTO code_metadata (chunk_id, symbol_name, symbol_type, language, start_line, end_line, parent_symbol, signature) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
     );
@@ -209,6 +225,7 @@ export class VectorDB {
         const chunkResult = insertChunk.run(docId, chunk.position, chunk.content);
         const chunkId = BigInt(chunkResult.lastInsertRowid);
         insertVec.run(chunkId, serializeVector(embedding));
+        insertFts.run(chunkId, chunk.content, chunk.symbolName ?? '');
         insertMeta.run(chunkId, chunk.symbolName, chunk.symbolType, chunk.language, chunk.startLine, chunk.endLine, chunk.parentSymbol, chunk.signature);
       }
     });
@@ -406,8 +423,124 @@ export class VectorDB {
     const rows = this.db.prepare('SELECT filename, modified_at, doc_type FROM documents').all() as { filename: string; modified_at: string; doc_type: string }[];
     return rows.map((r) => ({ filename: r.filename, modifiedAt: new Date(r.modified_at), docType: r.doc_type as 'doc' | 'code' }));
   }
+
+  // ─── FTS5 keyword search ───────────────────────────────────────────────────
+
+  searchByKeyword(query: string, topK: number, filter: SearchFilter | null): SearchResult[] {
+    const ftsQuery = buildFtsQuery(query);
+    if (!ftsQuery) return [];
+
+    let whereClause = 'WHERE fts_chunks MATCH ?';
+    const whereArgs: unknown[] = [ftsQuery];
+
+    if (filter) {
+      if (filter.directory) {
+        const dir = filter.directory.replace(/[/\\]+$/, '');
+        whereClause += ' AND (d.filename LIKE ? OR d.filename LIKE ?)';
+        whereArgs.push(`${dir}/%`, `${dir}\\%`);
+      }
+      if (filter.filePattern) {
+        const likePattern = globToLike(filter.filePattern);
+        whereClause += ' AND (d.filename LIKE ? OR d.filename LIKE ?)';
+        whereArgs.push(`%/${likePattern}`, likePattern);
+      }
+    }
+
+    const sql = `
+      SELECT d.filename, c.content, c.position, c.id as chunk_id,
+             bm25(fts_chunks) as bm25_score,
+             cm.symbol_name, cm.symbol_type, cm.language,
+             cm.start_line, cm.end_line, cm.parent_symbol, cm.signature
+      FROM fts_chunks
+      JOIN chunks c ON fts_chunks.rowid = c.id
+      JOIN documents d ON c.document_id = d.id
+      LEFT JOIN code_metadata cm ON c.id = cm.chunk_id
+      ${whereClause}
+      ORDER BY bm25(fts_chunks)
+      LIMIT ?
+    `;
+
+    const rows = this.db.prepare(sql).all(...whereArgs, topK) as {
+      filename: string; content: string; position: number; chunk_id: number;
+      bm25_score: number; symbol_name: string | null; symbol_type: string | null;
+      language: string | null; start_line: number | null; end_line: number | null;
+      parent_symbol: string | null; signature: string | null;
+    }[];
+
+    return rows.map((r) => ({
+      document: r.filename,
+      chunk: r.content,
+      // bm25() returns negative values; normalize to (0,1] — lower bm25 = more relevant
+      similarity: 1.0 / (1.0 + Math.abs(r.bm25_score)),
+      position: r.position,
+      metadata: r.symbol_type
+        ? { symbolName: r.symbol_name ?? '', symbolType: r.symbol_type, language: r.language ?? '',
+            startLine: r.start_line ?? 0, endLine: r.end_line ?? 0,
+            parentSymbol: r.parent_symbol ?? '', signature: r.signature ?? '' }
+        : undefined,
+    }));
+  }
+
+  searchHybrid(queryVector: number[], query: string, topK: number, filter: SearchFilter | null): SearchResult[] {
+    const fetch = topK * 3; // over-fetch to improve merge quality
+    const semantic = this.searchWithFilter(queryVector, fetch, filter);
+    const keyword = this.searchByKeyword(query, fetch, filter);
+
+    // Reciprocal Rank Fusion (k=60)
+    const RRF_K = 60;
+    const scores = new Map<number, number>(); // chunk_id → rrf score
+    const chunkMeta = new Map<number, SearchResult>();
+
+    for (let i = 0; i < semantic.length; i++) {
+      const r = semantic[i];
+      if (!r) continue;
+      const id = (r as SearchResult & { chunkId?: number }).chunkId ?? i;
+      scores.set(i, (scores.get(i) ?? 0) + 1 / (RRF_K + i + 1));
+      chunkMeta.set(i, r);
+    }
+
+    // Re-index keyword results by position in the semantic results to merge by content
+    // Since we don't have chunk IDs on SearchResult, merge by (document, position) identity
+    const semanticKey = (r: SearchResult): string => `${r.document}::${String(r.position)}`;
+    const keyToSemIdx = new Map<string, number>();
+    for (let i = 0; i < semantic.length; i++) {
+      const r = semantic[i];
+      if (r) keyToSemIdx.set(semanticKey(r), i);
+    }
+
+    // Track keyword-only hits (not in semantic results) starting after semantic range
+    let nextSlot = semantic.length;
+    for (let i = 0; i < keyword.length; i++) {
+      const r = keyword[i];
+      if (!r) continue;
+      const key = semanticKey(r);
+      let slot = keyToSemIdx.get(key);
+      if (slot === undefined) {
+        slot = nextSlot++;
+        chunkMeta.set(slot, r);
+      }
+      scores.set(slot, (scores.get(slot) ?? 0) + 1 / (RRF_K + i + 1));
+    }
+
+    return [...scores.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, topK)
+      .map(([slot, score]) => {
+        const r = chunkMeta.get(slot);
+        if (!r) return null;
+        return { ...r, similarity: score };
+      })
+      .filter((r): r is SearchResult => r !== null);
+  }
 }
 
 function globToLike(pattern: string): string {
   return pattern.replace(/%/g, '\\%').replace(/_/g, '\\_').replace(/\*/g, '%').replace(/\?/g, '_');
+}
+
+function buildFtsQuery(query: string): string {
+  // Split into terms and quote each to handle FTS5 special characters
+  const terms = query.trim().split(/\s+/).filter(Boolean);
+  if (terms.length === 0) return '';
+  return terms.map((t) => `"${t.replace(/"/g, '""')}"`).join(' ');
 }

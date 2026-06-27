@@ -65,6 +65,16 @@ CREATE TABLE IF NOT EXISTS index_rules (
   rule_type TEXT NOT NULL CHECK(rule_type IN ('docs_include','docs_exclude','code_include','code_exclude')),
   pattern   TEXT NOT NULL
 );
+
+CREATE VIRTUAL TABLE IF NOT EXISTS fts_chunks USING fts5(
+  content,
+  symbol_name,
+  tokenize='unicode61 remove_diacritics 2'
+);
+
+CREATE TRIGGER IF NOT EXISTS fts_chunks_delete AFTER DELETE ON chunks BEGIN
+  DELETE FROM fts_chunks WHERE rowid = old.id;
+END;
 `;
 }
 
@@ -85,5 +95,9 @@ export function buildMigrations(): string[] {
        rule_type TEXT NOT NULL,
        pattern   TEXT NOT NULL
      )`,
+    // Migration 4: create FTS5 full-text search table + delete trigger + backfill from existing chunks
+    `CREATE VIRTUAL TABLE IF NOT EXISTS fts_chunks USING fts5(content, symbol_name, tokenize='unicode61 remove_diacritics 2')`,
+    `CREATE TRIGGER IF NOT EXISTS fts_chunks_delete AFTER DELETE ON chunks BEGIN DELETE FROM fts_chunks WHERE rowid = old.id; END`,
+    `INSERT INTO fts_chunks(rowid, content, symbol_name) SELECT c.id, c.content, COALESCE(cm.symbol_name, '') FROM chunks c LEFT JOIN code_metadata cm ON cm.chunk_id = c.id`,
   ];
 }
