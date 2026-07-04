@@ -59,26 +59,36 @@ const CAPTURE_TO_SYMBOL_TYPE: Record<CaptureType, SymbolType> = {
   interface: 'interface',
 };
 
+// Loads a grammar package's native binding directly via `node-gyp-build`
+// instead of `require('tree-sitter-<lang>')`. Some tree-sitter grammar
+// packages (e.g. tree-sitter-c-sharp) publish an ESM entry point with a
+// top-level await while resolving the native binding, which Node's CJS
+// `require()` cannot resolve synchronously ("require() cannot be used on
+// an ESM graph with top-level await"). Going straight to the native
+// binding sidesteps that regardless of how a package's JS wrapper is
+// authored, including if other grammars migrate to the same style later.
+function loadNativeBinding(packageName: string): Record<string, TSLanguage> {
+  const pkgRoot = path.dirname(require.resolve(`${packageName}/package.json`));
+  const nodeGypBuild = require(require.resolve('node-gyp-build', { paths: [pkgRoot] })) as (
+    dir: string
+  ) => Record<string, TSLanguage>;
+  return nodeGypBuild(pkgRoot);
+}
+
 function loadGrammar(grammarKey: string): TSLanguage {
-  // tree-sitter-typescript exports { typescript, tsx }
+  // tree-sitter-typescript's native binding exports { typescript, tsx }
   if (grammarKey === 'typescript') {
-    const mod = require('tree-sitter-typescript') as { typescript: TSLanguage; tsx: TSLanguage };
-    return mod.typescript;
+    return loadNativeBinding('tree-sitter-typescript')['typescript']!;
   }
   if (grammarKey === 'tsx') {
-    const mod = require('tree-sitter-typescript') as { typescript: TSLanguage; tsx: TSLanguage };
-    return mod.tsx;
+    return loadNativeBinding('tree-sitter-typescript')['tsx']!;
   }
-  // tree-sitter-php exports { php, php_only } - use php
+  // tree-sitter-php's native binding exports { php, php_only } - use php
   if (grammarKey === 'php') {
-    const mod = require('tree-sitter-php') as { php: TSLanguage };
-    return mod.php;
+    return loadNativeBinding('tree-sitter-php')['php']!;
   }
-  // C# grammar key from tree-sitter-c-sharp
-  if (grammarKey === 'c_sharp') {
-    return require('tree-sitter-c-sharp') as TSLanguage;
-  }
-  return require(`tree-sitter-${grammarKey}`) as TSLanguage;
+  const packageName = grammarKey === 'c_sharp' ? 'tree-sitter-c-sharp' : `tree-sitter-${grammarKey}`;
+  return loadNativeBinding(packageName) as unknown as TSLanguage;
 }
 
 export class CodeParser {
