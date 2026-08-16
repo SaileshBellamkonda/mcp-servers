@@ -1,0 +1,13 @@
+diff --git a/binding.gyp b/binding.gyp
+index bb40aa7e8d41644ba690761e9064fc1d0f2dcd6b..4a6ba9f6ec024a9339c8dedb21e73837a24bfa68 100644
+--- a/binding.gyp
++++ b/binding.gyp
+@@ -39,7 +39,7 @@
+           "msvs_settings": {
+             "VCCLCompilerTool": {
+               "AdditionalOptions": [
+-                "/std:c++17",
++                "/std:c++20",
+               ],
+               "RuntimeLibrary": 0,
+             },
