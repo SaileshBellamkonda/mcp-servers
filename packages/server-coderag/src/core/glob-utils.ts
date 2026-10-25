@@ -42,7 +42,7 @@ export const WELL_KNOWN_EXCLUDES = [
   '**/*.pyo',
 ];
 
-export const DEFAULT_DOCS_INCLUDE = ['**/*.md'];
+export const DEFAULT_DOCS_INCLUDE = ['**/*.{md,mdx}'];
 
 export const DEFAULT_CODE_INCLUDE = [
   '**/*.{ts,tsx}',

@@ -81,7 +81,7 @@ describe('WELL_KNOWN_EXCLUDES', () => {
 
 describe('DEFAULT_DOCS_INCLUDE', () => {
   it('contains a markdown pattern', () => {
-    expect(DEFAULT_DOCS_INCLUDE.some((p) => p.includes('.md'))).toBe(true);
+    expect(DEFAULT_DOCS_INCLUDE.some((p) => p.includes('md'))).toBe(true);
   });
 });
 

@@ -222,7 +222,7 @@ describe('loadConfigFromVsCode', () => {
       },
     };
     const config = loadConfigFromVsCode(mockConfig, ['/workspace/myproject']);
-    expect(config.globs.docsInclude).toEqual(['/workspace/myproject/**/*.md']);
+    expect(config.globs.docsInclude).toEqual(['/workspace/myproject/**/*.{md,mdx}']);
   });
 
   it('reads docsInclude array from VS Code configuration', () => {

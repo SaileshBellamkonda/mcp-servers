@@ -111,7 +111,7 @@ export function loadConfigFromVsCode(
     return defaults;
   }
 
-  const defaultIncludeDir = workspaceFolders[0] !== undefined ? [`${workspaceFolders[0]}/**/*.md`] : DEFAULT_DOCS_INCLUDE;
+  const defaultIncludeDir = workspaceFolders[0] !== undefined ? [`${workspaceFolders[0]}/**/*.{md,mdx}`] : DEFAULT_DOCS_INCLUDE;
 
   const globs: GlobConfig = {
     docsInclude: parseVsCodeGlob('docsInclude', defaultIncludeDir),
