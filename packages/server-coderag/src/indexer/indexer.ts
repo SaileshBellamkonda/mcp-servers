@@ -96,6 +96,7 @@ export class Indexer {
     const chunks = chunkSections(doc.sections, this.chunkSize);
 
     if (chunks.length === 0) {
+      try { this.db.deleteDocument(filePath); } catch { /* not previously indexed */ }
       this.log('warning', `No chunks from ${filePath} (empty?)`);
       return;
     }

@@ -103,7 +103,7 @@ export async function runStartupSync(
       const docsResult = await indexer.scanDocs(docsReindexRequired);
       logger.info(`Docs scan: ${String(docsResult.indexed)} indexed, ${String(docsResult.skipped)} skipped, ${String(docsResult.failed)} failed`);
       db.setLastSyncAt('docs', new Date());
-      if (docsReindexRequired) db.clearDocsReindexRequired();
+      if (docsReindexRequired && docsResult.failed === 0) db.clearDocsReindexRequired();
     }
 
     if (rulesChanged || noCodeIndexed) {
