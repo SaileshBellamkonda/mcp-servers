@@ -17,7 +17,7 @@ export function registerIndexMarkdown(server: McpServer, indexer: Indexer, syncM
   server.registerTool(
     'index_markdown',
     {
-      description: `Index markdown files for semantic search. Chunks by paragraph and generates embeddings.
+      description: `Index markdown and MDX documents (.md, .markdown, .mdx) for semantic search. Chunks by heading section and stores frontmatter metadata (title, tags, doc_type, domain, project) for search filters.
 Provide one or more of: filepath, filepaths, directory, directories.
 Use exclude for semicolon-separated glob patterns (e.g. "drafts/**;**/*.draft.md").
 Returns { locked: true } if a sync operation is in progress.`,
@@ -26,7 +26,7 @@ Returns { locked: true } if a sync operation is in progress.`,
         properties: {
           filepath: { type: 'string', description: 'Path to a single markdown file to index' },
           filepaths: { type: 'string', description: 'Comma-separated list of markdown files to index' },
-          directory: { type: 'string', description: 'Directory to recursively index all markdown (.md) files' },
+          directory: { type: 'string', description: 'Directory to recursively index all markdown and MDX (.md, .markdown, .mdx) files' },
           directories: { type: 'string', description: 'Comma-separated list of directories to recursively index' },
           exclude: { type: 'string', description: 'Semicolon-separated glob patterns to exclude (e.g. "drafts/**;**/*.draft.md")' },
           force: { type: 'boolean', description: 'Force re-index even if file is unchanged (default: false)' },

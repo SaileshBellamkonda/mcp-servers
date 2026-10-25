@@ -23,7 +23,7 @@ export function registerSyncDocuments(
     'sync_documents',
     {
       description:
-        'Scan configured include directories for new or changed markdown files, index them, and remove stale index entries. ' +
+        'Scan configured include directories for new or changed markdown and MDX documents, index them, and remove stale index entries. ' +
         'Pass an optional directory to sync only that path. Returns { locked: true } if a sync is in progress.',
       inputSchema: fromJsonSchema({
         type: 'object',
