@@ -3,22 +3,58 @@ import { isFenceClose, matchFenceOpen, type Fence } from './fence.js';
 import { loadMarkdownLike } from './markdown.js';
 
 // An MDX ESM block starts with a column-0 import/export statement and runs to the next blank line.
+// `import x from` only counts when a quoted module follows, so prose such as "import data from the cache"
+// is left alone.
 const ESM_START =
-  /^(?:import\s*(?:[{*'"]|\w+\s*(?:,|from\b))|export\s+(?:const|let|var|function|async|class|default|type|interface|enum)\b|export\s*[{*])/;
+  /^(?:import\s*(?:[{*'"]|\w+\s*(?:,|from\s*['"]))|export\s+(?:const|let|var|function|async|class|default|type|interface|enum)\b|export\s*[{*])/;
 const COMPONENT_LINE = /^\s*<\/?[A-Z]/;
 const SELF_CLOSING = /<[A-Z][\w.]*(?:\s[^<>]*)?\/>/g;
 const COMPONENT_TAG = /<\/?[A-Z][\w.]*(?:\s[^<>]*)?>/g;
-const INLINE_COMMENT = /\{\/\*[\s\S]*?\*\/\}/g;
+// Splitting on a capturing group puts inline code spans at the odd indices.
+const CODE_SPAN = /(`[^`\n]*`)/;
 
-function cleanLine(text: string): string {
-  let result = text.replace(SELF_CLOSING, '');
-  if (COMPONENT_LINE.test(result)) result = result.replace(COMPONENT_TAG, '');
-  return result;
+/** Removes complete {/* ... *\/} comments in linear time (each search runs at most once past a miss). */
+function stripComments(text: string): string {
+  let out = '';
+  let position = 0;
+  for (;;) {
+    const start = text.indexOf('{/*', position);
+    if (start === -1) return out + text.slice(position);
+    const end = text.indexOf('*/}', start + 3);
+    if (end === -1) return out + text.slice(position);
+    out += text.slice(position, start);
+    position = end + 3;
+  }
 }
 
 /**
- * Removes MDX-only syntax (ESM blocks, {/* *\/} comments, JSX component tags) from a body.
+ * Strips MDX-only syntax from one ordinary line, leaving inline code spans untouched. `commentOpened` is
+ * true when the line ends inside a {/* comment that continues on the following lines.
+ */
+function renderLine(line: string): { text: string; commentOpened: boolean } {
+  const componentLine = COMPONENT_LINE.test(line);
+  const parts = line.split(CODE_SPAN);
+  let out = '';
+  for (const [index, part] of parts.entries()) {
+    if (index % 2 === 1) {
+      out += part;
+      continue;
+    }
+    let text = stripComments(part);
+    const commentStart = text.indexOf('{/*');
+    if (commentStart !== -1) text = text.slice(0, commentStart);
+    text = text.replace(SELF_CLOSING, '');
+    if (componentLine) text = text.replace(COMPONENT_TAG, '');
+    out += text;
+    if (commentStart !== -1) return { text: out, commentOpened: true };
+  }
+  return { text: out, commentOpened: false };
+}
+
+/**
+ * Removes MDX-only syntax (ESM blocks, {/* comments, JSX component tags) from a body.
  * Lines are blanked rather than deleted so line numbers stay stable. Fenced code is never touched.
+ * Line endings are normalised to \n.
  */
 export function stripMdx(body: string): string {
   const out: string[] = [];
@@ -26,7 +62,7 @@ export function stripMdx(body: string): string {
   let inEsm = false;
   let inComment = false;
 
-  for (const line of body.split('\n')) {
+  for (const line of body.split(/\r?\n/)) {
     if (fence) {
       out.push(line);
       if (isFenceClose(line, fence)) fence = null;
@@ -47,10 +83,11 @@ export function stripMdx(body: string): string {
       const end = line.indexOf('*/}');
       if (end === -1) {
         out.push('');
-      } else {
-        inComment = false;
-        out.push(cleanLine(line.slice(end + 3)));
+        continue;
       }
+      const rest = renderLine(line.slice(end + 3));
+      inComment = rest.commentOpened;
+      out.push(rest.text);
       continue;
     }
 
@@ -67,13 +104,9 @@ export function stripMdx(body: string): string {
       continue;
     }
 
-    let text = line.replace(INLINE_COMMENT, '');
-    const commentStart = text.indexOf('{/*');
-    if (commentStart !== -1) {
-      inComment = true;
-      text = text.slice(0, commentStart);
-    }
-    out.push(cleanLine(text));
+    const rendered = renderLine(line);
+    inComment = rendered.commentOpened;
+    out.push(rendered.text);
   }
 
   return out.join('\n');

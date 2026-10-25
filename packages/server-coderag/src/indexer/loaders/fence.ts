@@ -6,9 +6,14 @@ export interface Fence {
 const FENCE_OPEN = /^ {0,3}(`{3,}|~{3,})(.*)$/;
 const FENCE_CLOSE = /^ {0,3}(`{3,}|~{3,})[ \t]*$/;
 
+// Lines may still carry the \r of a CRLF line ending, which `.` and `$` would otherwise trip over.
+function withoutCr(line: string): string {
+  return line.endsWith('\r') ? line.slice(0, -1) : line;
+}
+
 /** Returns the fence opened by this line, or null if the line does not open one. */
 export function matchFenceOpen(line: string): Fence | null {
-  const match = FENCE_OPEN.exec(line);
+  const match = FENCE_OPEN.exec(withoutCr(line));
   if (!match) return null;
   const marker = match[1] ?? '';
   const info = match[2] ?? '';
@@ -20,7 +25,7 @@ export function matchFenceOpen(line: string): Fence | null {
 
 /** True when this line closes the given fence. */
 export function isFenceClose(line: string, fence: Fence): boolean {
-  const match = FENCE_CLOSE.exec(line);
+  const match = FENCE_CLOSE.exec(withoutCr(line));
   if (!match) return false;
   const marker = match[1] ?? '';
   return marker.startsWith(fence.char) && marker.length >= fence.len;
