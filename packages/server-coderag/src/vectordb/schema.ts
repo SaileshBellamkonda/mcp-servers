@@ -1,3 +1,24 @@
+const DOC_METADATA_DDL = `
+CREATE TABLE IF NOT EXISTS doc_metadata (
+  document_id INTEGER PRIMARY KEY,
+  title       TEXT,
+  doc_type    TEXT,
+  domain      TEXT,
+  project     TEXT,
+  language    TEXT,
+  extra_json  TEXT,
+  FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS doc_tags (
+  document_id INTEGER NOT NULL,
+  tag         TEXT    NOT NULL,
+  PRIMARY KEY (document_id, tag),
+  FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_doc_tags_tag ON doc_tags(tag);
+`;
+
 export function buildSchema(dimensions: number): string {
   return `
 CREATE TABLE IF NOT EXISTS db_meta (
@@ -16,10 +37,13 @@ CREATE INDEX IF NOT EXISTS idx_filename ON documents(filename);
 CREATE INDEX IF NOT EXISTS idx_doc_type ON documents(doc_type);
 
 CREATE TABLE IF NOT EXISTS chunks (
-  id          INTEGER PRIMARY KEY AUTOINCREMENT,
-  document_id INTEGER NOT NULL,
-  position    INTEGER NOT NULL,
-  content     TEXT    NOT NULL,
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  document_id  INTEGER NOT NULL,
+  position     INTEGER NOT NULL,
+  content      TEXT    NOT NULL,
+  heading_path TEXT,
+  start_line   INTEGER,
+  end_line     INTEGER,
   FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS idx_document_id ON chunks(document_id);
@@ -75,6 +99,7 @@ CREATE VIRTUAL TABLE IF NOT EXISTS fts_chunks USING fts5(
 CREATE TRIGGER IF NOT EXISTS fts_chunks_delete AFTER DELETE ON chunks BEGIN
   DELETE FROM fts_chunks WHERE rowid = old.id;
 END;
+${DOC_METADATA_DDL}
 `;
 }
 
@@ -100,4 +125,22 @@ export function buildMigrations(): string[] {
     `CREATE TRIGGER IF NOT EXISTS fts_chunks_delete AFTER DELETE ON chunks BEGIN DELETE FROM fts_chunks WHERE rowid = old.id; END`,
     `INSERT INTO fts_chunks(rowid, content, symbol_name) SELECT c.id, c.content, COALESCE(cm.symbol_name, '') FROM chunks c LEFT JOIN code_metadata cm ON cm.chunk_id = c.id`,
   ];
+}
+
+export interface DocMetadataMigration {
+  /** Idempotent statements creating doc_metadata, doc_tags and their index. */
+  statements: string[];
+  /** Columns added to `chunks`; each is applied only when the column is missing. */
+  chunkColumns: { name: string; ddl: string }[];
+}
+
+export function buildDocMetadataMigration(): DocMetadataMigration {
+  return {
+    statements: [DOC_METADATA_DDL],
+    chunkColumns: [
+      { name: 'heading_path', ddl: 'ALTER TABLE chunks ADD COLUMN heading_path TEXT' },
+      { name: 'start_line', ddl: 'ALTER TABLE chunks ADD COLUMN start_line INTEGER' },
+      { name: 'end_line', ddl: 'ALTER TABLE chunks ADD COLUMN end_line INTEGER' },
+    ],
+  };
 }
