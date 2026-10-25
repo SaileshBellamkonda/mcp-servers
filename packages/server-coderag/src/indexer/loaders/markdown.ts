@@ -3,9 +3,17 @@ import matter from 'gray-matter';
 import type { DocumentLoader, DocumentMetadata, DocumentSection, LoadedDocument } from './types.js';
 import { isFenceClose, matchFenceOpen, type Fence } from './fence.js';
 
-const ATX_HEADING = /^ {0,3}(#{1,6})[ \t]+(.+?)(?:[ \t]+#+)?[ \t]*$/;
+const ATX_OPEN = /^ {0,3}(#{1,6})[ \t]/;
+const SETEXT_UNDERLINE = /^ {0,3}(=+|-+)[ \t]*$/;
+// Line starts that begin some other block, so the line cannot be a one-line paragraph that an underline promotes.
+const NON_PARAGRAPH_START = /^ {0,3}(?:[-*+][ \t]|\d{1,9}[.)][ \t]|[>|<#]|`{3}|~{3})/;
+const HAS_FRONTMATTER_OPEN = /^\uFEFF?---/;
+const CLOSED_FRONTMATTER = /^\uFEFF?---[^\r\n]*\r?\n(?:[\s\S]*?\r?\n)?---[ \t]*(?:\r?\n|$)/;
 
 const KNOWN_KEYS = new Set(['title', 'tags', 'doc_type', 'docType', 'domain', 'project', 'language']);
+const MAX_EXTRA_NODES = 1000; // per frontmatter value
+const MAX_EXTRA_TOTAL_NODES = 5000; // across all accepted values
+const MAX_EXTRA_DEPTH = 6;
 
 interface Frontmatter {
   data: Record<string, unknown>;
@@ -20,6 +28,15 @@ interface OpenSection {
   hasHeading: boolean;
 }
 
+// gray-matter's default `---js` / `---javascript` engines eval the header. Documents are untrusted input,
+// so those engines are disabled (the resulting error makes the file fall back to body-only). Passing an
+// options object also bypasses gray-matter's global per-input cache, which would otherwise grow without
+// bound and hand back shared mutable objects.
+function disabledEngine(): never {
+  throw new Error('Code frontmatter is not supported');
+}
+const MATTER_OPTIONS = { engines: { js: disabledEngine, javascript: disabledEngine } };
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
@@ -32,15 +49,23 @@ function countNewlines(text: string): number {
   return count;
 }
 
-/** Splits YAML frontmatter from the body. Malformed or non-mapping frontmatter is left in the body. */
+function noFrontmatter(source: string): Frontmatter {
+  return { data: {}, body: source, lineOffset: 0 };
+}
+
+/**
+ * Splits YAML frontmatter from the body. Unterminated, malformed, non-mapping or code (`---js`) frontmatter
+ * is left in the body.
+ */
 export function splitFrontmatter(source: string): Frontmatter {
+  if (HAS_FRONTMATTER_OPEN.test(source) && !CLOSED_FRONTMATTER.test(source)) return noFrontmatter(source);
   try {
-    const parsed = matter(source);
-    if (!isRecord(parsed.data)) return { data: {}, body: source, lineOffset: 0 };
+    const parsed = matter(source, MATTER_OPTIONS);
+    if (!isRecord(parsed.data)) return noFrontmatter(source);
     const prefix = source.slice(0, source.length - parsed.content.length);
     return { data: parsed.data, body: parsed.content, lineOffset: countNewlines(prefix) };
   } catch {
-    return { data: {}, body: source, lineOffset: 0 };
+    return noFrontmatter(source);
   }
 }
 
@@ -63,10 +88,33 @@ function asTags(value: unknown): string[] {
   return tags;
 }
 
+// YAML aliases share structure, so a tiny header can expand to gigabytes when serialised, and an alias can
+// point back at its own ancestor. Walk each value with a node and depth budget and refuse anything larger;
+// a rejected value does not use up the budget of the others.
+function withinBudget(value: unknown, budget: { nodes: number }, depth: number): boolean {
+  budget.nodes--;
+  if (budget.nodes < 0 || depth > MAX_EXTRA_DEPTH) return false;
+  if (Array.isArray(value)) {
+    return (value as unknown[]).every((item) => withinBudget(item, budget, depth + 1));
+  }
+  if (isRecord(value)) {
+    return Object.values(value).every((item) => withinBudget(item, budget, depth + 1));
+  }
+  return true;
+}
+
 export function normalizeMetadata(data: Record<string, unknown>, fallbackTitle: string): DocumentMetadata {
   const extra: Record<string, unknown> = {};
+  let acceptedNodes = 0;
   for (const [key, value] of Object.entries(data)) {
-    if (!KNOWN_KEYS.has(key)) extra[key] = value;
+    if (KNOWN_KEYS.has(key)) continue;
+    const allowance = Math.min(MAX_EXTRA_NODES, MAX_EXTRA_TOTAL_NODES - acceptedNodes);
+    if (allowance <= 0) break;
+    const budget = { nodes: allowance };
+    if (withinBudget(value, budget, 0)) {
+      extra[key] = value;
+      acceptedNodes += allowance - budget.nodes;
+    }
   }
   return {
     title: asText(data['title']) ?? fallbackTitle,
@@ -77,6 +125,38 @@ export function normalizeMetadata(data: Record<string, unknown>, fallbackTitle: 
     language: asText(data['language']),
     extra,
   };
+}
+
+/** Parses an ATX heading in linear time; a heading with no text is not treated as a heading. */
+function parseAtxHeading(line: string): { level: number; text: string } | null {
+  const open = ATX_OPEN.exec(line);
+  if (!open) return null;
+  let text = line.slice(open[0].length).trim();
+  // Optional closing sequence: trailing #s that are separated from the text by whitespace.
+  let end = text.length;
+  while (end > 0 && text.charAt(end - 1) === '#') end--;
+  if (end < text.length && (end === 0 || /[ \t]/.test(text.charAt(end - 1)))) {
+    text = text.slice(0, end).trimEnd();
+  }
+  return text === '' ? null : { level: (open[1] ?? '').length, text };
+}
+
+/** True when the open section ends in a one-line paragraph that a following setext underline would promote. */
+function isSetextCandidate(open: OpenSection): boolean {
+  const last = open.lines.length - 1;
+  const previous = open.lines[last];
+  if (previous === undefined || previous.trim() === '') return false;
+  if (last === 0 && open.hasHeading) return false;
+  if (last > 0 && (open.lines[last - 1] ?? '').trim() !== '') return false;
+  if (/^ {4}/.test(previous) || NON_PARAGRAPH_START.test(previous)) return false;
+  if (SETEXT_UNDERLINE.test(previous) || matchFenceOpen(previous) !== null) return false;
+  return true;
+}
+
+function pushHeading(stack: { level: number; text: string }[], level: number, text: string): string[] {
+  while (stack.length > 0 && (stack[stack.length - 1]?.level ?? 0) >= level) stack.pop();
+  stack.push({ level, text });
+  return stack.map((entry) => entry.text);
 }
 
 function finish(open: OpenSection): DocumentSection | null {
@@ -125,18 +205,28 @@ export function parseMarkdownBody(
       continue;
     }
 
-    const heading = ATX_HEADING.exec(line);
+    const underline = SETEXT_UNDERLINE.exec(line);
+    if (underline && open && isSetextCandidate(open)) {
+      const titleLine = open.lines.pop() ?? '';
+      const done = finish(open);
+      if (done) sections.push(done);
+      const level = (underline[1] ?? '').startsWith('=') ? 1 : 2;
+      const text = titleLine.trim();
+      const headingPath = pushHeading(stack, level, text);
+      if (level === 1) firstH1 ??= text;
+      open = { headingPath, startLine: lineNo - 1, lines: [titleLine, line], hasHeading: true };
+      continue;
+    }
+
+    const heading = parseAtxHeading(line);
     if (heading) {
       if (open) {
         const done = finish(open);
         if (done) sections.push(done);
       }
-      const level = (heading[1] ?? '').length;
-      const text = (heading[2] ?? '').trim();
-      while (stack.length > 0 && (stack[stack.length - 1]?.level ?? 0) >= level) stack.pop();
-      stack.push({ level, text });
-      if (level === 1) firstH1 ??= text;
-      open = { headingPath: stack.map((entry) => entry.text), startLine: lineNo, lines: [line], hasHeading: true };
+      const headingPath = pushHeading(stack, heading.level, heading.text);
+      if (heading.level === 1) firstH1 ??= heading.text;
+      open = { headingPath, startLine: lineNo, lines: [line], hasHeading: true };
       continue;
     }
 
