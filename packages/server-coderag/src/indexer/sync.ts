@@ -84,8 +84,10 @@ export async function runStartupSync(
     const noDocsIndexed = db.getDocumentCountByType('doc') === 0;
     const noCodeIndexed = db.getDocumentCountByType('code') === 0;
     const rulesChanged = storedRules === null || !globConfigEqual(storedRules, currentGlobs);
+    // Set by a schema migration when existing docs must be re-embedded (e.g. new heading/metadata context).
+    const docsReindexRequired = db.isDocsReindexRequired();
 
-    logger.info(`Startup sync: rules_changed=${String(rulesChanged)}, no_docs=${String(noDocsIndexed)}, no_code=${String(noCodeIndexed)}`);
+    logger.info(`Startup sync: rules_changed=${String(rulesChanged)}, no_docs=${String(noDocsIndexed)}, no_code=${String(noCodeIndexed)}, docs_reindex=${String(docsReindexRequired)}`);
 
     const docsMatcher = new GlobMatcher(currentGlobs.docsInclude, currentGlobs.docsExclude, cwd, config.useGitignore);
     const codeMatcher = new GlobMatcher(currentGlobs.codeInclude, currentGlobs.codeExclude, cwd, config.useGitignore);
@@ -96,11 +98,12 @@ export async function runStartupSync(
       pruneExcluded(db, docsMatcher, codeMatcher, logger);
     }
 
-    if (rulesChanged || noDocsIndexed) {
-      logger.info('Scanning docs...');
-      const docsResult = await indexer.scanDocs(false);
+    if (rulesChanged || noDocsIndexed || docsReindexRequired) {
+      logger.info(docsReindexRequired ? 'Scanning docs (forced re-index)...' : 'Scanning docs...');
+      const docsResult = await indexer.scanDocs(docsReindexRequired);
       logger.info(`Docs scan: ${String(docsResult.indexed)} indexed, ${String(docsResult.skipped)} skipped, ${String(docsResult.failed)} failed`);
       db.setLastSyncAt('docs', new Date());
+      if (docsReindexRequired) db.clearDocsReindexRequired();
     }
 
     if (rulesChanged || noCodeIndexed) {
