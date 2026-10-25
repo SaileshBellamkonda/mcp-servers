@@ -53,6 +53,7 @@ describe('CodeRagWatcher', () => {
     mockIndexer = {
       indexFile: vi.fn().mockResolvedValue(undefined),
       indexCodeFile: vi.fn().mockResolvedValue(undefined),
+      isDocumentFile: vi.fn((p: string) => /\.(md|mdx|markdown)$/i.test(p)),
     } as unknown as Indexer;
     mockSyncManager = { inProgress: false };
     mockDocsMatcher = { isIncluded: vi.fn().mockReturnValue(true) } as unknown as GlobMatcher;

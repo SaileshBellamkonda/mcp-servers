@@ -98,7 +98,7 @@ export class CodeRagWatcher {
 
     const ext = path.extname(filePath).toLowerCase();
 
-    if (ext === '.md') {
+    if (this.indexer.isDocumentFile(filePath)) {
       if (!this.docsMatcher.isIncluded(filePath)) return;
       try {
         await this.indexer.indexFile(filePath);
