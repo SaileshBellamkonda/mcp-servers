@@ -1,11 +1,12 @@
-import { statSync } from 'node:fs';
+import { readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import type { VectorDB } from '../vectordb/db.js';
 import type { Embedder } from '../embedder/embedder.js';
-import { parseMarkdownFile } from './chunk.js';
+import { chunkSections } from './chunk.js';
 import { CodeParser } from './code-parser.js';
 import { isSupportedExtension } from './languages.js';
-import type { CodeSyncResult } from '../core/types.js';
+import { createDefaultLoaderRegistry, type LoaderRegistry } from './loaders/index.js';
+import type { CodeSyncResult, DocumentMetadata, MarkdownChunk } from '../core/types.js';
 import type { McpLogger } from '../core/logger.js';
 import { GlobMatcher } from '../core/glob-utils.js';
 
@@ -15,6 +16,16 @@ export interface IndexerOptions {
   globalExclude?: string[];
   useGitignore?: boolean;
   logger?: McpLogger;
+  loaders?: LoaderRegistry;
+}
+
+/** Text sent to the embedder: document title, heading breadcrumb and tags give the chunk its context. */
+function buildDocEmbeddingText(metadata: DocumentMetadata, chunk: MarkdownChunk): string {
+  const header: string[] = [];
+  if (metadata.title) header.push(metadata.title);
+  if (chunk.headingPath && chunk.headingPath.length > 0) header.push(chunk.headingPath.join(' > '));
+  if (metadata.tags.length > 0) header.push(`tags: ${metadata.tags.join(', ')}`);
+  return header.length > 0 ? `${header.join('\n')}\n\n${chunk.content}` : chunk.content;
 }
 
 export class Indexer {
@@ -26,6 +37,7 @@ export class Indexer {
   private readonly codeMatcher: GlobMatcher | undefined;
   private readonly globalExclude: string[];
   private readonly useGitignore: boolean;
+  private readonly loaders: LoaderRegistry;
   private codeParser: CodeParser | null = null;
 
   constructor(db: VectorDB, embedder: Embedder, chunkSize: number, options: IndexerOptions = {}) {
@@ -37,6 +49,7 @@ export class Indexer {
     this.codeMatcher = options.codeMatcher;
     this.globalExclude = options.globalExclude ?? [];
     this.useGitignore = options.useGitignore ?? false;
+    this.loaders = options.loaders ?? createDefaultLoaderRegistry();
   }
 
   private log(level: 'info' | 'warning', msg: string): void {
@@ -66,19 +79,30 @@ export class Indexer {
     return this.codeMatcher?.isExcluded(filePath) ?? false;
   }
 
+  /** True when a registered document loader handles this file's extension. */
+  isDocumentFile(filePath: string): boolean {
+    return this.loaders.isSupported(filePath);
+  }
+
   async indexFile(filePath: string): Promise<void> {
     this.log('info', `Indexing markdown: ${filePath}`);
+    const loader = this.loaders.getForFile(filePath);
+    if (!loader) {
+      throw new Error(`Unsupported document type: ${path.extname(filePath).toLowerCase()}`);
+    }
+
     const stat = statSync(filePath);
-    const chunks = parseMarkdownFile(filePath, this.chunkSize);
+    const doc = loader.load(filePath, readFileSync(filePath, 'utf8'));
+    const chunks = chunkSections(doc.sections, this.chunkSize);
 
     if (chunks.length === 0) {
       this.log('warning', `No chunks from ${filePath} (empty?)`);
       return;
     }
 
-    const texts = chunks.map((c) => c.content);
+    const texts = chunks.map((c) => buildDocEmbeddingText(doc.metadata, c));
     const embeddings = await this.embedder.embedBatch(texts);
-    this.db.insertDocument(filePath, stat.mtime, chunks, embeddings);
+    this.db.insertDocument(filePath, stat.mtime, chunks, embeddings, doc.metadata);
     this.log('info', `Indexed ${filePath} (${String(chunks.length)} chunks)`);
   }
 
@@ -101,7 +125,7 @@ export class Indexer {
 
   async scanDocs(force = false): Promise<CodeSyncResult> {
     if (!this.docsMatcher) return { indexed: 0, skipped: 0, failed: 0, added: 0, updated: 0 };
-    const files = this.docsMatcher.findFiles();
+    const files = this.docsMatcher.findFiles().filter((f) => this.loaders.isSupported(f));
     return this.indexFileList(files, 'doc', force);
   }
 
@@ -167,7 +191,7 @@ export class Indexer {
 
   async indexMarkdownDirectory(dir: string, force: boolean, exclude: string[] = []): Promise<CodeSyncResult> {
     const matcher = new GlobMatcher(
-      [`${dir.replace(/\\/g, '/')}/**/*.md`],
+      [`${dir.replace(/\\/g, '/')}/${this.loaders.globPattern()}`],
       [...this.globalExclude, ...exclude],
       dir,
       this.useGitignore,
