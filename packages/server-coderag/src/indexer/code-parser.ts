@@ -75,20 +75,29 @@ function loadNativeBinding(packageName: string): Record<string, TSLanguage> {
   return nodeGypBuild(pkgRoot);
 }
 
+// Picks one named grammar out of a multi-grammar native binding.
+function pickGrammar(packageName: string, exportName: string): TSLanguage {
+  const language = loadNativeBinding(packageName)[exportName];
+  if (!language) {
+    throw new Error(`Grammar "${exportName}" not found in ${packageName}`);
+  }
+  return language;
+}
+
 function loadGrammar(grammarKey: string): TSLanguage {
   // tree-sitter-typescript's native binding exports { typescript, tsx }
   if (grammarKey === 'typescript') {
-    return loadNativeBinding('tree-sitter-typescript')['typescript']!;
+    return pickGrammar('tree-sitter-typescript', 'typescript');
   }
   if (grammarKey === 'tsx') {
-    return loadNativeBinding('tree-sitter-typescript')['tsx']!;
+    return pickGrammar('tree-sitter-typescript', 'tsx');
   }
   // tree-sitter-php's native binding exports { php, php_only } - use php
   if (grammarKey === 'php') {
-    return loadNativeBinding('tree-sitter-php')['php']!;
+    return pickGrammar('tree-sitter-php', 'php');
   }
   const packageName = grammarKey === 'c_sharp' ? 'tree-sitter-c-sharp' : `tree-sitter-${grammarKey}`;
-  return loadNativeBinding(packageName) as unknown as TSLanguage;
+  return loadNativeBinding(packageName);
 }
 
 export class CodeParser {

@@ -18,7 +18,7 @@ export function registerIndexStatus(
         properties: {},
       }),
     },
-    async (_input: unknown) => {
+    (_input: unknown) => {
       const documentCount = db.getDocumentCount();
       const docCount = db.getDocumentCountByType('doc');
       const codeCount = db.getDocumentCountByType('code');
@@ -27,7 +27,7 @@ export function registerIndexStatus(
       const embeddingDim = db.getStoredDimensions();
       const syncStatus = syncManager.status;
 
-      return {
+      return Promise.resolve({
         content: [{
           type: 'text' as const,
           text: JSON.stringify({
@@ -43,7 +43,7 @@ export function registerIndexStatus(
             sync_operation: syncStatus.operation,
           }, null, 2),
         }],
-      };
+      });
     }
   );
 }

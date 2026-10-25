@@ -325,7 +325,7 @@ export class VectorDB {
         const chunkResult = insertChunk.run(docId, chunk.position, chunk.content);
         const chunkId = BigInt(chunkResult.lastInsertRowid);
         insertVec.run(chunkId, serializeVector(embedding));
-        insertFts.run(chunkId, chunk.content, chunk.symbolName ?? '');
+        insertFts.run(chunkId, chunk.content, chunk.symbolName);
         insertMeta.run(chunkId, chunk.symbolName, chunk.symbolType, chunk.language, chunk.startLine, chunk.endLine, chunk.parentSymbol, chunk.signature);
       }
     });
@@ -535,7 +535,6 @@ export class VectorDB {
     for (let i = 0; i < semantic.length; i++) {
       const r = semantic[i];
       if (!r) continue;
-      const id = (r as SearchResult & { chunkId?: number }).chunkId ?? i;
       scores.set(i, (scores.get(i) ?? 0) + 1 / (RRF_K + i + 1));
       chunkMeta.set(i, r);
     }
