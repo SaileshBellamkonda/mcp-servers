@@ -1,4 +1,3 @@
-import { readFileSync } from 'node:fs';
 import type { MarkdownChunk } from '../core/types.js';
 import type { DocumentSection } from './loaders/types.js';
 import { isFenceClose, matchFenceOpen } from './loaders/fence.js';
@@ -13,11 +12,6 @@ function segArray(str: string): string[] {
   return [...segmenter.segment(str)].map(s => s.segment);
 }
 
-export function parseMarkdownFile(filePath: string, chunkSize: number): MarkdownChunk[] {
-  const content = readFileSync(filePath, 'utf8');
-  const texts = splitIntoChunks(content, chunkSize);
-  return texts.map((text, i) => ({ content: text, position: i }));
-}
 
 export function splitIntoChunks(content: string, chunkSize: number): string[] {
   const runes = segArray(content); // unicode-safe split
