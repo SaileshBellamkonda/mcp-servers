@@ -39,6 +39,27 @@ export interface CodeChunk {
 export interface MarkdownChunk {
   content: string;
   position: number;
+  headingPath?: string[] | undefined;
+  startLine?: number | undefined;
+  endLine?: number | undefined;
+}
+
+export interface DocumentMetadata {
+  title?: string | undefined;
+  tags: string[];
+  docType?: string | undefined;
+  domain?: string | undefined;
+  project?: string | undefined;
+  language?: string | undefined;
+  extra: Record<string, unknown>;
+}
+
+export interface DocMetadataResult {
+  title: string;
+  tags: string[];
+  docType: string;
+  domain: string;
+  project: string;
 }
 
 export interface CodeMetadataResult {
@@ -57,11 +78,19 @@ export interface SearchResult {
   similarity: number;
   position: number;
   metadata?: CodeMetadataResult | undefined;
+  headingPath?: string[] | undefined;
+  startLine?: number | undefined;
+  endLine?: number | undefined;
+  docMetadata?: DocMetadataResult | undefined;
 }
 
 export interface SearchFilter {
   directory?: string | undefined;
   filePattern?: string | undefined;
+  tags?: string[] | undefined;
+  docType?: string | undefined;
+  domain?: string | undefined;
+  project?: string | undefined;
 }
 
 export interface CodeRelation {
