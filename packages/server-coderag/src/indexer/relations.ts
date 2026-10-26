@@ -51,7 +51,7 @@ export interface ExtractedRelations {
  * parses the indexed code files again and rewrites their relations only (chunks and vectors are not touched, nothing is
  * embedded again).
  */
-export const RELATIONS_VERSION = 3;
+export const RELATIONS_VERSION = 4;
 
 export const NO_RELATIONS: ExtractedRelations = { relations: [], truncated: [] };
 
@@ -174,6 +174,11 @@ function lineOf(node: TSNode): number {
   return node.startPosition.row + 1;
 }
 
+/** A call is reported on the line of the called name: the callee expression ends there, while a chain starts lines earlier. */
+function callLineOf(callee: TSNode): number {
+  return callee.endPosition.row + 1;
+}
+
 type Emit = (type: RelationKind, name: string | null, node: TSNode, position: number | undefined, names?: string[]) => void;
 
 type Visitor = (node: TSNode, position: number | undefined, emit: Emit, isChunk: (n: TSNode) => boolean) => void;
@@ -244,11 +249,11 @@ const visitTs: Visitor = (node, position, emit, isChunk) => {
         if (module !== null) emit('imports', module, node, 0, []);
         return;
       }
-      emit('calls', nameOf(fn), node, position);
+      emit('calls', nameOf(fn), fn ?? node, position);
       return;
     }
     case 'new_expression':
-      emit('calls', nameOf(node.childForFieldName('constructor')), node, position);
+      emit('calls', nameOf(node.childForFieldName('constructor')), node.childForFieldName('constructor') ?? node, position);
       return;
     case 'class_heritage':
       if (node.parent && isChunk(node.parent)) heritageNames(node, emit, position);
@@ -293,7 +298,7 @@ const visitPython: Visitor = (node, position, emit, isChunk) => {
       return;
     }
     case 'call':
-      emit('calls', nameOf(node.childForFieldName('function')), node, position);
+      emit('calls', nameOf(node.childForFieldName('function')), node.childForFieldName('function') ?? node, position);
       return;
     case 'class_definition': {
       if (!isChunk(node)) return;
@@ -315,7 +320,7 @@ const visitGo: Visitor = (node, position, emit, isChunk) => {
       return;
     }
     case 'call_expression':
-      emit('calls', nameOf(node.childForFieldName('function')), node, position);
+      emit('calls', nameOf(node.childForFieldName('function')), node.childForFieldName('function') ?? node, position);
       return;
     case 'field_declaration': {
       // An embedded struct field has a type and no name.
@@ -386,7 +391,7 @@ const visitRust: Visitor = (node, position, emit, isChunk) => {
       return;
     }
     case 'call_expression':
-      emit('calls', nameOf(node.childForFieldName('function')), node, position);
+      emit('calls', nameOf(node.childForFieldName('function')), node.childForFieldName('function') ?? node, position);
       return;
     case 'impl_item': {
       const trait = node.childForFieldName('trait');
@@ -417,10 +422,10 @@ const visitJava: Visitor = (node, position, emit, isChunk) => {
       return;
     }
     case 'method_invocation':
-      emit('calls', node.childForFieldName('name')?.text ?? null, node, position);
+      emit('calls', node.childForFieldName('name')?.text ?? null, node.childForFieldName('name') ?? node, position);
       return;
     case 'object_creation_expression':
-      emit('calls', nameOf(node.childForFieldName('type')), node, position);
+      emit('calls', nameOf(node.childForFieldName('type')), node.childForFieldName('type') ?? node, position);
       return;
     case 'class_declaration':
     case 'interface_declaration':
@@ -452,10 +457,10 @@ const visitCsharp: Visitor = (node, position, emit, isChunk) => {
       return;
     }
     case 'invocation_expression':
-      emit('calls', nameOf(node.childForFieldName('function')), node, position);
+      emit('calls', nameOf(node.childForFieldName('function')), node.childForFieldName('function') ?? node, position);
       return;
     case 'object_creation_expression':
-      emit('calls', nameOf(node.childForFieldName('type')), node, position);
+      emit('calls', nameOf(node.childForFieldName('type')), node.childForFieldName('type') ?? node, position);
       return;
     default:
       if (!CSHARP_TYPE_DECLARATIONS.has(node.type) || !isChunk(node)) return;
@@ -531,7 +536,7 @@ export function extractRelations(root: TSNode, lang: string, chunks: readonly Ch
       return;
     }
     counts.set(countKey, count + 1);
-    const relation: RawRelation = { type, sourcePosition: position, targetName: name, line: lineOf(node), ...(type === 'imports' ? { names: [...(names ?? [])] } : {}), ...(weak ? { weak: true } : {}) };
+    const relation: RawRelation = { type, sourcePosition: position, targetName: name, line: type === 'calls' ? callLineOf(node) : lineOf(node), ...(type === 'imports' ? { names: [...(names ?? [])] } : {}), ...(weak ? { weak: true } : {}) };
     relations.push(relation);
     if (type === 'imports') importIndex.set(name, relation);
   };
