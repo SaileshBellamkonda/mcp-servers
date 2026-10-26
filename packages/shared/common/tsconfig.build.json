@@ -6,8 +6,7 @@
     "customConditions": [],
     "outDir": "dist",
     "rootDir": "src",
-    "composite": true,
-    "tsBuildInfoFile": "dist/.tsbuildinfo"
+    "composite": true
   },
   "include": [
     "src/**/*"
