@@ -57,7 +57,7 @@ export interface ExtractedRelations {
  * parses the indexed code files again and rewrites their relations only (chunks and vectors are not touched, nothing is
  * embedded again).
  */
-export const RELATIONS_VERSION = 7;
+export const RELATIONS_VERSION = 8;
 
 export const NO_RELATIONS: ExtractedRelations = { relations: [], truncated: [] };
 
@@ -171,6 +171,54 @@ function nameOf(node: TSNode | null, depth = 0): string | null {
   if (NAME_IS_LAST_CHILD.has(node.type)) return nameOf(namedChildren(node).at(-1) ?? null, depth + 1);
   if (NAME_IS_FIRST_CHILD.has(node.type)) return nameOf(namedChildren(node)[0] ?? null, depth + 1);
   return null;
+}
+
+const NO_PARAMETERS: ReadonlySet<string> = new Set();
+
+/** Nodes that declare parameters (function declarations and expressions, methods, closures, lambdas). */
+const FUNCTION_NODES = new Set([
+  'function_declaration', 'function_expression', 'generator_function', 'generator_function_declaration', 'arrow_function', 'method_definition',
+  'function_definition', 'lambda', 'function_item', 'closure_expression', 'func_literal', 'method_declaration', 'constructor_declaration',
+  'lambda_expression', 'local_function_statement', 'anonymous_method_expression',
+]);
+
+function firstIdentifier(node: TSNode | null, depth = 0): string | null {
+  if (!node || depth > 4) return null;
+  if (node.type === 'identifier') return node.text;
+  for (const child of namedChildren(node)) {
+    const found = firstIdentifier(child, depth + 1);
+    if (found !== null) return found;
+  }
+  return null;
+}
+
+/** Names bound by the parameters of a function-like node. */
+function parameterNames(fn: TSNode): string[] {
+  const params = fn.childForFieldName('parameters') ?? fn.childForFieldName('parameter');
+  if (!params) return [];
+  if (params.type === 'identifier') return [params.text];
+  const names: string[] = [];
+  for (const param of namedChildren(params)) {
+    if (param.type === 'identifier') {
+      names.push(param.text);
+      continue;
+    }
+    const target = param.childForFieldName('pattern') ?? param.childForFieldName('name');
+    if (target) {
+      const name = firstIdentifier(target);
+      if (name !== null) names.push(name);
+      continue;
+    }
+    // Go `a, b func()` and Python `*args`, `callback: Callable`: the names are identifier children.
+    for (const child of namedChildren(param)) if (child.type === 'identifier') names.push(child.text);
+  }
+  return names;
+}
+
+/** True for `name(...)`: the callee is a bare identifier, not `x.name(...)`, `T::name(...)` or `x?.name(...)`. */
+function isPlainCallee(node: TSNode): boolean {
+  if (node.type !== 'identifier') return false;
+  return !(node.parent?.type === 'method_invocation' && node.parent.childForFieldName('object'));
 }
 
 const SELF_NAMES = new Set(['this', 'self', 'Self', 'super', 'base', 'cls']);
@@ -550,8 +598,13 @@ export function extractRelations(root: TSNode, lang: string, chunks: readonly Ch
   const dropped = new Map<string, RelationTruncation>();
   const importIndex = new Map<string, RawRelation>();
 
+  // Names of the parameters of the functions around the node being visited.
+  let scopeParams: ReadonlySet<string> = NO_PARAMETERS;
+
   const emit: Emit = (type, name, node, position, names) => {
     if (name === null || position === undefined) return;
+    // `callback(x)`, `done()`, `handler()`: a call of a parameter is a call of whatever the caller passed in.
+    if (type === 'calls' && scopeParams.has(name) && isPlainCallee(node)) return;
     if (type === 'imports') {
       if (name === '') return;
       const existing = importIndex.get(name);
@@ -593,14 +646,17 @@ export function extractRelations(root: TSNode, lang: string, chunks: readonly Ch
     if (type === 'imports') importIndex.set(name, relation);
   };
 
-  const stack: { node: TSNode; position: number | undefined }[] = [{ node: root, position: undefined }];
+  const stack: { node: TSNode; position: number | undefined; params: ReadonlySet<string> }[] = [{ node: root, position: undefined, params: NO_PARAMETERS }];
   for (let frame = stack.pop(); frame; frame = stack.pop()) {
     const { node } = frame;
     const position = chunkOf(node)?.position ?? frame.position;
+    const own = FUNCTION_NODES.has(node.type) ? parameterNames(node) : [];
+    const params = own.length === 0 ? frame.params : new Set([...frame.params, ...own]);
+    scopeParams = params;
     visitor(node, position, emit, isChunk);
     for (let i = node.childCount - 1; i >= 0; i--) {
       const child = node.child(i);
-      if (child?.isNamed && !SKIPPED_NODES.has(child.type)) stack.push({ node: child, position });
+      if (child?.isNamed && !SKIPPED_NODES.has(child.type)) stack.push({ node: child, position, params });
     }
   }
 
