@@ -74,6 +74,15 @@ interface EdgeRow {
   target_chunk_id: number | null;
   confidence: number;
   doc_id: number;
+  weak: number;
+  qualifier: string | null;
+}
+
+/** Line range of a function or method chunk of one document. */
+interface FunctionRange {
+  chunk_id: number;
+  start_line: number;
+  end_line: number;
 }
 
 interface Candidate {
@@ -84,6 +93,7 @@ interface Candidate {
   symbol_name: string;
   parent_symbol: string | null;
   start_line: number | null;
+  end_line: number | null;
 }
 
 interface ImportRow {
@@ -144,6 +154,40 @@ function collapseSymbols(candidates: readonly Candidate[]): Candidate[] {
   const grouped = [...first.values()];
   const classLike = new Set(grouped.filter((c) => c.symbol_type === 'class' || c.symbol_type === 'struct').map((c) => `${String(c.document_id)}\u0000${c.symbol_name}`));
   return grouped.filter((c) => !(c.symbol_type === 'function' && c.parent_symbol === c.symbol_name && classLike.has(`${String(c.document_id)}\u0000${c.symbol_name}`)));
+}
+
+function isInFiles(candidate: Candidate, files: readonly string[]): boolean {
+  const file = candidate.filename.replaceAll('\\', '/');
+  return files.includes(file) || files.includes(dirname(file));
+}
+
+/** True when the symbol is a member of class/type `name`, or lives in a file or folder of that name (a module or package). */
+function belongsTo(candidate: Candidate, name: string): boolean {
+  if (candidate.parent_symbol === name) return true;
+  const file = candidate.filename.replaceAll('\\', '/');
+  const base = path.posix.basename(file);
+  return base.slice(0, base.length - path.posix.extname(base).length) === name || path.posix.basename(path.posix.dirname(file)) === name;
+}
+
+/**
+ * True when `candidate` is nested in a function or method of its file (a closure, a helper of a test, a local class)
+ * and the calling chunk is outside that function, in another file or elsewhere in the same one.
+ */
+function isHiddenLocal(
+  candidate: Candidate,
+  sourceDocument: number,
+  source: { start: number; end: number } | null,
+  functionsOf: (document: number) => readonly FunctionRange[],
+): boolean {
+  if (candidate.start_line === null || candidate.end_line === null) return false;
+  let innermost: FunctionRange | undefined;
+  for (const f of functionsOf(candidate.document_id)) {
+    if (f.chunk_id === candidate.chunk_id || f.start_line > candidate.start_line || f.end_line < candidate.end_line) continue;
+    if (f.start_line === candidate.start_line && f.end_line === candidate.end_line) continue;
+    if (!innermost || f.end_line - f.start_line < innermost.end_line - innermost.start_line) innermost = f;
+  }
+  if (!innermost) return false;
+  return candidate.document_id !== sourceDocument || source === null || source.start < innermost.start_line || source.end > innermost.end_line;
 }
 
 function placeholders(n: number): string {
@@ -256,7 +300,7 @@ export class RelationStore {
     if (!extracted) return;
 
     const insert = this.db.prepare(
-      'INSERT INTO code_relations (source_chunk_id, target_chunk_id, relation_type, target_name, target_file, confidence, line, names, weak) VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?)',
+      'INSERT INTO code_relations (source_chunk_id, target_chunk_id, relation_type, target_name, target_file, confidence, line, names, weak, qualifier) VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?, ?)',
     );
     const edges: EdgeRow[] = [];
     for (const relation of extracted.relations) {
@@ -264,10 +308,12 @@ export class RelationStore {
       if (source === undefined || source <= 0) continue;
       if (relation.type === 'imports') {
         const file = this.fileIndex().resolveImport(language, relation.targetName, relation.names ?? [], filename);
-        insert.run(source, 'imports', relation.targetName, file ?? '', file === null ? CONFIDENCE.unresolved : CONFIDENCE.importResolved, relation.line, toNamesColumn(relation.names), 0);
+        insert.run(source, 'imports', relation.targetName, file ?? '', file === null ? CONFIDENCE.unresolved : CONFIDENCE.importResolved, relation.line, toNamesColumn(relation.names), 0, null);
       } else {
-        const result = insert.run(source, relation.type, relation.targetName, '', CONFIDENCE.unresolved, relation.line, null, relation.weak === true ? 1 : 0);
-        edges.push({ id: result.lastInsertRowid, source_chunk_id: source, relation_type: relation.type, target_name: relation.targetName, target_chunk_id: null, confidence: CONFIDENCE.unresolved, doc_id: 0 });
+        const weak = relation.weak === true ? 1 : 0;
+        const qualifier = relation.qualifier ?? null;
+        const result = insert.run(source, relation.type, relation.targetName, '', CONFIDENCE.unresolved, relation.line, null, weak, qualifier);
+        edges.push({ id: result.lastInsertRowid, source_chunk_id: source, relation_type: relation.type, target_name: relation.targetName, target_chunk_id: null, confidence: CONFIDENCE.unresolved, doc_id: 0, weak, qualifier });
       }
     }
     if (edges.length > 0) this.resolveEdges(edges, this.docIdOf(filename));
@@ -297,7 +343,7 @@ export class RelationStore {
       if (!found) {
         found = this.db
           .prepare<Candidate>(
-            `SELECT cm.chunk_id, c.document_id, d.filename, cm.symbol_type, cm.symbol_name, cm.parent_symbol, cm.start_line FROM code_metadata cm
+            `SELECT cm.chunk_id, c.document_id, d.filename, cm.symbol_type, cm.symbol_name, cm.parent_symbol, cm.start_line, cm.end_line FROM code_metadata cm
              JOIN chunks c ON c.id = cm.chunk_id JOIN documents d ON d.id = c.document_id WHERE cm.symbol_name = ? LIMIT ${String(MAX_CANDIDATE_CHUNKS)}`,
           )
           .all(name);
@@ -317,12 +363,51 @@ export class RelationStore {
       return files;
     };
 
+    const functions = new Map<number, FunctionRange[]>();
+    const functionsOf = (document: number): FunctionRange[] => {
+      let found = functions.get(document);
+      if (!found) {
+        found = this.db
+          .prepare<FunctionRange>(
+            `SELECT cm.chunk_id, cm.start_line, cm.end_line FROM code_metadata cm JOIN chunks c ON c.id = cm.chunk_id
+             WHERE c.document_id = ? AND cm.symbol_type IN ('function', 'method') AND cm.start_line IS NOT NULL AND cm.end_line IS NOT NULL`,
+          )
+          .all(document);
+        functions.set(document, found);
+      }
+      return found;
+    };
+    const sources = new Map<number, { name: string; start: number; end: number } | null>();
+    const sourceOf = (chunk: number): { name: string; start: number; end: number } | null => {
+      let found = sources.get(chunk);
+      if (found === undefined) {
+        const row = this.db.prepare<{ symbol_name: string | null; start_line: number | null; end_line: number | null }>('SELECT symbol_name, start_line, end_line FROM code_metadata WHERE chunk_id = ?').get(chunk);
+        found = row ? { name: row.symbol_name ?? '', start: row.start_line ?? 0, end: row.end_line ?? 0 } : null;
+        sources.set(chunk, found);
+      }
+      return found;
+    };
+
     for (const edge of edges) {
       const document = docId > 0 ? docId : edge.doc_id;
-      // A class never inherits from itself: `class Config(lib.Config)` names another class that happens to share the name.
-      const all = collapseSymbols(
-        candidatesFor(edge.target_name).filter((c) => TARGET_TYPES[edge.relation_type].has(c.symbol_type) && !(edge.relation_type === 'inherits' && c.chunk_id === edge.source_chunk_id)),
-      );
+      const source = sourceOf(edge.source_chunk_id);
+      let found = candidatesFor(edge.target_name).filter((c) => TARGET_TYPES[edge.relation_type].has(c.symbol_type));
+      // A class never inherits from itself, nor from a same-named type of its own file (`impl Error for Error`);
+      // `class Config(lib.Config)` names another class that happens to share the name.
+      if (edge.relation_type === 'inherits') found = found.filter((c) => c.chunk_id !== edge.source_chunk_id && !(c.document_id === document && source !== null && c.symbol_name === source.name));
+      // A call to a very common name (`toString`, `clone`, `contains`) is almost always a library call: it only
+      // resolves to a symbol of its own file or of a file it imports.
+      if (edge.weak === 1) {
+        const files = importedFiles(document);
+        found = found.filter((c) => c.document_id === document || isInFiles(c, files));
+      }
+      // `GsonTypes.getRawType(x)`, `flask.views.View`: a candidate that belongs to the named class or module wins.
+      if (edge.qualifier !== null && edge.qualifier !== '') {
+        const named = found.filter((c) => belongsTo(c, edge.qualifier ?? ''));
+        if (named.length > 0) found = named;
+      }
+      // A function nested in another function is only visible inside it.
+      const all = collapseSymbols(found.filter((c) => !isHiddenLocal(c, document, source, functionsOf)));
       let resolved: { chunk: number | null; confidence: number };
       if (all.length === 0) {
         resolved = { chunk: null, confidence: CONFIDENCE.unresolved };
@@ -331,10 +416,7 @@ export class RelationStore {
         let pick: Candidate[] = sameFile.length > 0 ? sameFile : all;
         if (pick.length > 1 && sameFile.length === 0) {
           const files = importedFiles(document);
-          const viaImport = pick.filter((c) => {
-            const file = c.filename.replaceAll('\\', '/');
-            return files.includes(file) || files.includes(dirname(file));
-          });
+          const viaImport = pick.filter((c) => isInFiles(c, files));
           if (viaImport.length > 0) pick = viaImport;
         }
         const only = pick.length === 1 ? pick[0] : undefined;
@@ -397,7 +479,7 @@ export class RelationStore {
       if (names.length === 0) return 0;
       const edges = this.db
         .prepare<EdgeRow>(
-          `SELECT cr.id, cr.source_chunk_id, cr.relation_type, cr.target_name, cr.target_chunk_id, cr.confidence, c.document_id AS doc_id
+          `SELECT cr.id, cr.source_chunk_id, cr.relation_type, cr.target_name, cr.target_chunk_id, cr.confidence, c.document_id AS doc_id, cr.weak, cr.qualifier
            FROM relation_dirty rd
            JOIN code_relations cr ON cr.target_name = rd.value AND cr.id <= rd.watermark AND cr.relation_type IN ('calls','inherits')
            JOIN chunks c ON c.id = cr.source_chunk_id

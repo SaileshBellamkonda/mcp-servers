@@ -12,8 +12,8 @@ function chunk(name: string, position: number, overrides: Partial<CodeChunk> = {
   };
 }
 
-function rel(type: RelationKind, sourcePosition: number, targetName: string): RawRelation {
-  return { type, sourcePosition, targetName, line: 3 };
+function rel(type: RelationKind, sourcePosition: number, targetName: string, extra: Partial<RawRelation> = {}): RawRelation {
+  return { type, sourcePosition, targetName, line: 3, ...extra };
 }
 
 const relations = (...list: RawRelation[]): ExtractedRelations => ({ relations: list, truncated: [] });
@@ -90,5 +90,106 @@ describe('overloads and constructors are one target', () => {
     put('/p/c.java', [chunk('Foo', 0, { symbolType: 'function' })]);
     await db.resolvePendingRelations();
     expect(db.queryRelations(query('caller', { direction: 'out', types: ['calls'] })).hits[0]).toMatchObject({ confidence: 0.5 });
+  });
+});
+
+describe('a qualified call prefers the class or module it names', () => {
+  it('resolves `GsonTypes.getRawType(x)` to the method of GsonTypes, not to a same-named method of the calling class', async () => {
+    put('/p/internal/GsonTypes.java', [chunk('getRawType', 0, { symbolType: 'method', parentSymbol: 'GsonTypes' })]);
+    put('/p/reflect/TypeToken.java', [
+      chunk('caller', 0, { symbolType: 'method', parentSymbol: 'TypeToken' }),
+      chunk('getRawType', 1, { symbolType: 'method', parentSymbol: 'TypeToken' }),
+    ], relations(rel('calls', 0, 'getRawType', { qualifier: 'GsonTypes' })));
+    await db.resolvePendingRelations();
+    const hit = db.queryRelations(query('TypeToken.caller', { direction: 'out', types: ['calls'] })).hits[0];
+    expect(hit).toMatchObject({ confidence: 0.9, target: { file: '/p/internal/GsonTypes.java', parent: 'GsonTypes' } });
+  });
+
+  it('resolves `flask.views.View` by the file name of the module and `flask.Flask` by the name of its folder', async () => {
+    const klass = (name: string): CodeChunk => chunk(name, 0, { symbolType: 'class', language: 'python' });
+    put('/p/src/flask/views.py', [klass('View')]);
+    put('/p/src/flask/app.py', [klass('Flask')]);
+    put('/p/tests/test_views.py', [klass('View'), chunk('Flask', 1, { symbolType: 'class', language: 'python' }), chunk('Index', 2, { symbolType: 'class', language: 'python' })],
+      relations(rel('inherits', 2, 'View', { qualifier: 'views' }), rel('calls', 2, 'Flask', { qualifier: 'flask' })));
+    await db.resolvePendingRelations();
+    const out = db.queryRelations(query('Index', { direction: 'out' })).hits;
+    expect(out.find((h) => h.type === 'inherits')).toMatchObject({ confidence: 0.9, target: { file: '/p/src/flask/views.py' } });
+    expect(out.find((h) => h.type === 'calls')).toMatchObject({ confidence: 0.9, target: { file: '/p/src/flask/app.py' } });
+  });
+
+  it('keeps the same-file preference when the qualifier names no candidate (a variable)', async () => {
+    put('/p/a.java', [chunk('caller', 0), chunk('add', 1, { symbolType: 'method', parentSymbol: 'Local' })], relations(rel('calls', 0, 'add', { qualifier: 'items' })));
+    put('/p/b.java', [chunk('add', 0, { symbolType: 'method', parentSymbol: 'Other' })]);
+    await db.resolvePendingRelations();
+    expect(db.queryRelations(query('caller', { direction: 'out', types: ['calls'] })).hits[0]).toMatchObject({ confidence: 0.9, target: { file: '/p/a.java', parent: 'Local' } });
+  });
+});
+
+describe('a function nested in another function is not visible outside it', () => {
+  const outer = chunk('timedOut', 0, { startLine: 10, endLine: 60 });
+  const inner = chunk('once', 1, { startLine: 20, endLine: 24 });
+
+  it('is not the target of a call from another file', async () => {
+    put('/p/timed-out.ts', [outer, inner]);
+    put('/p/other.ts', [chunk('caller', 0)], relations(rel('calls', 0, 'once')));
+    await db.resolvePendingRelations();
+    const hit = db.queryRelations(query('caller', { direction: 'out', types: ['calls'] })).hits[0];
+    expect(hit).toMatchObject({ targetName: 'once', confidence: 0.3 });
+    expect(hit?.target).toBeUndefined();
+  });
+
+  it('is the target of calls from inside the enclosing function but not from elsewhere in its file', async () => {
+    put('/p/timed-out.ts', [outer, inner, chunk('handler', 2, { startLine: 30, endLine: 35 }), chunk('later', 3, { startLine: 70, endLine: 80 })],
+      relations(rel('calls', 2, 'once'), rel('calls', 3, 'once')));
+    await db.resolvePendingRelations();
+    const calls = db.queryRelations(query('once', { direction: 'in', types: ['calls'] })).hits;
+    expect(calls.filter((h) => h.target).map((h) => h.source.name)).toEqual(['handler']);
+    expect(calls.find((h) => h.source.name === 'handler')).toMatchObject({ confidence: 0.9, target: { name: 'once' } });
+    expect(calls.find((h) => h.source.name === 'later')).toMatchObject({ confidence: 0.3 });
+  });
+
+  it('does not hide a method of a class, nor a function nested only in a class', async () => {
+    put('/p/a.ts', [chunk('Box', 0, { symbolType: 'class', startLine: 1, endLine: 50 }), chunk('open', 1, { symbolType: 'method', parentSymbol: 'Box', startLine: 5, endLine: 9 })]);
+    put('/p/b.ts', [chunk('caller', 0)], relations(rel('calls', 0, 'open')));
+    await db.resolvePendingRelations();
+    expect(db.queryRelations(query('caller', { direction: 'out', types: ['calls'] })).hits[0]).toMatchObject({ confidence: 0.9, target: { name: 'open', parent: 'Box' } });
+  });
+});
+
+describe('calls to common names resolve only through the file itself or an import', () => {
+  const weakCall = (name: string): RawRelation => rel('calls', 0, name, { weak: true });
+
+  it('does not attach `value.toString()` to the only toString the index happens to define', async () => {
+    put('/p/a.java', [chunk('caller', 0)], relations(weakCall('toString')));
+    put('/p/b.java', [chunk('toString', 0, { symbolType: 'method', parentSymbol: 'Number' })]);
+    await db.resolvePendingRelations();
+    expect(db.queryRelations(query('caller', { direction: 'out' })).hits).toEqual([]);
+    expect(db.queryRelations(query('toString', { direction: 'in' })).hits).toEqual([]);
+  });
+
+  it('stays hidden when several symbols have the name', async () => {
+    put('/p/a.java', [chunk('caller', 0)], relations(weakCall('contains')));
+    put('/p/b.java', [chunk('contains', 0)]);
+    put('/p/c.java', [chunk('contains', 0)]);
+    await db.resolvePendingRelations();
+    expect(db.queryRelations(query('caller', { direction: 'out' })).hits).toEqual([]);
+  });
+
+  it('is shown when the calling file imports the file that defines the name', async () => {
+    put('/p/util.ts', [chunk('close', 0, { language: 'typescript' })]);
+    put('/p/other.ts', [chunk('close', 0, { language: 'typescript' })]);
+    put('/p/a.ts', [chunk('caller', 0, { language: 'typescript' })], relations(rel('imports', 0, './util', { names: ['close'] }), weakCall('close')));
+    await db.resolvePendingRelations();
+    expect(db.queryRelations(query('caller', { direction: 'out', types: ['calls'] })).hits[0]).toMatchObject({ confidence: 0.9, target: { file: '/p/util.ts' } });
+  });
+});
+
+describe('an impl block does not inherit from the type it implements', () => {
+  it('leaves `impl std::error::Error for Error` unresolved instead of pointing at struct Error of the same file', async () => {
+    put('/p/error.rs', [chunk('Error', 0, { symbolType: 'struct', language: 'rust' }), chunk('Error', 1, { symbolType: 'struct', language: 'rust' })], relations(rel('inherits', 1, 'Error')));
+    await db.resolvePendingRelations();
+    const hit = db.queryRelations(query('Error', { direction: 'out', types: ['inherits'] })).hits[0];
+    expect(hit).toMatchObject({ confidence: 0.3 });
+    expect(hit?.target).toBeUndefined();
   });
 });

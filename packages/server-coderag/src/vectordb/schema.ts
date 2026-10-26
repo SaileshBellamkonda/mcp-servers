@@ -60,7 +60,8 @@ END`;
  * `target_file` is the file an import resolves to; `confidence` is 1.0 for a resolved import, 0.9 for a unique name
  * match, 0.5 for an ambiguous name (target_chunk_id NULL), 0.3 for an unresolved one. `line` is the line of the call,
  * base type or import in the source file; `names` lists the imported names as `,a,b,`; `weak` marks a call to a very
- * common name that stays hidden unless it resolves to an indexed symbol (target set, or ambiguous).
+ * common name that stays hidden unless it resolves to a symbol of its own file or of an imported file; `qualifier` is the
+ * name written before the callee or base type (`GsonTypes` in `GsonTypes.getRawType(x)`), used to prefer that class or module.
  */
 export const RELATIONS_TABLE_DDL = `
 CREATE TABLE IF NOT EXISTS code_relations (
@@ -74,6 +75,7 @@ CREATE TABLE IF NOT EXISTS code_relations (
   line            INTEGER,
   names           TEXT,
   weak            INTEGER NOT NULL DEFAULT 0,
+  qualifier       TEXT,
   FOREIGN KEY (source_chunk_id) REFERENCES chunks(id) ON DELETE CASCADE,
   FOREIGN KEY (target_chunk_id) REFERENCES chunks(id) ON DELETE SET NULL
 );`;
@@ -83,6 +85,7 @@ export const RELATIONS_ADDED_COLUMNS = [
   { name: 'line', ddl: 'ALTER TABLE code_relations ADD COLUMN line INTEGER' },
   { name: 'names', ddl: 'ALTER TABLE code_relations ADD COLUMN names TEXT' },
   { name: 'weak', ddl: 'ALTER TABLE code_relations ADD COLUMN weak INTEGER NOT NULL DEFAULT 0' },
+  { name: 'qualifier', ddl: 'ALTER TABLE code_relations ADD COLUMN qualifier TEXT' },
 ] as const;
 
 /**

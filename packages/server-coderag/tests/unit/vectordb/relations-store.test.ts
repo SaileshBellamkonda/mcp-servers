@@ -121,6 +121,8 @@ describe('call and inheritance edges', () => {
 });
 
 describe('weak edges (calls to common names)', () => {
+  // A name from the stop-list (format, toString, clone, ...) is almost always a library call, so it resolves only to a
+  // symbol of the calling file or of a file it imports; on six real repositories every one of 30 sampled global matches was wrong.
   const weakCall = (name: string): RawRelation => rel('calls', 0, name, { weak: true });
 
   it('are not shown while nothing in the index has that name, and do not count', async () => {
@@ -132,23 +134,26 @@ describe('weak edges (calls to common names)', () => {
     expect(db.queryRelations(query('format', { direction: 'in' }))).toMatchObject({ hits: [], total: 0 });
   });
 
-  it('appear when a symbol with that name is indexed later (0.9, or 0.5 when ambiguous)', async () => {
+  it('stay hidden when only another file, that is not imported, has a symbol with that name (a library call)', async () => {
     put('/p/a.ts', [chunk('caller', 0)], relations(weakCall('format')));
     put('/p/b.ts', [chunk('format', 0)]);
-    await db.resolvePendingRelations();
-    expect(db.queryRelations(query('format', { direction: 'in' })).hits[0]).toMatchObject({ confidence: 0.9, source: { name: 'caller' }, target: { file: '/p/b.ts' } });
-    put('/p/c.ts', [chunk('format', 0)]);
-    await db.resolvePendingRelations();
-    expect(db.queryRelations(query('caller', { direction: 'out' })).hits[0]).toMatchObject({ targetName: 'format', confidence: 0.5 });
-  });
-
-  it('disappear again when the only symbol with that name is deleted', async () => {
-    put('/p/a.ts', [chunk('caller', 0)], relations(weakCall('format')));
-    put('/p/b.ts', [chunk('format', 0)]);
-    await db.resolvePendingRelations();
-    db.deleteDocument('/p/b.ts');
     await db.resolvePendingRelations();
     expect(db.queryRelations(query('caller', { direction: 'out' })).hits).toEqual([]);
+    put('/p/c.ts', [chunk('format', 0)]);
+    await db.resolvePendingRelations();
+    expect(db.queryRelations(query('caller', { direction: 'out' })).hits).toEqual([]);
+  });
+
+  it('appear (0.9) once the calling file imports the file that has a symbol with that name, and disappear with it', async () => {
+    put('/p/a.ts', [chunk('caller', 0)], relations(rel('imports', 0, './b', { names: ['format'] }), weakCall('format')));
+    await db.resolvePendingRelations();
+    expect(db.queryRelations(query('caller', { direction: 'out', types: ['calls'] })).hits).toEqual([]);
+    put('/p/b.ts', [chunk('format', 0)]);
+    await db.resolvePendingRelations();
+    expect(db.queryRelations(query('format', { direction: 'in', types: ['calls'] })).hits[0]).toMatchObject({ confidence: 0.9, source: { name: 'caller' }, target: { file: '/p/b.ts' } });
+    db.deleteDocument('/p/b.ts');
+    await db.resolvePendingRelations();
+    expect(db.queryRelations(query('caller', { direction: 'out', types: ['calls'] })).hits).toEqual([]);
   });
 
   it('do not add to the omitted note', () => {
