@@ -7,15 +7,38 @@ MCP clients can use them without a separate process.
 - **CodeRAG** - semantic search over code and Markdown through an OpenAI-compatible embeddings endpoint
   (added to the extension in a later release; see availability below).
 
-Every server listens on `127.0.0.1` only and requires a bearer token. The tree view and status bar show the
-state of each server; the commands `MCP Servers: Start/Stop/Restart Server` control them.
+Every server listens on `127.0.0.1` only and requires a bearer token (random per VS Code session; it is never shown
+or copied). The **MCP Servers** view in the activity bar and the status bar entry show the state of each server
+(stopped, starting, running, error, or unavailable with the reason); the status bar counts the running servers.
+
+## Behaviour
+
+- **Auto-start:** with `mcpServers.git.autoStart` on, the Git server starts when VS Code opens with a workspace folder,
+  and when you open a folder later. Without a folder the server is *unavailable* ("Open a folder to use the Git server").
+- **Workspace folders:** adding or removing folders re-scopes the running Git server without a restart; closing the last
+  folder stops it.
+- **Port:** changing `mcpServers.git.port` restarts a running server and tells you. A taken port is reported as
+  "Port N is already in use (change mcpServers.git.port)"; any other startup failure shows its real message once.
+- **Shutdown:** all servers are stopped when the extension deactivates, so no port stays bound.
+
+## Commands
+
+Available from the Command Palette (category *MCP Servers*), as inline buttons on a tree item and in its context menu.
+From the palette with several candidates you pick the server; with exactly one it is used directly.
+
+| Command | |
+|---|---|
+| `MCP Servers: Start Server` | Start a stopped (or failed) server |
+| `MCP Servers: Stop Server` | Stop a running server |
+| `MCP Servers: Restart Server` | Restart a running server (keeps its token) |
+| `MCP Servers: Copy Server URL` | Copies `http://127.0.0.1:<port>/mcp` (never the token) |
 
 ## Settings
 
 | Setting | Default | |
 |---|---|---|
-| `mcpServers.git.autoStart` | `true` | Start the Git server when the workspace opens |
-| `mcpServers.git.port` | `3000` | Port of the Git server |
+| `mcpServers.git.autoStart` | `true` | Start the Git server when a workspace folder is open |
+| `mcpServers.git.port` | `3000` | Port of the Git server (`0` picks a free port) |
 
 ## CodeRAG availability
 
