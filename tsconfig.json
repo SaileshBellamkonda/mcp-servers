@@ -13,9 +13,6 @@
     },
     {
       "path": "packages/server-coderag/tsconfig.build.json"
-    },
-    {
-      "path": "packages/vscode-extension"
     }
   ]
 }

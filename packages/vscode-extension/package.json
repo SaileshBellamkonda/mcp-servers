@@ -1,11 +1,33 @@
 {
-  "name": "@mcp-servers/vscode-extension",
+  "name": "mcp-servers",
+  "displayName": "MCP Servers",
+  "description": "Runs Model Context Protocol servers (Git, and CodeRAG semantic search where supported) inside VS Code, bound to loopback and protected by a bearer token.",
   "version": "0.1.0",
-  "description": "VS Code extension hosting MCP servers",
+  "publisher": "SaileshBellamkonda",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/SaileshBellamkonda/mcp-servers.git",
+    "directory": "packages/vscode-extension"
+  },
+  "homepage": "https://github.com/SaileshBellamkonda/mcp-servers#readme",
+  "bugs": {
+    "url": "https://github.com/SaileshBellamkonda/mcp-servers/issues"
+  },
+  "categories": [
+    "AI",
+    "Other"
+  ],
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "git",
+    "claude"
+  ],
   "main": "./dist/extension.js",
   "engines": {
-    "vscode": "^1.85.0",
-    "node": ">=22.0.0"
+    "vscode": "^1.101.0",
+    "node": ">=22.16"
   },
   "activationEvents": ["onStartupFinished"],
   "contributes": {
@@ -65,20 +87,20 @@
     }
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
-    "package": "vsce package"
-  },
-  "dependencies": {
-    "@mcp-servers/server-git": "workspace:*"
+    "clean": "rm -rf dist"
   },
   "devDependencies": {
+    "@mcp-servers/server-coderag": "workspace:*",
+    "@mcp-servers/server-git": "workspace:*",
     "@types/node": "catalog:",
-    "@types/vscode": "catalog:",
+    "@types/vscode": "1.101.0",
     "@vitest/coverage-v8": "catalog:",
     "@vscode/vsce": "catalog:",
+    "esbuild": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
   }

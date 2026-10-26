@@ -2,14 +2,12 @@
   "$schema": "https://json.schemastore.org/tsconfig",
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "module": "commonjs",
-    "moduleResolution": "node10",
-    "ignoreDeprecations": "6.0",
-    "verbatimModuleSyntax": false,
+    "module": "preserve",
+    "moduleResolution": "bundler",
     "target": "ES2022",
-    "outDir": "dist",
-    "rootDir": "src",
-    "composite": true
+    "noEmit": true,
+    "customConditions": ["@mcp-servers/source"],
+    "types": ["node"]
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist", "tests"]

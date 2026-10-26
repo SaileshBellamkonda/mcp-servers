@@ -23,11 +23,17 @@ function makeOutputChannel(): vscode.OutputChannel {
   } as unknown as vscode.OutputChannel;
 }
 
-function makeHttpServer(callCbImmediately = true): { close: ReturnType<typeof vi.fn> } {
+function makeInstance(port = 3000): {
+  port: number;
+  host: string;
+  close: ReturnType<typeof vi.fn>;
+  updateAllowedRepositories: ReturnType<typeof vi.fn>;
+} {
   return {
-    close: vi.fn((cb?: () => void) => {
-      if (callCbImmediately && cb) cb();
-    }),
+    port,
+    host: '127.0.0.1',
+    close: vi.fn(() => Promise.resolve()),
+    updateAllowedRepositories: vi.fn(),
   };
 }
 
@@ -56,12 +62,7 @@ describe('GitServerAdapter', () => {
     } as unknown as vscode.WorkspaceConfiguration);
 
     // Default: activateGitServer resolves successfully
-    mockActivate.mockResolvedValue({
-      server: {} as never,
-      app: {} as never,
-      httpServer: makeHttpServer() as never,
-      transports: new Map(),
-    });
+    mockActivate.mockResolvedValue(makeInstance() as never);
   });
 
   afterEach(() => {
@@ -91,12 +92,7 @@ describe('GitServerAdapter', () => {
       let statusDuringActivation: string | undefined;
       mockActivate.mockImplementation(async () => {
         statusDuringActivation = adapter.status;
-        return {
-          server: {} as never,
-          app: {} as never,
-          httpServer: makeHttpServer() as never,
-          transports: new Map(),
-        };
+        return makeInstance() as never;
       });
 
       await adapter.start();
@@ -105,7 +101,7 @@ describe('GitServerAdapter', () => {
       expect(adapter.status).toBe('running');
     });
 
-    it('calls activateGitServer with workspace paths and configured port', async () => {
+    it('calls activateGitServer with the options API: folders, port, a random 32-byte hex token and a logger', async () => {
       vi.mocked(vscode.workspace.getConfiguration).mockReturnValue({
         get: vi.fn((_key: string, defaultValue?: unknown) => {
           if (_key === 'port') return 4000;
@@ -115,7 +111,33 @@ describe('GitServerAdapter', () => {
 
       await adapter.start();
 
-      expect(mockActivate).toHaveBeenCalledWith(['/test/workspace'], 4000);
+      expect(mockActivate).toHaveBeenCalledTimes(1);
+      expect(mockActivate).toHaveBeenCalledWith({
+        workspaceFolders: ['/test/workspace'],
+        port: 4000,
+        authToken: expect.stringMatching(/^[0-9a-f]{64}$/) as string,
+        logger: expect.objectContaining({ info: expect.any(Function), warning: expect.any(Function), error: expect.any(Function) }) as object,
+      });
+    });
+
+    it('generates a fresh token for every start', async () => {
+      await adapter.start();
+      await adapter.stop();
+      await adapter.start();
+      const tokens = mockActivate.mock.calls.map((c) => c[0].authToken);
+      expect(tokens).toHaveLength(2);
+      expect(tokens[0]).not.toBe(tokens[1]);
+    });
+
+    it('forwards server diagnostics to the output channel', async () => {
+      await adapter.start();
+      const options = mockActivate.mock.calls[0]?.[0];
+      options?.logger?.warning('careful');
+      expect(
+        (outputChannel.appendLine as ReturnType<typeof vi.fn>).mock.calls.some(
+          (args: string[][]) => typeof args[0] === 'string' && args[0].includes('careful')
+        )
+      ).toBe(true);
     });
 
     it('sets port to the configured value after successful start', async () => {
@@ -126,6 +148,7 @@ describe('GitServerAdapter', () => {
         }),
       } as unknown as vscode.WorkspaceConfiguration);
 
+      mockActivate.mockResolvedValue(makeInstance(4000) as never);
       await adapter.start();
 
       expect(adapter.port).toBe(4000);
@@ -169,10 +192,12 @@ describe('GitServerAdapter', () => {
       expect(outputChannel.appendLine).toHaveBeenCalled();
     });
 
-    it('shows error notification when activateGitServer throws', async () => {
-      mockActivate.mockRejectedValue(new Error('listen EADDRINUSE :::3000'));
+    it('shows the real failure reason, not a generic "port in use", when activateGitServer throws', async () => {
+      mockActivate.mockRejectedValue(new Error('listen EACCES: permission denied 127.0.0.1:80'));
       await adapter.start();
-      expect(vscode.window.showErrorMessage).toHaveBeenCalled();
+      const message = vi.mocked(vscode.window.showErrorMessage).mock.calls[0]?.[0];
+      expect(message).toContain('EACCES');
+      expect(message).not.toContain('in use');
     });
 
     it('is no-op when already running', async () => {
@@ -185,21 +210,16 @@ describe('GitServerAdapter', () => {
 
   // ---- stop() -------------------------------------------------------------
   describe('stop()', () => {
-    it('calls httpServer.close() and transitions to "stopped"', async () => {
-      const httpServer = makeHttpServer();
-      mockActivate.mockResolvedValue({
-        server: {} as never,
-        app: {} as never,
-        httpServer: httpServer as never,
-        transports: new Map(),
-      });
+    it('calls the instance close() and transitions to "stopped"', async () => {
+      const instance = makeInstance();
+      mockActivate.mockResolvedValue(instance as never);
 
       await adapter.start();
       expect(adapter.status).toBe('running');
 
       await adapter.stop();
 
-      expect(httpServer.close).toHaveBeenCalledOnce();
+      expect(instance.close).toHaveBeenCalledOnce();
       expect(adapter.status).toBe('stopped');
     });
 
@@ -235,12 +255,7 @@ describe('GitServerAdapter', () => {
       let calls = 0;
       mockActivate.mockImplementation(async () => {
         calls = listener.mock.calls.length; // captures calls during 'starting'
-        return {
-          server: {} as never,
-          app: {} as never,
-          httpServer: makeHttpServer() as never,
-          transports: new Map(),
-        };
+        return makeInstance() as never;
       });
 
       await adapter.start();

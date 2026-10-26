@@ -14,6 +14,7 @@
       }
     },
     "./embedded": {
+      "@mcp-servers/source": "./src/embedded.ts",
       "import": {
         "types": "./dist/embedded.d.ts",
         "default": "./dist/embedded.js"

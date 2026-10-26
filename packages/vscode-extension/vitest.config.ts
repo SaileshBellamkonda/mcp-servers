@@ -7,13 +7,19 @@ export default defineConfig({
       vscode: path.resolve(import.meta.dirname, './__mocks__/vscode.ts'),
     },
   },
+  // Resolve @mcp-servers/* workspace packages to their TypeScript source (no build needed).
+  ssr: {
+    resolve: {
+      conditions: ['@mcp-servers/source'],
+    },
+  },
   test: {
     globals: false,
     environment: 'node',
     pool: 'forks',
     clearMocks: true,
     restoreMocks: true,
-    include: ['tests/**/*.ts', 'src/**/*.test.*', 'src/**/*.spec.*'],
+    include: ['tests/**/*.test.ts', 'src/**/*.test.*', 'src/**/*.spec.*'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'lcov', 'html'],

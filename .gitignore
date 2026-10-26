@@ -152,3 +152,6 @@ archive/
 
 # Scratch output of tests (bundle test)
 .tmp-*
+
+# VS Code extension packages
+*.vsix
