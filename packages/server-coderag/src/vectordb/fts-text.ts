@@ -152,6 +152,8 @@ export interface FtsSource {
   /** Frontmatter title of a document. */
   title?: string | undefined;
   headingPath?: readonly string[] | undefined;
+  /** First paragraph of the comment above a function or method; searchable, never shown. */
+  doc?: string | undefined;
 }
 
 /** The four columns of `fts_chunks`, in `FTS_COLUMNS` order of schema.ts. */
@@ -167,7 +169,7 @@ const PATH_SEGMENTS_INDEXED = 3;
 /** Column texts for one chunk, each expanded with the words of its compound identifiers. */
 export function buildFtsRow(source: FtsSource): FtsRow {
   const path = source.filename.split(/[\\/]+/).filter((segment) => segment !== '').slice(-PATH_SEGMENTS_INDEXED);
-  const context = [...path, source.parentSymbol ?? '', source.title ?? '', ...(source.headingPath ?? [])].filter((part) => part !== '');
+  const context = [...path, source.parentSymbol ?? '', source.title ?? '', ...(source.headingPath ?? []), source.doc ?? ''].filter((part) => part !== '');
   return {
     symbolName: expandIdentifiers(source.symbolName ?? ''),
     signature: expandIdentifiers(source.signature ?? ''),

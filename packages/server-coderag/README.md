@@ -180,7 +180,11 @@ docs/DESIGN.md:12-30 Design > Search modes (0.74)
   ending with `+N more members`. Methods and functions keep their own full chunks, so search returns either the skeleton
   (for a query about the class) or the method (for a query about its behaviour), never both. Skeletons are built for
   TypeScript, JavaScript, Python, Go, Rust, Java, C# and C++; other languages index the whole class as before.
-- After an upgrade that changes what is stored per symbol (signatures, skeletons), the next start re-parses and
+- The first paragraph (at most 300 characters) of the comment block directly above a function or method (`/** */`,
+  runs of `//`, `///` or `#`, Javadoc, C# XML summaries; a Python docstring is already part of the body) is sent to the
+  embedder with the code and added to the keyword index (path and context column, weight 3). It is not shown with the hit:
+  the displayed snippet and signature are unchanged. Lint directives and license headers are ignored.
+- After an upgrade that changes what is stored per symbol (signatures, skeletons, doc comments), the next start re-parses and
   re-embeds all indexed code files once (the version is stored in the database).
 
 ## Relations

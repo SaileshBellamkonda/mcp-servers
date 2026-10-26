@@ -6,6 +6,7 @@ import {
   buildDocMetadataMigration,
   buildVecChunksDdl,
   buildFtsDdl,
+  CODE_DOC_COLUMN_DDL,
   FTS_BM25_WEIGHTS,
   FTS_DELETE_TRIGGER_DDL,
 } from './schema.js';
@@ -72,6 +73,8 @@ function runMigrations(db: SqliteDatabase): void {
   }
   // Migration 4: relation columns and bookkeeping tables. Rows written earlier keep what they have.
   ensureRelationsSchema(db);
+  // Migration 5: doc comments of functions. Rows indexed earlier have none until the parser version forces a re-parse.
+  if (!columnExists(db, 'code_metadata', 'doc')) db.exec(CODE_DOC_COLUMN_DDL);
 }
 
 const FTS_INSERT_SQL = 'INSERT INTO fts_chunks(rowid, symbol_name, signature, context, content) VALUES (?, ?, ?, ?, ?)';
@@ -94,9 +97,9 @@ function ensureFtsIndex(db: SqliteDatabase): void {
 
   const select = db.prepare<{
     id: number; content: string; heading_path: string | null; filename: string;
-    symbol_name: string | null; parent_symbol: string | null; signature: string | null; title: string | null;
+    symbol_name: string | null; parent_symbol: string | null; signature: string | null; doc: string | null; title: string | null;
   }>(`
-    SELECT c.id, c.content, c.heading_path, d.filename, cm.symbol_name, cm.parent_symbol, cm.signature, dm.title
+    SELECT c.id, c.content, c.heading_path, d.filename, cm.symbol_name, cm.parent_symbol, cm.signature, cm.doc, dm.title
     FROM chunks c
     JOIN documents d ON d.id = c.document_id
     LEFT JOIN code_metadata cm ON cm.chunk_id = c.id
@@ -118,6 +121,7 @@ function ensureFtsIndex(db: SqliteDatabase): void {
           symbolName: row.symbol_name ?? undefined,
           parentSymbol: row.parent_symbol ?? undefined,
           signature: row.signature ?? undefined,
+          doc: row.doc ?? undefined,
           title: row.title ?? undefined,
           headingPath: parseHeadingPath(row.heading_path),
         });
@@ -424,7 +428,7 @@ export class VectorDB {
     const insertVec = this.db.prepare('INSERT INTO vec_chunks (rowid, embedding) VALUES (?, ?)');
     const insertFts = this.db.prepare(FTS_INSERT_SQL);
     const insertMeta = this.db.prepare(
-      'INSERT INTO code_metadata (chunk_id, symbol_name, symbol_type, language, start_line, end_line, parent_symbol, signature) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+      'INSERT INTO code_metadata (chunk_id, symbol_name, symbol_type, language, start_line, end_line, parent_symbol, signature, doc) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
     );
     const deleteChunks = this.db.prepare('DELETE FROM chunks WHERE document_id = ?');
 
@@ -449,8 +453,9 @@ export class VectorDB {
           symbolName: chunk.symbolName,
           parentSymbol: chunk.parentSymbol,
           signature: chunk.signature,
+          doc: chunk.doc,
         })));
-        insertMeta.run(chunkId, chunk.symbolName, chunk.symbolType, chunk.language, chunk.startLine, chunk.endLine, chunk.parentSymbol, chunk.signature);
+        insertMeta.run(chunkId, chunk.symbolName, chunk.symbolType, chunk.language, chunk.startLine, chunk.endLine, chunk.parentSymbol, chunk.signature, chunk.doc ?? null);
       }
       // Edges of other files may now resolve differently: to these symbols, or (for imports) to this file.
       this.relations.markDirty({

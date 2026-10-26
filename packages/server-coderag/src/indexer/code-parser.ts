@@ -18,8 +18,9 @@ import { extractRelations, NO_RELATIONS, type ChunkNode, type ExtractedRelations
  * 7: the chunk of a Python function or class starts at its first decorator, and that of a Rust item at its first attribute.
  * 8: JavaScript `var f = function () {}`, `a.b = function () {}`, `exports.f = ...` and `Foo.prototype.m = ...` are indexed (and `var`
  *    arrow functions in TypeScript), with the signature cut at the function body.
+ * 9: the first paragraph of the comment above a function or method is stored (`doc`), embedded and added to its keyword text.
  */
-export const CODE_PARSER_VERSION = 8;
+export const CODE_PARSER_VERSION = 9;
 
 let defaultRequire: NodeJS.Require | undefined;
 
@@ -247,6 +248,7 @@ export class CodeParser {
       const node = symbol.node;
       const skeleton = skeletons && CONTAINER_TYPES.has(symbol.type) ? buildSkeleton(symbol, lang, source, byRange) : null;
       const first = firstAnnotation(node, lang);
+      const doc = symbol.type === 'function' || symbol.type === 'method' ? leadingComment(node, source, MAX_FUNCTION_DOC_CHARS) : '';
       return {
         content: skeleton ?? source.slice(first.startIndex, node.endIndex),
         position,
@@ -257,13 +259,16 @@ export class CodeParser {
         endLine: node.endPosition.row + 1,
         parentSymbol: findParentSymbol(node),
         signature: symbol.signature,
+        ...(doc !== '' ? { doc } : {}),
       };
     });
     return { chunks, nodes: symbols.map((symbol, position) => ({ node: symbol.node, position, name: symbol.name })) };
   }
 
+  /** The text sent to the embedder: label, the doc comment (when there is one) and the code. */
   static getEmbeddingText(chunk: CodeChunk): string {
-    return `${chunk.language} ${chunk.symbolName}: ${chunk.content}`;
+    const doc = chunk.doc !== undefined && chunk.doc !== '' ? `${chunk.doc}\n` : '';
+    return `${chunk.language} ${chunk.symbolName}: ${doc}${chunk.content}`;
   }
 }
 
@@ -350,6 +355,8 @@ const MAX_SKELETON_MEMBERS = 60;
 const MAX_SKELETON_CHARS = 2000;
 const MAX_MEMBER_LINE_CHARS = 100;
 const MAX_DOC_CHARS = 160;
+/** Upper bound for the doc comment stored with a function or method. */
+const MAX_FUNCTION_DOC_CHARS = 300;
 /** Characters kept free for the `+N more members` line. */
 const MORE_LINE_RESERVE = 24;
 
@@ -357,7 +364,9 @@ const COMMENT_TYPES = new Set(['comment', 'line_comment', 'block_comment']);
 /** Nodes between a doc comment and the declaration it documents (Rust attributes, Python decorators). */
 const BETWEEN_DOC_AND_DECLARATION = new Set(['attribute_item', 'decorator']);
 /** Nodes wrapped around a declaration; a doc comment sits above the wrapper. */
-const DECLARATION_WRAPPERS = new Set(['export_statement', 'decorated_definition', 'template_declaration']);
+const DECLARATION_WRAPPERS = new Set(['export_statement', 'decorated_definition', 'template_declaration', 'expression_statement']);
+/** Bodies whose first member's leading comment hangs off the node before the body, not inside it. */
+const BODY_WITH_LEADING_COMMENT = new Set(['block', 'body_statement']);
 /** Direct children of a class body that are not members. */
 const NOT_MEMBERS = new Set(['attribute_item', 'inner_attribute_item', 'access_specifier', 'pass_statement', 'decorator', 'ERROR']);
 /** A signature that already starts with its declaration keyword needs no kind label. */
@@ -417,14 +426,37 @@ function memberLines(container: TSNode, source: string, byRange: Map<string, Sym
   return lines;
 }
 
-function firstParagraph(rawLines: readonly string[]): string {
+/** Doc-comment lines that are tool directives (lint, formatter, coverage, region markers), not prose. */
+const DIRECTIVE_LINE =
+  /^(?:eslint(?:-[\w-]+)?\b|prettier-ignore|istanbul\b|c8\b|tslint:|jshint|pylint:|noqa\b|nolint\b|noinspection\b|pragma\b|#?(?:end)?region\b|go:|type:\s*ignore|fmt:|rubocop:|rustfmt|clippy::|coding[:=]|-\*-|!\/)/i;
+/** A comment block with one of these lines is a file header, not documentation of the declaration below it. */
+const LICENSE_LINE = /^(?:copyright\b|licensed (?:under|to)\b|spdx-license-identifier|all rights reserved)/i;
+/** XML doc parts that follow the summary: the first paragraph ends before them. */
+const DOC_SECTION_START = /^<(?:param|typeparam|returns|exception|remarks|example|value|seealso)\b/i;
+const DOC_TAGS = 'summary|remarks|para|see|seealso|paramref|typeparamref|c|code|p|b|i|em|strong|br|ul|ol|li|pre|tt|a|returns|value|example|inheritdoc|list|item|description|term';
+
+/** A comment line as prose: `{@code x}` and `<see cref="X"/>` become the word they hold, other doc tags disappear. */
+function cleanDocLine(line: string): string {
+  return line
+    .replace(/\{@(?:code|link|linkplain|literal|value)\s+([^}]*)\}/g, '$1')
+    .replace(/<(?:see|seealso|paramref|typeparamref)\b[^>]*?\b(?:cref|name|langword)="([^"]*)"[^>]*>/gi, '$1')
+    .replace(new RegExp(`</?(?:${DOC_TAGS})\\b[^>]*>`, 'gi'), '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function firstParagraph(rawLines: readonly string[], max = MAX_DOC_CHARS): string {
   const kept: string[] = [];
   for (const raw of rawLines) {
-    const line = raw.trim();
-    if (line === '' ? kept.length > 0 : line.startsWith('@')) break;
+    const trimmed = raw.trim();
+    if (LICENSE_LINE.test(trimmed)) return '';
+    if (DIRECTIVE_LINE.test(trimmed)) continue;
+    if (trimmed.startsWith('@') || DOC_SECTION_START.test(trimmed) || (kept.length > 0 && /^<p\b/i.test(trimmed))) break;
+    const line = cleanDocLine(trimmed);
+    if (line === '' ? kept.length > 0 : false) break;
     if (line !== '') kept.push(line);
   }
-  return clipTo(kept.join(' '), MAX_DOC_CHARS);
+  return clipTo(kept.join(' '), max);
 }
 
 /** Last line a node occupies; a node that ends with its newline (Rust line comments) ends on the line before. */
@@ -433,7 +465,7 @@ function lastRow(node: TSNode): number {
 }
 
 /** The first paragraph of the comment block that ends on the line directly above the declaration, or ''. */
-function leadingComment(node: TSNode, source: string): string {
+function leadingComment(node: TSNode, source: string, max = MAX_DOC_CHARS): string {
   let target = node;
   while (target.parent && DECLARATION_WRAPPERS.has(target.parent.type)) target = target.parent;
   let row = target.startPosition.row;
@@ -442,6 +474,8 @@ function leadingComment(node: TSNode, source: string): string {
     row = prev.startPosition.row;
     prev = prev.previousSibling;
   }
+  // Python and Ruby grammars attach a comment that precedes the first member of a class to the class node, before its body.
+  if (!prev && target.parent && BODY_WITH_LEADING_COMMENT.has(target.parent.type)) prev = target.parent.previousSibling;
   const lines: string[] = [];
   while (prev && COMMENT_TYPES.has(prev.type) && lastRow(prev) === row - 1) {
     // A comment that trails another statement on its own line does not document what follows.
@@ -455,7 +489,7 @@ function leadingComment(node: TSNode, source: string): string {
     row = prev.startPosition.row;
     prev = prev.previousSibling;
   }
-  return firstParagraph(lines);
+  return firstParagraph(lines, max);
 }
 
 /** First line of a Python class docstring, without quotes. */

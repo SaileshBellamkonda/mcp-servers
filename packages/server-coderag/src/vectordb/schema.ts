@@ -158,6 +158,7 @@ CREATE TABLE IF NOT EXISTS code_metadata (
   end_line      INTEGER,
   parent_symbol TEXT,
   signature     TEXT,
+  doc           TEXT,
   FOREIGN KEY (chunk_id) REFERENCES chunks(id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS idx_code_symbol   ON code_metadata(symbol_name);
@@ -197,6 +198,9 @@ export function buildMigrations(): string[] {
     // The FTS5 table is not created here: VectorDB builds it (and rebuilds it when FTS_VERSION changes), see buildFtsDdl.
   ];
 }
+
+/** Adds the doc-comment column to `code_metadata` of a database created before doc comments were indexed. */
+export const CODE_DOC_COLUMN_DDL = 'ALTER TABLE code_metadata ADD COLUMN doc TEXT';
 
 export interface DocMetadataMigration {
   /** Idempotent statements creating doc_metadata, doc_tags and their index. */

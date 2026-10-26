@@ -36,6 +36,11 @@ export interface CodeChunk {
   endLine: number;
   parentSymbol: string;
   signature: string;
+  /**
+   * First paragraph of the comment block directly above a function or method (comment markers and tags removed, at most
+   * ~300 characters). It is searched and embedded but never shown with the chunk. Classes carry theirs in `content`.
+   */
+  doc?: string | undefined;
 }
 
 export interface MarkdownChunk {

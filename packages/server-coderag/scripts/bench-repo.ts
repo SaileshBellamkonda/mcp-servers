@@ -70,11 +70,20 @@ try {
   const parseFailures: string[] = [];
   const syntaxErrorFiles: string[] = [];
   let slowest = { file: '', ms: 0 };
+  // Text sent to the embedder: total, and what the doc comments of functions and methods contribute to it.
+  let embedChars = 0;
+  let docChars = 0;
+  let docChunks = 0;
+  let functionChunks = 0;
   const parsers = (parser as unknown as { parsers: Map<string, { parse(s: string): { rootNode: { hasError: boolean } } }> }).parsers;
   for (const file of files) {
     const t0 = performance.now();
     try {
-      parser.parseFileWithRelations(file);
+      for (const chunk of parser.parseFileWithRelations(file).chunks) {
+        embedChars += CodeParser.getEmbeddingText(chunk).length;
+        if (chunk.symbolType === 'function' || chunk.symbolType === 'method') functionChunks++;
+        if (chunk.doc) { docChars += chunk.doc.length + 1; docChunks++; }
+      }
       const lang = getLanguageByExtension(path.extname(file).toLowerCase())?.name ?? '';
       if (parsers.get(lang)?.parse(readFileSync(file, 'utf8')).rootNode.hasError) syntaxErrorFiles.push(path.relative(repo, file));
     } catch (err) {
@@ -129,6 +138,7 @@ try {
   for (const line of [...parseFailures, ...stderrLines, ...warnings].slice(0, 15)) out(`  ! ${line}`);
   if (syntaxErrorFiles.length > 0) out(`  syntax-error files: ${syntaxErrorFiles.slice(0, 10).join(', ')}`);
   out(`chunks=${String(chunks)} skeleton chunks=${String(skeletons)} (of ${String(containers.length)} class-like) chunk chars total=${String(totalChars)} largest=${String(largest?.n ?? 0)} (${largest ? `${path.relative(repo, largest.f)}#${largest.s}` : '-'})`);
+  out(`embedding text chars=${String(embedChars)} (without doc comments ${String(embedChars - docChars)}, +${((100 * docChars) / Math.max(1, embedChars - docChars)).toFixed(1)}%) functions/methods with a doc comment=${String(docChunks)}/${String(functionChunks)}`);
   out(`symbols: ${symbolKinds.map((r) => `${r.k}=${String(r.n)}`).join(' ')}`);
   for (const r of relRows) {
     out(`relations ${r.t.padEnd(8)} total=${String(r.total)} visible=${String(r.visible)} hidden-weak=${String(r.hidden)} resolved=${String(r.resolved)} ambiguous=${String(r.ambiguous)}${r.t === 'imports' ? ` file-resolved=${String(r.fileResolved)}` : ''}`);
