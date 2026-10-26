@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import type { CodeChunk, SymbolType } from '../core/types.js';
 import { getLanguageByExtension, SUPPORTED_LANGUAGES } from './languages.js';
+import { extractRelations, NO_RELATIONS, type ChunkNode, type ExtractedRelations } from './relations.js';
 
 /**
  * Version of what `CodeParser` stores per symbol (signature rules, symbol selection). Bump it when the output for an
@@ -28,7 +29,7 @@ function requireFor(nativeModulesDir: string | undefined): NodeJS.Require {
 }
 
 // Minimal type declarations for tree-sitter's Node.js API (v0.21.x)
-interface TSNode {
+export interface TSNode {
   type: string;
   text: string;
   isNamed: boolean;
@@ -135,6 +136,11 @@ function loadGrammar(require: NodeJS.Require, grammarKey: string): TSLanguage {
   return loadNativeBinding(require, packageName);
 }
 
+export interface ParsedCode {
+  chunks: CodeChunk[];
+  relations: ExtractedRelations;
+}
+
 export class CodeParser {
   private readonly ParserClass: TSParserConstructor;
   private readonly parsers = new Map<string, TSParser>();
@@ -171,6 +177,11 @@ export class CodeParser {
 
   /** `readFrom` is the path actually opened (the guard-resolved real path); the language still comes from `filePath`. */
   parseFile(filePath: string, readFrom: string = filePath): CodeChunk[] {
+    return this.parseFileWithRelations(filePath, readFrom).chunks;
+  }
+
+  /** The chunks of a file and the relations (imports, inheritance, calls) found in the same syntax tree. */
+  parseFileWithRelations(filePath: string, readFrom: string = filePath): ParsedCode {
     const ext = path.extname(filePath).toLowerCase();
     const langConfig = getLanguageByExtension(ext);
     if (!langConfig) {
@@ -187,10 +198,11 @@ export class CodeParser {
 
     const source = readFileSync(readFrom, 'utf8');
     const tree = parser.parse(source);
-    return this.extractSymbols(tree.rootNode, source, langKey, query);
+    const { chunks, nodes } = this.extractSymbols(tree.rootNode, source, langKey, query);
+    return { chunks, relations: chunks.length === 0 ? NO_RELATIONS : extractRelations(tree.rootNode, langKey, nodes) };
   }
 
-  private extractSymbols(root: TSNode, source: string, lang: string, query: TSQuery): CodeChunk[] {
+  private extractSymbols(root: TSNode, source: string, lang: string, query: TSQuery): { chunks: CodeChunk[]; nodes: ChunkNode[] } {
     const matches = query.matches(root);
     const symbols: Symbol[] = [];
     const seen = new Set<string>();
@@ -223,7 +235,7 @@ export class CodeParser {
     const byRange = new Map(symbols.map((symbol) => [rangeKey(symbol.node), symbol]));
     const skeletons = SKELETON_LANGUAGES.has(lang);
 
-    return symbols.map((symbol, position) => {
+    const chunks = symbols.map((symbol, position): CodeChunk => {
       const node = symbol.node;
       const skeleton = skeletons && CONTAINER_TYPES.has(symbol.type) ? buildSkeleton(symbol, lang, source, byRange) : null;
       return {
@@ -238,6 +250,7 @@ export class CodeParser {
         signature: symbol.signature,
       };
     });
+    return { chunks, nodes: symbols.map((symbol, position) => ({ node: symbol.node, position })) };
   }
 
   static getEmbeddingText(chunk: CodeChunk): string {
