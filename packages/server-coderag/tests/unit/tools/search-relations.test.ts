@@ -59,7 +59,7 @@ describe('search_relations (concise)', () => {
     expect(await call({ symbol: 'helper' })).toBe([
       'imports  src/a.ts:1 -> ./b [src/b.ts] {helper} (1.00)',
       'calls  …/lib/x.ts:9 ext -> helper [src/b.ts:1] (0.90)',
-      'calls  src/a.ts:7 Svc.run -> helper [src/b.ts:1] (0.90)',
+      'calls  src/a.ts:7 Svc.run -> helper [same] (0.90)',
     ].join('\n'));
   });
 
@@ -146,10 +146,10 @@ describe('search_relations (detailed)', () => {
 
 describe('search_relations definition', () => {
   it('describes what is recorded and that it is approximate, in a few lines', () => {
-    expect(description.length).toBeLessThan(700);
-    expect(description).toMatch(/calls/);
-    expect(description).toMatch(/imports/);
-    expect(description).toMatch(/inherits/);
+    expect(description.length).toBeLessThan(400);
+    expect(description).toMatch(/calls/i);
+    expect(description).toMatch(/imports/i);
+    expect(description).toMatch(/inherit/i);
     expect(description).toMatch(/approximate|name-based/i);
     expect(description).not.toMatch(/does not record|no relations|empty/i);
   });

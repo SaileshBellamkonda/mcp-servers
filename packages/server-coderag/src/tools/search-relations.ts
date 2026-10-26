@@ -34,17 +34,23 @@ function clipNames(names: readonly string[]): string {
   return ` {${shown}${names.length > MAX_IMPORT_NAMES ? `, +${String(names.length - MAX_IMPORT_NAMES)}` : ''}}`;
 }
 
-/** `kind  path:line Source -> target [target-path:line] (confidence)`; only an unresolved target shows the name as written. */
-function renderHit(hit: RelationHit, roots: readonly string[]): string {
+/**
+ * `kind  path:line Source -> target [target-path:line] (confidence)`; only an unresolved target shows the name as written.
+ * A resolved target that an earlier line of the same answer already named is shortened to `[same]`.
+ */
+function renderHit(hit: RelationHit, roots: readonly string[], named: Set<string>): string {
   const where = `${relativePath(hit.source.file, roots)}:${String(hit.line)}`;
   const score = `(${hit.confidence.toFixed(2)})`;
   if (hit.type === 'imports') {
     const file = hit.targetFile === '' ? '' : ` [${relativePath(hit.targetFile, roots)}]`;
     return `imports  ${where} -> ${hit.targetName}${file}${clipNames(hit.names)} ${score}`;
   }
-  const target = hit.target
-    ? `${qualified(hit.target)} [${relativePath(hit.target.file, roots)}:${String(hit.target.startLine)}]`
-    : hit.targetName;
+  let target = hit.targetName;
+  if (hit.target) {
+    const place = `${relativePath(hit.target.file, roots)}:${String(hit.target.startLine)}`;
+    target = `${qualified(hit.target)} [${named.has(place) ? 'same' : place}]`;
+    named.add(place);
+  }
   return `${hit.type}  ${where} ${qualified(hit.source)} -> ${target} ${score}`;
 }
 
@@ -66,6 +72,7 @@ function formatConcise(page: RelationPage, symbol: string, direction: 'in' | 'ou
   const budget = maxTokens * CHARS_PER_TOKEN;
   const mixed = page.hits.some((h) => h.direction === 'out') && page.hits.some((h) => h.direction === 'in');
   const lines: string[] = [];
+  const named = new Set<string>();
   let used = 0;
   let shown = 0;
   let noteDone = page.omitted.length === 0;
@@ -94,7 +101,7 @@ function formatConcise(page: RelationPage, symbol: string, direction: 'in' | 'ou
         break;
       }
     }
-    if (!push(renderHit(hit, roots), reserve)) {
+    if (!push(renderHit(hit, roots, named), reserve)) {
       cut = true;
       break;
     }
@@ -117,15 +124,15 @@ export function registerSearchRelations(server: McpServer, db: VectorDB, pathGua
   server.registerTool(
     'search_relations',
     {
-      description: 'Relations between code symbols, recorded at index time (TypeScript, TSX, JavaScript, Python, Go, Rust, Java, C#): calls (callers and callees), imports (who imports a symbol or file, what a file imports), inherits (subclasses and base classes). Matching is by name, so results are approximate: confidence 0.9 = unique match, 0.5 = ambiguous name (raw name shown), 0.3 = not found in the index; very common built-in names are not recorded. Compact text, one line per relation; read the file to confirm.',
+      description: 'Calls, imports and inheritance between code symbols, recorded at index time (TypeScript, JavaScript, Python, Go, Rust, Java, C#). Matched by name, so approximate: confidence 0.9 unique match, 0.5 ambiguous name (raw name shown), 0.3 not in the index. Verify in the file.',
       inputSchema: fromJsonSchema({
         type: 'object',
         properties: {
-          symbol: { type: 'string', description: 'Name, Class.method or file path (src/a.ts)' },
-          relation_type: { type: 'string', enum: [...RELATION_TYPES], description: 'Only this kind (default: all; file paths: imports)' },
-          direction: { type: 'string', enum: [...DIRECTIONS], description: 'in = callers/importers/subclasses, out = callees/imports/bases, both (default)' },
-          max_tokens: { type: 'integer', minimum: 1, description: 'Output budget in estimated tokens (chars / 4), default 1000' },
-          offset: { type: 'integer', minimum: 0, description: 'Relations to skip, for paging' },
+          symbol: { type: 'string', description: 'Name, Class.method or file path' },
+          relation_type: { type: 'string', enum: [...RELATION_TYPES], description: 'Default: all (file path: imports)' },
+          direction: { type: 'string', enum: [...DIRECTIONS], description: 'in = callers/importers/subclasses, out = callees/imports/bases; default both' },
+          max_tokens: { type: 'integer', minimum: 1, description: 'Output budget, default 1000' },
+          offset: { type: 'integer', minimum: 0, description: 'Skip this many, for paging' },
           response_format: { type: 'string', enum: ['concise', 'detailed'], description: 'concise (default) or detailed (JSON)' },
         },
         required: ['symbol'],
