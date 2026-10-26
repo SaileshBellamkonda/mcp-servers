@@ -10,9 +10,11 @@ import type { TSNode } from './code-parser.js';
  * - `calls`: call expressions, attributed to the innermost chunk that contains them (a method, a function, or a class
  *   body for field initialisers). Calls outside every chunk (module-level statements) are not recorded.
  *
- * Targets are names, not resolved symbols: the extractor sees one file. Calls to very common names (built-ins,
- * collection and string methods, logging) are left out, each (chunk, type, name) is recorded once, and a chunk keeps at
- * most `RELATION_CAPS` records per type; what was left out is counted in `truncated`.
+ * Targets are names, not resolved symbols: the extractor sees one file. A call to a very common name (built-ins,
+ * collection and string methods, logging) is a noise filter for names that resolve to nothing: it is kept as usual when
+ * the file itself defines a symbol of that name, and otherwise marked `weak`, so the index shows it only if some indexed
+ * symbol has that name. Each (chunk, type, name) is recorded once, and a chunk keeps at most `RELATION_CAPS` records
+ * per type; what was left out is counted in `truncated` (weak calls are capped separately and not counted there).
  */
 export type RelationKind = 'imports' | 'inherits' | 'calls';
 
@@ -26,6 +28,11 @@ export interface RawRelation {
   line: number;
   /** Imports only: imported names (`*` for a namespace or wildcard import; a default import is listed by its local name). */
   names?: string[] | undefined;
+  /**
+   * A call to a very common name (`map`, `log`, `format`) that no symbol of this file defines. It is only worth keeping
+   * if the index has a symbol of that name, so it stays hidden until one resolves it.
+   */
+  weak?: boolean | undefined;
 }
 
 export interface RelationTruncation {
@@ -44,7 +51,7 @@ export interface ExtractedRelations {
  * parses the indexed code files again and rewrites their relations only (chunks and vectors are not touched, nothing is
  * embedded again).
  */
-export const RELATIONS_VERSION = 1;
+export const RELATIONS_VERSION = 2;
 
 export const NO_RELATIONS: ExtractedRelations = { relations: [], truncated: [] };
 
@@ -55,6 +62,7 @@ export const RELATION_CAPS: Record<RelationKind, number> = { calls: 50, inherits
 export interface ChunkNode {
   node: TSNode;
   position: number;
+  name: string;
 }
 
 const COMMON_COMMON = [
@@ -476,6 +484,7 @@ export function extractRelations(root: TSNode, lang: string, chunks: readonly Ch
   const visitor = VISITORS[lang];
   if (!visitor || chunks.length === 0) return NO_RELATIONS;
   const stoplist = STOPLISTS[lang] ?? new Set<string>();
+  const definedHere = new Set(chunks.map((c) => c.name));
 
   const byStart = new Map<number, ChunkNode[]>();
   for (const chunk of chunks) {
@@ -504,22 +513,24 @@ export function extractRelations(root: TSNode, lang: string, chunks: readonly Ch
     } else if (!IDENTIFIER.test(name)) {
       return;
     }
-    if (type === 'calls' && (name.length < 2 || stoplist.has(name))) return;
+    if (type === 'calls' && name.length < 2) return;
+    const weak = type === 'calls' && stoplist.has(name) && !definedHere.has(name);
 
     const key = `${type}\u0000${String(position)}\u0000${name}`;
     if (seen.has(key)) return;
     seen.add(key);
 
-    const countKey = `${type}\u0000${String(position)}`;
+    const countKey = `${weak ? 'weak' : type}\u0000${String(position)}`;
     const count = counts.get(countKey) ?? 0;
     if (count >= RELATION_CAPS[type]) {
+      if (weak) return;
       const entry = dropped.get(countKey) ?? { sourcePosition: position, type, dropped: 0 };
       entry.dropped++;
       dropped.set(countKey, entry);
       return;
     }
     counts.set(countKey, count + 1);
-    const relation: RawRelation = { type, sourcePosition: position, targetName: name, line: lineOf(node), ...(type === 'imports' ? { names: [...(names ?? [])] } : {}) };
+    const relation: RawRelation = { type, sourcePosition: position, targetName: name, line: lineOf(node), ...(type === 'imports' ? { names: [...(names ?? [])] } : {}), ...(weak ? { weak: true } : {}) };
     relations.push(relation);
     if (type === 'imports') importIndex.set(name, relation);
   };

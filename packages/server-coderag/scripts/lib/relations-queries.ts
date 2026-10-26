@@ -61,10 +61,21 @@ export const RELATION_QUESTIONS: readonly RelationQuestion[] = [
     'vectordb/db.ts:insertDocument', 'vectordb/db.ts:insertCodeDocument', 'vectordb/db.ts:insertRelations', 'vectordb/db.ts:saveRules',
     'vectordb/db.ts:setLastSyncAt', 'indexer/sync.ts:runStartupSync'] },
 
+  // calls to common names (stop-listed as noise unless the index has a symbol of that name)
+  { question: 'who calls log (a common name, defined three times)', kind: 'callers', symbol: 'log', expect: [
+    'src/logger.ts:debug', 'src/logger.ts:info', 'src/logger.ts:notice', 'src/logger.ts:warning', 'src/logger.ts:error', 'src/logger.ts:critical',
+    'indexer/indexer.ts:matcherOptions', 'indexer/indexer.ts:indexFile', 'indexer/indexer.ts:indexCodeFile', 'indexer/indexer.ts:indexFileList',
+    'indexer/sync.ts:syncDocuments'] },
+  { question: 'who calls emit (a local function)', kind: 'callers', symbol: 'emit', expect: ['indexer/chunk.ts:packLines', 'indexer/chunk.ts:chunkSections'] },
+  { question: 'who calls close (a common name, defined six times)', kind: 'callers', symbol: 'close', expect: [
+    'src/server.ts:touch', 'src/server.ts:discard', 'src/server.ts:createSession', 'src/server.ts:close', 'vectordb/sqlite-probe.ts:probeSqliteSupport',
+    'vectordb/sqlite-db.ts:close', 'vectordb/db.ts:readStoredDimensions', 'vectordb/db.ts:open', 'vectordb/db.ts:close', 'src/embedded.ts:activateCodeRagServer',
+    'src/embedded.ts:deactivateCodeRagServer', 'src/standalone.ts:main', 'src/standalone.ts:shutdown', 'indexer/indexer.ts:close', 'indexer/watcher.ts:close'] },
+
   // what does X call (functions and methods of this repository only)
   { question: 'what does runStartupSync call', kind: 'callees', symbol: 'runStartupSync', expect: [
     'getStoredRules', 'getDocumentCountByType', 'globConfigEqual', 'isDocsReindexRequired', 'GlobMatcher', 'pruneExcluded', 'scanDocs', 'setLastSyncAt',
-    'clearDocsReindexRequired', 'scanCode', 'removeStaleDocs', 'removeStaleCode', 'saveRules', 'run'] },
+    'clearDocsReindexRequired', 'scanCode', 'removeStaleDocs', 'removeStaleCode', 'saveRules', 'run', 'info'] },
   { question: 'what does indexCodeFile call', kind: 'callees', symbol: 'indexCodeFile', expect: [
     'assertAllowedReal', 'log', 'getCodeParser', 'parseFile', 'getEmbeddingText', 'embedBatch', 'insertCodeDocument'] },
   { question: 'what does registerDeleteDocument call', kind: 'callees', symbol: 'registerDeleteDocument', expect: ['syncLockedResponse', 'assertAllowed', 'deleteDocument'] },

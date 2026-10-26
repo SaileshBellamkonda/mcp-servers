@@ -120,6 +120,43 @@ describe('call and inheritance edges', () => {
   });
 });
 
+describe('weak edges (calls to common names)', () => {
+  const weakCall = (name: string): RawRelation => rel('calls', 0, name, { weak: true });
+
+  it('are not shown while nothing in the index has that name, and do not count', async () => {
+    put('/p/a.ts', [chunk('caller', 0)], relations(weakCall('format'), rel('calls', 0, 'real')));
+    await db.resolvePendingRelations();
+    const page = db.queryRelations(query('caller', { direction: 'out' }));
+    expect(page.hits.map((h) => h.targetName)).toEqual(['real']);
+    expect(page.total).toBe(1);
+    expect(db.queryRelations(query('format', { direction: 'in' }))).toMatchObject({ hits: [], total: 0 });
+  });
+
+  it('appear when a symbol with that name is indexed later (0.9, or 0.5 when ambiguous)', async () => {
+    put('/p/a.ts', [chunk('caller', 0)], relations(weakCall('format')));
+    put('/p/b.ts', [chunk('format', 0)]);
+    await db.resolvePendingRelations();
+    expect(db.queryRelations(query('format', { direction: 'in' })).hits[0]).toMatchObject({ confidence: 0.9, source: { name: 'caller' }, target: { file: '/p/b.ts' } });
+    put('/p/c.ts', [chunk('format', 0)]);
+    await db.resolvePendingRelations();
+    expect(db.queryRelations(query('caller', { direction: 'out' })).hits[0]).toMatchObject({ targetName: 'format', confidence: 0.5 });
+  });
+
+  it('disappear again when the only symbol with that name is deleted', async () => {
+    put('/p/a.ts', [chunk('caller', 0)], relations(weakCall('format')));
+    put('/p/b.ts', [chunk('format', 0)]);
+    await db.resolvePendingRelations();
+    db.deleteDocument('/p/b.ts');
+    await db.resolvePendingRelations();
+    expect(db.queryRelations(query('caller', { direction: 'out' })).hits).toEqual([]);
+  });
+
+  it('do not add to the omitted note', () => {
+    put('/p/a.ts', [chunk('caller', 0)], { relations: [weakCall('format')], truncated: [] });
+    expect(db.queryRelations(query('caller', { direction: 'out' })).omitted).toEqual([]);
+  });
+});
+
 describe('import edges', () => {
   it('stores the resolved file at confidence 1.0 and the raw module at 0.3 when it is not indexed', () => {
     put('/p/src/b.ts', [chunk('thing', 0)]);

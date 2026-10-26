@@ -222,7 +222,7 @@ export class RelationStore {
     if (!extracted) return;
 
     const insert = this.db.prepare(
-      'INSERT INTO code_relations (source_chunk_id, target_chunk_id, relation_type, target_name, target_file, confidence, line, names) VALUES (?, NULL, ?, ?, ?, ?, ?, ?)',
+      'INSERT INTO code_relations (source_chunk_id, target_chunk_id, relation_type, target_name, target_file, confidence, line, names, weak) VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?)',
     );
     const edges: EdgeRow[] = [];
     for (const relation of extracted.relations) {
@@ -230,9 +230,9 @@ export class RelationStore {
       if (source === undefined || source <= 0) continue;
       if (relation.type === 'imports') {
         const file = this.fileIndex().resolveImport(language, relation.targetName, relation.names ?? [], filename);
-        insert.run(source, 'imports', relation.targetName, file ?? '', file === null ? CONFIDENCE.unresolved : CONFIDENCE.importResolved, relation.line, toNamesColumn(relation.names));
+        insert.run(source, 'imports', relation.targetName, file ?? '', file === null ? CONFIDENCE.unresolved : CONFIDENCE.importResolved, relation.line, toNamesColumn(relation.names), 0);
       } else {
-        const result = insert.run(source, relation.type, relation.targetName, '', CONFIDENCE.unresolved, relation.line, null);
+        const result = insert.run(source, relation.type, relation.targetName, '', CONFIDENCE.unresolved, relation.line, null, relation.weak === true ? 1 : 0);
         edges.push({ id: result.lastInsertRowid, source_chunk_id: source, relation_type: relation.type, target_name: relation.targetName, target_chunk_id: null, confidence: CONFIDENCE.unresolved, doc_id: 0 });
       }
     }
@@ -435,7 +435,7 @@ export class RelationStore {
     let symbols: number;
 
     const addBranch = (dir: 'in' | 'out', condition: string, args: SqlParam[]): void => {
-      branches.push({ sql: `${SELECT_ROWS}, '${dir}' AS dir ${FROM_ROWS} WHERE ${condition}${typeFilter}`, args: [...args, ...typeArgs] });
+      branches.push({ sql: `${SELECT_ROWS}, '${dir}' AS dir ${FROM_ROWS} WHERE ${condition}${typeFilter} AND ${VISIBLE}`, args: [...args, ...typeArgs] });
     };
 
     if (fileMode) {
@@ -507,6 +507,9 @@ export class RelationStore {
     return { hits: rows.map(toHit), total, symbols, omitted };
   }
 }
+
+/** A weak edge (call to a very common name) is shown only once an indexed symbol has resolved it, or it is ambiguous. */
+const VISIBLE = '(cr.weak = 0 OR cr.target_chunk_id IS NOT NULL OR cr.confidence = 0.5)';
 
 const SELECT_ROWS = `SELECT cr.id, cr.relation_type, cr.line, cr.target_name, cr.target_file, cr.confidence, cr.names,
   sd.filename AS src_file, sm.symbol_name AS src_name, sm.parent_symbol AS src_parent, sm.start_line AS src_start,

@@ -23,17 +23,21 @@ interface Parsed {
   relations: ExtractedRelations;
   /** `type source->target` with the source chunk's symbol name; imports are listed as `imports module [names]`. */
   lines: string[];
+  /** Calls to common names that no symbol of the file defines: kept only if the index can resolve them. */
+  weak: string[];
 }
 
 function parse(fileName: string, source: string): Parsed {
   const file = path.join(dir, fileName);
   writeFileSync(file, source);
   const { chunks, relations } = parser.parseFileWithRelations(file);
-  const lines = relations.relations.map((r) => {
+  const describe = (r: (typeof relations.relations)[number]): string => `${r.type} ${chunks[r.sourcePosition]?.symbolName ?? '?'}->${r.targetName}`;
+  const weak = relations.relations.filter((r) => r.weak === true).map(describe);
+  const lines = relations.relations.filter((r) => r.weak !== true).map((r) => {
     if (r.type === 'imports') return `imports ${r.targetName} [${(r.names ?? []).join(',')}]`;
     return `${r.type} ${chunks[r.sourcePosition]?.symbolName ?? '?'}->${r.targetName}`;
   });
-  return { chunks, relations, lines };
+  return { chunks, relations, lines, weak };
 }
 
 const only = (lines: string[], type: string): string[] => lines.filter((l) => l.startsWith(`${type} `));
@@ -262,6 +266,30 @@ interface I2 : I, J {} }
 
   it('records invocations and object creation', () => {
     expect(only(parse('a3.cs', source).lines, 'calls')).toEqual(['calls M->Foo', 'calls M->Bar', 'calls M->Baz', 'calls M->Qux', 'calls M->Go', 'calls M->Gen', 'calls M->Zed']);
+  });
+});
+
+describe('relations: calls to common names', () => {
+  it('keeps a call to a common name when the same file defines it (Go format, Java print, Python format, Rust parse, TypeScript log)', () => {
+    expect(only(parse('w.go', 'package p\nfunc format(r int) string { return "" }\nfunc Handle(r int) string { return format(r) }\n').lines, 'calls')).toEqual(['calls Handle->format']);
+    expect(only(parse('W.java', 'class Printer { void print(int x) {} }\nclass App { void report(Printer p) { p.print(1); } }\n').lines, 'calls')).toEqual(['calls report->print']);
+    expect(only(parse('w.py', 'def format(x):\n    return x\ndef handle(x):\n    return format(x)\n').lines, 'calls')).toEqual(['calls handle->format']);
+    expect(only(parse('w.rs', 'fn parse(s: &str) -> u32 { 1 }\nfn run(s: &str) -> u32 { parse(s) }\n').lines, 'calls')).toEqual(['calls run->parse']);
+    expect(only(parse('w.ts', 'class Svc { log(m: string) {} run() { this.log("x"); } }\n').lines, 'calls')).toEqual(['calls run->log']);
+  });
+
+  it('marks other calls to common names as weak instead of dropping them', () => {
+    const parsed = parse('w2.ts', 'function f(items: number[]) { items.map((x) => x); console.log(1); own(); }\n');
+    expect(only(parsed.lines, 'calls')).toEqual(['calls f->own']);
+    expect(parsed.weak).toEqual(['calls f->map', 'calls f->log']);
+  });
+
+  it('does not count weak calls against the cap or in the dropped note', () => {
+    const noise = Array.from({ length: 70 }, () => 'items.push(1);').join(' ');
+    const names = Array.from({ length: 70 }, (_, i) => `x.push${String(i)}();`).join(' ');
+    const parsed = parse('w3.ts', `function f(items: number[], x: any) { ${noise} ${names} real(); }\n`);
+    expect(only(parsed.lines, 'calls')).toHaveLength(50);
+    expect(parsed.relations.truncated).toEqual([{ sourcePosition: 0, type: 'calls', dropped: 21 }]);
   });
 });
 

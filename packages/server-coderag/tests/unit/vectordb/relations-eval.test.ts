@@ -6,7 +6,7 @@ import { refIsAvailable, indexPinnedCorpus, type PinnedCorpus } from '../../../s
 /**
  * Quality guard for `search_relations`: labelled questions over the pinned snapshot of this repository (see
  * scripts/lib/corpus.ts), network-free. Run `pnpm --filter @mcp-servers/server-coderag run eval:relations` for the table.
- * The thresholds sit a little below what was reached when relations landed (calls precision 1.000, recall 0.991;
+ * The thresholds sit a little below what was reached when relations landed (calls precision 1.000, recall 1.000;
  * imports and inherits 1.000 / 1.000). The snapshot is TypeScript only; the other languages are covered by the
  * real-grammar extraction tests.
  */

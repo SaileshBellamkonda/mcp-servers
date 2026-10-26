@@ -219,8 +219,9 @@ calls  src/indexer/sync.ts:138 pruneExcluded -> VectorDB.deleteDocument [same] (
   dotted modules, Go module paths, Rust `crate::`/`self::` paths, Java and C# names that mirror the folders), `0.90` the
   name matches exactly one indexed symbol (a definition in the same file wins, then one in an imported file), `0.50`
   several symbols have the name (one row, no target), `0.30` no indexed symbol has it (library calls, packages). Calls
-  to very common names (`map`, `push`, `get`, `log`, `println`, `unwrap`, ...) and one-letter names are not recorded, so
-  `this.log(...)` of your own class is missed too. A call to the enclosing method's own name (`super.run()`, a wrapper
+  to very common names (`map`, `push`, `get`, `log`, `println`, `unwrap`, ...) are noise unless they resolve: they are
+  kept when the file defines a symbol of that name, and otherwise stored hidden and shown only if some indexed symbol
+  has that name (an ambiguous name shows at 0.50). One-letter names are not recorded. A call to the enclosing method's own name (`super.run()`, a wrapper
   that delegates) is taken to be that method. Module-level statements (and the callbacks of a test file's `it`) belong to
   no symbol, so their calls are not recorded. A symbol keeps at most 50 distinct calls, 20 base types and an import list
   of 200; the output says how many calls were left out.
@@ -230,11 +231,12 @@ calls  src/indexer/sync.ts:138 pruneExcluded -> VectorDB.deleteDocument [same] (
 - **First start after an upgrade:** an index written before relations existed has none. The next start parses the
   indexed code files once more and fills the relations only: chunks, vectors and the keyword index are not touched and
   nothing is sent to the embedder (`db_meta.relations_version`). A file that changed since it was indexed is left to the
-  normal scan. On the pinned snapshot of this repository (58 files, 381 symbols) this takes 0.7 s and the 836 relations
-  add 6 to 8 % to the database file (2.57 MB to 2.72-2.78 MB).
-- **Quality:** `pnpm --filter @mcp-servers/server-coderag run eval:relations` asks 32 labelled questions about the pinned
+  normal scan. On the pinned snapshot of this repository (58 files, 381 symbols) this takes 1.0 s; 1,550 relation rows
+  are stored (1,008 visible, 542 hidden calls to common names that nothing resolved) and add about 9 % to the database
+  file (2.57 MB to 2.79 MB).
+- **Quality:** `pnpm --filter @mcp-servers/server-coderag run eval:relations` asks 35 labelled questions about the pinned
   snapshot (who calls X, what does X call, what does a file import, who imports a file, who extends X; expected answers
-  from grep). Calls: precision 1.000, recall 0.991 (the miss is the `log` method, a stop-listed name); imports and
+  from grep). Calls: precision 1.000, recall 1.000 (23 questions, including common names such as `log` and `close`); imports and
   inheritance: 1.000 and 1.000. A hand check of 20 random call edges found all 20 calls where recorded and all 14 resolved
   targets right. The snapshot is TypeScript only and has few name clashes, so expect lower numbers on code with many
   same-named methods; the other languages are covered by extraction tests on real grammars. An answer averages 183

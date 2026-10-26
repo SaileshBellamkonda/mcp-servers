@@ -250,7 +250,7 @@ export class CodeParser {
         signature: symbol.signature,
       };
     });
-    return { chunks, nodes: symbols.map((symbol, position) => ({ node: symbol.node, position })) };
+    return { chunks, nodes: symbols.map((symbol, position) => ({ node: symbol.node, position, name: symbol.name })) };
   }
 
   static getEmbeddingText(chunk: CodeChunk): string {
