@@ -184,6 +184,30 @@ describe('calls to common names resolve only through the file itself or an impor
   });
 });
 
+describe('a common name resolves through an import only to what the import brings in', () => {
+  const weakCall = (name: string): RawRelation => rel('calls', 0, name, { weak: true });
+  const setup = (importedNames: string[]): void => {
+    put('/p/types.ts', [chunk('Selection', 0, { symbolType: 'class', language: 'typescript' }), chunk('map', 1, { symbolType: 'method', parentSymbol: 'Selection', language: 'typescript' })]);
+    put('/p/a.ts', [chunk('caller', 0, { language: 'typescript' })], relations(rel('imports', 0, './types', { names: importedNames }), weakCall('map')));
+  };
+
+  it('does not take `opt.map(f)` for Selection.map because the file imports Types from the same module', async () => {
+    setup(['Types']);
+    await db.resolvePendingRelations();
+    expect(db.queryRelations(query('caller', { direction: 'out', types: ['calls'] })).hits).toEqual([]);
+  });
+
+  it('takes it when the import names the symbol, its class, or everything', async () => {
+    for (const names of [['map'], ['Selection'], ['*'], []]) {
+      db.close();
+      db = VectorDB.open(':memory:', 4);
+      setup(names);
+      await db.resolvePendingRelations();
+      expect(db.queryRelations(query('caller', { direction: 'out', types: ['calls'] })).hits[0], `names ${JSON.stringify(names)}`).toMatchObject({ confidence: 0.9, target: { name: 'map', parent: 'Selection' } });
+    }
+  });
+});
+
 describe('an impl block does not inherit from the type it implements', () => {
   it('leaves `impl std::error::Error for Error` unresolved instead of pointing at struct Error of the same file', async () => {
     put('/p/error.rs', [chunk('Error', 0, { symbolType: 'struct', language: 'rust' }), chunk('Error', 1, { symbolType: 'struct', language: 'rust' })], relations(rel('inherits', 1, 'Error')));

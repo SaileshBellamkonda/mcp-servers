@@ -126,11 +126,11 @@ interface QueryRow {
 }
 
 /**
- * The files the imports of one document (`?`) resolve to. CROSS JOIN fixes the order: SQLite would otherwise start from
+ * The files the imports of one document (`?`) resolve to, with the names each import brings in. CROSS JOIN fixes the order: SQLite would otherwise start from
  * every `imports` row of the index (idx_rel_type) and look the chunk of each one up, which made resolving the calls of an
  * index quadratic (30 s of a 65 s run over 1,500 files); starting from the chunks of the document it takes 0.03 ms.
  */
-export const IMPORTED_FILES_SQL = `SELECT DISTINCT cr.target_file FROM chunks c CROSS JOIN code_relations cr ON cr.source_chunk_id = c.id
+export const IMPORTED_FILES_SQL = `SELECT DISTINCT cr.target_file, cr.names FROM chunks c CROSS JOIN code_relations cr ON cr.source_chunk_id = c.id
   WHERE c.document_id = ? AND cr.relation_type = 'imports' AND cr.target_file != ''`;
 
 /** Imports (`?` 1: highest relation id to consider, 2: LIKE pattern) of modules that no indexed file satisfied so far. */
@@ -159,6 +159,23 @@ function collapseSymbols(candidates: readonly Candidate[]): Candidate[] {
 function isInFiles(candidate: Candidate, files: readonly string[]): boolean {
   const file = candidate.filename.replaceAll('\\', '/');
   return files.includes(file) || files.includes(dirname(file));
+}
+
+interface ImportedFiles {
+  files: string[];
+  /** Per imported file (or directory): the names brought in, or null for everything. */
+  names: Map<string, Set<string> | null>;
+}
+
+/** True when an import of the calling document brings in the candidate itself, its class, or everything of its file. */
+function isBroughtIn(candidate: Candidate, imported: ImportedFiles): boolean {
+  const file = candidate.filename.replaceAll('\\', '/');
+  for (const where of [file, dirname(file)]) {
+    if (!imported.names.has(where)) continue;
+    const names = imported.names.get(where);
+    if (names === null || names === undefined || names.has('*') || names.has(candidate.symbol_name) || (candidate.parent_symbol !== null && names.has(candidate.parent_symbol))) return true;
+  }
+  return false;
 }
 
 /** True when the symbol is a member of class/type `name`, or lives in a file or folder of that name (a module or package). */
@@ -334,7 +351,7 @@ export class RelationStore {
   /** Resolves a batch of calls/inherits edges of one document (`docId` 0: read each edge's own document). */
   private resolveEdges(edges: readonly EdgeRow[], docId: number): number {
     const candidates = new Map<string, Candidate[]>();
-    const imported = new Map<number, string[]>();
+    const imported = new Map<number, ImportedFiles>();
     const update = this.db.prepare('UPDATE code_relations SET target_chunk_id = ?, confidence = ? WHERE id = ?');
     let changed = 0;
 
@@ -351,18 +368,22 @@ export class RelationStore {
       }
       return found;
     };
-    const importedFiles = (document: number): string[] => {
-      let files = imported.get(document);
-      if (!files) {
-        files = this.db
-          .prepare<{ target_file: string }>(IMPORTED_FILES_SQL)
-          .all(document)
-          .map((r) => r.target_file.replaceAll('\\', '/'));
-        imported.set(document, files);
+    const importedOf = (document: number): ImportedFiles => {
+      let found = imported.get(document);
+      if (!found) {
+        found = { files: [], names: new Map() };
+        for (const row of this.db.prepare<{ target_file: string; names: string | null }>(IMPORTED_FILES_SQL).all(document)) {
+          const file = row.target_file.replaceAll('\\', '/');
+          const names = fromNamesColumn(row.names);
+          if (!found.names.has(file)) found.files.push(file);
+          const known = found.names.get(file);
+          // An import without names (`import a.b.C`, `import os`) brings the whole module in.
+          found.names.set(file, names.length === 0 || known === null ? null : new Set([...(known ?? []), ...names]));
+        }
+        imported.set(document, found);
       }
-      return files;
+      return found;
     };
-
     const functions = new Map<number, FunctionRange[]>();
     const functionsOf = (document: number): FunctionRange[] => {
       let found = functions.get(document);
@@ -398,8 +419,8 @@ export class RelationStore {
       // A call to a very common name (`toString`, `clone`, `contains`) is almost always a library call: it only
       // resolves to a symbol of its own file or of a file it imports.
       if (edge.weak === 1) {
-        const files = importedFiles(document);
-        found = found.filter((c) => c.document_id === document || isInFiles(c, files));
+        const brought = importedOf(document);
+        found = found.filter((c) => c.document_id === document || isBroughtIn(c, brought));
       }
       // `GsonTypes.getRawType(x)`, `flask.views.View`: a candidate that belongs to the named class or module wins.
       if (edge.qualifier !== null && edge.qualifier !== '') {
@@ -415,7 +436,7 @@ export class RelationStore {
         const sameFile = all.filter((c) => c.document_id === document);
         let pick: Candidate[] = sameFile.length > 0 ? sameFile : all;
         if (pick.length > 1 && sameFile.length === 0) {
-          const files = importedFiles(document);
+          const files = importedOf(document).files;
           const viaImport = pick.filter((c) => isInFiles(c, files));
           if (viaImport.length > 0) pick = viaImport;
         }
