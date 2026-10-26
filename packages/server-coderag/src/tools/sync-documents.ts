@@ -6,6 +6,7 @@ import { syncDocuments, type SyncResult } from '../indexer/sync.js';
 import type { McpLogger } from '../core/logger.js';
 import type { SyncManager } from '../indexer/sync-manager.js';
 import { syncLockedResponse, SyncInProgressError } from '../indexer/sync-manager.js';
+import type { PathGuard } from '../core/path-guard.js';
 
 const SyncDocumentsSchema = z.object({
   directory: z.string().optional(),
@@ -17,6 +18,7 @@ export function registerSyncDocuments(
   indexer: Indexer,
   defaultIncludeDirs: string[],
   syncManager: SyncManager,
+  pathGuard: PathGuard,
   logger?: McpLogger,
 ): void {
   server.registerTool(
@@ -39,7 +41,7 @@ export function registerSyncDocuments(
       if (syncManager.inProgress) return syncLockedResponse(syncManager.status);
 
       const { directory } = SyncDocumentsSchema.parse(input);
-      const targetDirs = directory?.trim() ? [directory.trim()] : defaultIncludeDirs;
+      const targetDirs = directory?.trim() ? [pathGuard.assertAllowed(directory.trim())] : defaultIncludeDirs;
 
       let syncResult: SyncResult | undefined;
       try {

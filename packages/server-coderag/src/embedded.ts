@@ -8,6 +8,7 @@ import { Embedder } from './embedder/embedder.js';
 import { VectorDB } from './vectordb/db.js';
 import { Indexer } from './indexer/indexer.js';
 import { GlobMatcher } from './core/glob-utils.js';
+import { PathGuard, computeAllowedRoots } from './core/path-guard.js';
 import { McpLogger } from './core/logger.js';
 import { SyncManager } from './indexer/sync-manager.js';
 import { runStartupSync } from './indexer/sync.js';
@@ -54,7 +55,13 @@ export function activateCodeRagServer(
   const docsMatcher = new GlobMatcher(config.globs.docsInclude, config.globs.docsExclude, cwd, config.useGitignore);
   const codeMatcher = new GlobMatcher(config.globs.codeInclude, config.globs.codeExclude, cwd, config.useGitignore);
 
-  const indexer = new Indexer(db, embedder, config.chunkSize, { docsMatcher, codeMatcher, logger });
+  const pathGuard = new PathGuard(computeAllowedRoots({
+    cwdOrFolders: workspaceFolders.length > 0 ? workspaceFolders : [cwd],
+    globs: config.globs,
+    extraRoots: config.allowedRoots,
+  }));
+
+  const indexer = new Indexer(db, embedder, config.chunkSize, { docsMatcher, codeMatcher, logger, pathGuard });
 
   const includeDirs = config.globs.docsInclude.map((p) => {
     const abs = p.startsWith('/') ? p : `${cwd}/${p}`;
@@ -62,7 +69,7 @@ export function activateCodeRagServer(
     return base || cwd;
   });
 
-  createCodeRagServer(server, db, embedder, indexer, config.topK, [...new Set(includeDirs)], syncManager, logger, config.dbPath, config.embedding.model);
+  createCodeRagServer(server, db, embedder, indexer, config.topK, [...new Set(includeDirs)], syncManager, logger, config.dbPath, config.embedding.model, pathGuard);
 
   const transports = new Map<string, WebStandardStreamableHTTPServerTransport>();
   const app = createMcpHonoApp({ host: '127.0.0.1' });

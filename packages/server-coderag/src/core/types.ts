@@ -20,6 +20,8 @@ export interface CodeRagConfig {
   topK: number;
   useGitignore: boolean;
   embeddingDim: number;
+  /** Extra directories the file tools may touch, beyond the cwd/workspace folders and include-glob bases. */
+  allowedRoots: string[];
 }
 
 export type SymbolType = 'function' | 'method' | 'class' | 'struct' | 'interface';

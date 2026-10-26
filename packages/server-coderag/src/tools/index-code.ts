@@ -3,6 +3,7 @@ import { z } from 'zod';
 import type { Indexer } from '../indexer/indexer.js';
 import type { SyncManager } from '../indexer/sync-manager.js';
 import { syncLockedResponse } from '../indexer/sync-manager.js';
+import type { PathGuard } from '../core/path-guard.js';
 
 const IndexCodeSchema = z.object({
   filepath: z.string().optional(),
@@ -13,7 +14,7 @@ const IndexCodeSchema = z.object({
   force: z.boolean().optional(),
 });
 
-export function registerIndexCode(server: McpServer, indexer: Indexer, syncManager: SyncManager): void {
+export function registerIndexCode(server: McpServer, indexer: Indexer, syncManager: SyncManager, pathGuard: PathGuard): void {
   server.registerTool(
     'index_code',
     {
@@ -47,12 +48,19 @@ Returns { locked: true } if a sync operation is in progress.`,
       const results: { file?: string; directory?: string; success: boolean; error?: string; excluded?: boolean; indexed?: number; skipped?: number; failed?: number }[] = [];
 
       const indexSingleFile = async (f: string) => {
-        if (indexer.isCodeExcluded(f)) {
+        let resolved: string;
+        try {
+          resolved = pathGuard.assertAllowed(f);
+        } catch (err) {
+          results.push({ file: f, success: false, error: String(err) });
+          return;
+        }
+        if (indexer.isCodeExcluded(resolved)) {
           results.push({ file: f, success: false, excluded: true, error: 'File is excluded by configured code exclusion patterns' });
           return;
         }
         try {
-          await indexer.indexCodeFile(f);
+          await indexer.indexCodeFile(resolved);
           results.push({ file: f, success: true });
         } catch (err) {
           results.push({ file: f, success: false, error: String(err) });
@@ -68,7 +76,7 @@ Returns { locked: true } if a sync operation is in progress.`,
 
       if (directory) {
         try {
-          const r = await indexer.indexCodeDirectory(directory, force ?? false, excludePatterns);
+          const r = await indexer.indexCodeDirectory(pathGuard.assertAllowed(directory), force ?? false, excludePatterns);
           results.push({ directory, success: true, ...r });
         } catch (err) {
           void server.sendLoggingMessage({ level: 'error', logger: 'index_code', data: `indexCodeDirectory failed for ${directory}: ${String(err)}` }).catch((_e: unknown) => { /* fire-and-forget log */ });
@@ -79,7 +87,7 @@ Returns { locked: true } if a sync operation is in progress.`,
       if (directories) {
         for (const d of directories.split(',').map((x) => x.trim()).filter(Boolean)) {
           try {
-            const r = await indexer.indexCodeDirectory(d, force ?? false, excludePatterns);
+            const r = await indexer.indexCodeDirectory(pathGuard.assertAllowed(d), force ?? false, excludePatterns);
             results.push({ directory: d, success: true, ...r });
           } catch (err) {
             void server.sendLoggingMessage({ level: 'error', logger: 'index_code', data: `indexCodeDirectory failed for ${d}: ${String(err)}` }).catch((_e: unknown) => { /* fire-and-forget log */ });

@@ -2,6 +2,7 @@ import { type McpServer, fromJsonSchema } from '@modelcontextprotocol/server';
 import { z } from 'zod';
 import { readFileSync, writeFileSync } from 'node:fs';
 import matter from 'gray-matter';
+import type { PathGuard } from '../core/path-guard.js';
 
 const AddFrontmatterSchema = z.object({
   filepath: z.string().min(1).describe('Path to the markdown file'),
@@ -12,7 +13,7 @@ const AddFrontmatterSchema = z.object({
   project: z.string().optional().describe('Project name'),
 });
 
-export function registerAddFrontmatter(server: McpServer): void {
+export function registerAddFrontmatter(server: McpServer, pathGuard: PathGuard): void {
   server.registerTool(
     'add_frontmatter',
     {
@@ -31,7 +32,8 @@ export function registerAddFrontmatter(server: McpServer): void {
       }),
     },
     (input: unknown) => {
-      const { filepath, domain, doc_type, language, tags, project } = AddFrontmatterSchema.parse(input);
+      const { filepath: requested, domain, doc_type, language, tags, project } = AddFrontmatterSchema.parse(input);
+      const filepath = pathGuard.assertAllowed(requested);
       const raw = readFileSync(filepath, 'utf8');
       const parsed = matter(raw);
 

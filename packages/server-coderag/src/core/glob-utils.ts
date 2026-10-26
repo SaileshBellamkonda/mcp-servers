@@ -74,12 +74,12 @@ function loadGitignorePatterns(dir: string): string[] {
   }
 }
 
-function resolveToAbsolute(pattern: string, cwd: string): string {
+export function resolveToAbsolute(pattern: string, cwd: string): string {
   if (path.isAbsolute(pattern)) return pattern.replace(/\\/g, '/');
   return path.join(cwd, pattern).replace(/\\/g, '/');
 }
 
-function extractGlobBase(absPattern: string): string {
+export function extractGlobBase(absPattern: string): string {
   const parts = absPattern.replace(/\\/g, '/').split('/');
   const firstGlobIdx = parts.findIndex((p) => /[*?{[!]/.test(p));
   if (firstGlobIdx === -1) return absPattern;

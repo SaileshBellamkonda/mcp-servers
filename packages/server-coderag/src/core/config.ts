@@ -62,6 +62,7 @@ export function loadConfigFromEnv(): CodeRagConfig {
     topK: topKRaw ? parseInt(topKRaw, 10) : DEFAULT_TOP_K,
     useGitignore: useGitignoreRaw === undefined ? true : /^(true|1|yes)$/i.test(useGitignoreRaw),
     embeddingDim: embeddingDimRaw ? parseInt(embeddingDimRaw, 10) : DEFAULT_EMBEDDING_DIM,
+    allowedRoots: parseSemicolon(process.env['CODERAG_ALLOWED_ROOTS'], []),
   };
 }
 
@@ -133,5 +134,6 @@ export function loadConfigFromVsCode(
     topK: typeof topK === 'number' && topK > 0 ? topK : DEFAULT_TOP_K,
     useGitignore: useGitignore !== false,
     embeddingDim: typeof embeddingDim === 'number' && embeddingDim > 0 ? embeddingDim : DEFAULT_EMBEDDING_DIM,
+    allowedRoots: parseVsCodeGlob('allowedRoots', []),
   };
 }

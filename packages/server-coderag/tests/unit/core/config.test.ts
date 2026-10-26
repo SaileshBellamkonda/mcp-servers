@@ -357,3 +357,57 @@ describe('loadConfigFromVsCode — additional coverage', () => {
     expect(config.globs.docsInclude.length).toBeGreaterThan(0);
   });
 });
+
+describe('allowedRoots', () => {
+  const originalEnv = process.env;
+
+  beforeEach(() => {
+    process.env = { ...originalEnv };
+    process.env['CODERAG_EMBEDDING_URL'] = 'http://localhost:11434/v1';
+    process.env['CODERAG_EMBEDDING_MODEL'] = 'nomic-embed-text';
+    process.env['CODERAG_DB_PATH'] = '/tmp/test.db';
+  });
+
+  afterEach(() => {
+    process.env = originalEnv;
+  });
+
+  function vsConfig(extra: Record<string, unknown>): { get: (key: string) => unknown } {
+    const vals: Record<string, unknown> = {
+      embeddingUrl: 'http://localhost:11434/v1',
+      embeddingModel: 'nomic-embed-text',
+      dbPath: './coderag.db',
+      ...extra,
+    };
+    return { get: (key: string): unknown => vals[key] };
+  }
+
+  it('defaults to an empty list from the environment', () => {
+    delete process.env['CODERAG_ALLOWED_ROOTS'];
+    expect(loadConfigFromEnv().allowedRoots).toEqual([]);
+  });
+
+  it('parses CODERAG_ALLOWED_ROOTS as a trimmed semicolon list without empty entries', () => {
+    process.env['CODERAG_ALLOWED_ROOTS'] = ' /data/a ; ;/data/b;; ';
+    expect(loadConfigFromEnv().allowedRoots).toEqual(['/data/a', '/data/b']);
+  });
+
+  it('treats a blank CODERAG_ALLOWED_ROOTS as empty', () => {
+    process.env['CODERAG_ALLOWED_ROOTS'] = '   ';
+    expect(loadConfigFromEnv().allowedRoots).toEqual([]);
+  });
+
+  it('defaults to an empty list from VS Code settings', () => {
+    expect(loadConfigFromVsCode(vsConfig({}), []).allowedRoots).toEqual([]);
+  });
+
+  it('reads allowedRoots as an array from VS Code settings', () => {
+    const config = loadConfigFromVsCode(vsConfig({ allowedRoots: [' /data/a ', '', 42, '/data/b'] }), []);
+    expect(config.allowedRoots).toEqual(['/data/a', '/data/b']);
+  });
+
+  it('reads allowedRoots as a semicolon-separated string from VS Code settings', () => {
+    const config = loadConfigFromVsCode(vsConfig({ allowedRoots: '/data/a; /data/b;;' }), []);
+    expect(config.allowedRoots).toEqual(['/data/a', '/data/b']);
+  });
+});

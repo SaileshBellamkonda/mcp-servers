@@ -9,6 +9,7 @@ import { createDefaultLoaderRegistry, type LoaderRegistry } from './loaders/inde
 import type { CodeSyncResult, DocumentMetadata, MarkdownChunk } from '../core/types.js';
 import type { McpLogger } from '../core/logger.js';
 import { GlobMatcher } from '../core/glob-utils.js';
+import type { PathGuard } from '../core/path-guard.js';
 
 export interface IndexerOptions {
   docsMatcher?: GlobMatcher;
@@ -17,6 +18,8 @@ export interface IndexerOptions {
   useGitignore?: boolean;
   logger?: McpLogger;
   loaders?: LoaderRegistry;
+  /** Confines indexing to the allowed roots; files resolving outside them are rejected or skipped. */
+  pathGuard?: PathGuard;
 }
 
 /** Text sent to the embedder: document title, heading breadcrumb and tags give the chunk its context. */
@@ -38,6 +41,7 @@ export class Indexer {
   private readonly globalExclude: string[];
   private readonly useGitignore: boolean;
   private readonly loaders: LoaderRegistry;
+  private readonly pathGuard: PathGuard | undefined;
   private codeParser: CodeParser | null = null;
 
   constructor(db: VectorDB, embedder: Embedder, chunkSize: number, options: IndexerOptions = {}) {
@@ -50,6 +54,7 @@ export class Indexer {
     this.globalExclude = options.globalExclude ?? [];
     this.useGitignore = options.useGitignore ?? false;
     this.loaders = options.loaders ?? createDefaultLoaderRegistry();
+    this.pathGuard = options.pathGuard;
   }
 
   private log(level: 'info' | 'warning', msg: string): void {
@@ -85,6 +90,7 @@ export class Indexer {
   }
 
   async indexFile(filePath: string): Promise<void> {
+    this.pathGuard?.assertAllowed(filePath);
     this.log('info', `Indexing markdown: ${filePath}`);
     const loader = this.loaders.getForFile(filePath);
     if (!loader) {
@@ -108,6 +114,7 @@ export class Indexer {
   }
 
   async indexCodeFile(filePath: string): Promise<void> {
+    this.pathGuard?.assertAllowed(filePath);
     this.log('info', `Indexing code: ${filePath}`);
     const stat = statSync(filePath);
     const parser = this.getCodeParser();
@@ -147,6 +154,11 @@ export class Indexer {
     const result: CodeSyncResult = { indexed: 0, skipped: 0, failed: 0, added: 0, updated: 0 };
 
     for (const filePath of files) {
+      if (this.pathGuard && !this.pathGuard.isAllowed(filePath)) {
+        this.log('warning', `Skipping ${filePath}: it resolves outside the allowed roots (set CODERAG_ALLOWED_ROOTS to allow it)`);
+        result.skipped++;
+        continue;
+      }
       try {
         const stat = statSync(filePath);
         const existingModTime = existingDocs.get(filePath);

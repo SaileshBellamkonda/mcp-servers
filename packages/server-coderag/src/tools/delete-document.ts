@@ -3,12 +3,13 @@ import { z } from 'zod';
 import type { VectorDB } from '../vectordb/db.js';
 import type { SyncManager } from '../indexer/sync-manager.js';
 import { syncLockedResponse } from '../indexer/sync-manager.js';
+import type { PathGuard } from '../core/path-guard.js';
 
 const DeleteDocumentSchema = z.object({
   filename: z.string().min(1),
 });
 
-export function registerDeleteDocument(server: McpServer, db: VectorDB, syncManager: SyncManager): void {
+export function registerDeleteDocument(server: McpServer, db: VectorDB, syncManager: SyncManager, pathGuard: PathGuard): void {
   server.registerTool(
     'delete_document',
     {
@@ -23,8 +24,9 @@ export function registerDeleteDocument(server: McpServer, db: VectorDB, syncMana
     },
     (input: unknown) => {
       if (syncManager.inProgress) return Promise.resolve(syncLockedResponse(syncManager.status));
-      const { filename } = DeleteDocumentSchema.parse(input);
+      const { filename: requested } = DeleteDocumentSchema.parse(input);
       return Promise.resolve().then(() => {
+        const filename = pathGuard.assertAllowed(requested);
         db.deleteDocument(filename);
         return { content: [{ type: 'text', text: JSON.stringify({ success: true, filename }) }] };
       });

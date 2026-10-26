@@ -6,12 +6,13 @@ import type { Indexer } from '../indexer/indexer.js';
 import type { SyncManager } from '../indexer/sync-manager.js';
 import { syncLockedResponse } from '../indexer/sync-manager.js';
 import { isSupportedExtension } from '../indexer/languages.js';
+import type { PathGuard } from '../core/path-guard.js';
 
 const ReindexDocumentSchema = z.object({
   filename: z.string().min(1),
 });
 
-export function registerReindexDocument(server: McpServer, db: VectorDB, indexer: Indexer, syncManager: SyncManager): void {
+export function registerReindexDocument(server: McpServer, db: VectorDB, indexer: Indexer, syncManager: SyncManager, pathGuard: PathGuard): void {
   server.registerTool(
     'reindex_document',
     {
@@ -27,7 +28,8 @@ export function registerReindexDocument(server: McpServer, db: VectorDB, indexer
     async (input: unknown) => {
       if (syncManager.inProgress) return syncLockedResponse(syncManager.status);
 
-      const { filename } = ReindexDocumentSchema.parse(input);
+      const { filename: requested } = ReindexDocumentSchema.parse(input);
+      const filename = pathGuard.assertAllowed(requested);
       const ext = path.extname(filename).toLowerCase();
       const isCode = isSupportedExtension(ext);
 

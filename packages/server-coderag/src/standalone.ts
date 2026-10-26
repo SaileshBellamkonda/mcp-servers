@@ -10,6 +10,7 @@ import { Embedder } from './embedder/embedder.js';
 import { VectorDB } from './vectordb/db.js';
 import { Indexer } from './indexer/indexer.js';
 import { GlobMatcher } from './core/glob-utils.js';
+import { PathGuard, computeAllowedRoots } from './core/path-guard.js';
 import { McpLogger } from './core/logger.js';
 import { SyncManager } from './indexer/sync-manager.js';
 import { runStartupSync } from './indexer/sync.js';
@@ -47,7 +48,9 @@ async function main(): Promise<void> {
   const docsMatcher = new GlobMatcher(config.globs.docsInclude, config.globs.docsExclude, cwd, config.useGitignore);
   const codeMatcher = new GlobMatcher(config.globs.codeInclude, config.globs.codeExclude, cwd, config.useGitignore);
 
-  const indexer = new Indexer(db, embedder, config.chunkSize, { docsMatcher, codeMatcher, logger });
+  const pathGuard = new PathGuard(computeAllowedRoots({ cwdOrFolders: [cwd], globs: config.globs, extraRoots: config.allowedRoots }));
+
+  const indexer = new Indexer(db, embedder, config.chunkSize, { docsMatcher, codeMatcher, logger, pathGuard });
 
   // Use docsInclude roots as the default sync dirs for sync_documents tool
   const includeDirs = config.globs.docsInclude.map((p) => {
@@ -56,7 +59,7 @@ async function main(): Promise<void> {
     return base || cwd;
   });
 
-  createCodeRagServer(server, db, embedder, indexer, config.topK, [...new Set(includeDirs)], syncManager, logger, config.dbPath, config.embedding.model);
+  createCodeRagServer(server, db, embedder, indexer, config.topK, [...new Set(includeDirs)], syncManager, logger, config.dbPath, config.embedding.model, pathGuard);
 
   const scheduleStartupSync = (): void => {
     setImmediate(() => {

@@ -4,6 +4,7 @@ import type { Embedder } from '../embedder/embedder.js';
 import type { Indexer } from '../indexer/indexer.js';
 import type { McpLogger } from '../core/logger.js';
 import type { SyncManager } from '../indexer/sync-manager.js';
+import { PathGuard } from '../core/path-guard.js';
 import { registerSearch } from '../tools/search.js';
 import { registerIndexMarkdown } from '../tools/index-markdown.js';
 import { registerListDocuments } from '../tools/list-documents.js';
@@ -27,16 +28,17 @@ export function createCodeRagServer(
   logger?: McpLogger,
   dbPath?: string,
   embeddingModel?: string,
+  pathGuard: PathGuard = new PathGuard([process.cwd()]),
 ): void {
   registerSearch(server, db, embedder, defaultTopK);
-  registerIndexMarkdown(server, indexer, syncManager);
+  registerIndexMarkdown(server, indexer, syncManager, pathGuard);
   registerListDocuments(server, db);
-  registerDeleteDocument(server, db, syncManager);
-  registerReindexDocument(server, db, indexer, syncManager);
-  registerAddFrontmatter(server);
-  registerUpdateFrontmatter(server);
-  registerIndexCode(server, indexer, syncManager);
+  registerDeleteDocument(server, db, syncManager, pathGuard);
+  registerReindexDocument(server, db, indexer, syncManager, pathGuard);
+  registerAddFrontmatter(server, pathGuard);
+  registerUpdateFrontmatter(server, pathGuard);
+  registerIndexCode(server, indexer, syncManager, pathGuard);
   registerSearchRelations(server, db);
-  registerSyncDocuments(server, db, indexer, includeDirs, syncManager, logger);
+  registerSyncDocuments(server, db, indexer, includeDirs, syncManager, pathGuard, logger);
   registerIndexStatus(server, db, { model: embeddingModel ?? 'unknown' }, syncManager, dbPath ?? '');
 }
