@@ -198,6 +198,11 @@ dependency). Vectors live in a `vec0` virtual table from the `sqlite-vec` extens
 - An existing database keeps its stored embedding dimensions. A different `CODERAG_EMBEDDING_DIM` only logs a warning
   and the stored value stays in use; to change the dimensions, use a new database file.
 - Brute-force vector search time grows linearly with the number of chunks.
+- Keyword search is identifier-aware: camelCase, PascalCase and snake_case names are indexed whole and as words, queries
+  are split the same way (stop words dropped, the last word matches as a prefix), all-words matches rank first and
+  partial matches follow, so a query is not empty just because one word is missing. A database written by an older
+  version has its FTS table rebuilt once on the next start (`db_meta.fts_version`); vectors are not touched and nothing
+  is re-embedded.
 
 ## Development
 
@@ -211,11 +216,17 @@ pnpm --filter @mcp-servers/server-coderag run typecheck
 pnpm --filter @mcp-servers/server-coderag run dev            # standalone entry from source (tsx)
 pnpm lint                                                    # ESLint for the whole repository
 pnpm --filter @mcp-servers/server-coderag run bench          # search response size benchmark (see below)
+pnpm --filter @mcp-servers/server-coderag run eval           # retrieval eval: recall@5, recall@10, MRR
 ```
 
 `bench` needs no network: it indexes a pinned git snapshot of this repository (`BENCH_REF`, default `bdb73d5`) with a
 deterministic hash-based embedder and runs 12 fixed queries through the real `search` handler in hybrid, keyword and
 semantic mode. It prints per-query characters, estimated tokens (chars / 4) and result counts, plus mean and p90 per mode.
+
+`eval` scores 52 labelled queries (`scripts/lib/retrieval-queries.ts`: natural language, identifiers, camelCase
+fragments, snake/kebab names, concepts, docs) against the same snapshot for keyword, semantic and hybrid search. Its
+semantic leg is a hashed bag of words, so the hybrid row only shows what the keyword leg contributes; real semantic
+quality needs a real embedder. `tests/unit/vectordb/retrieval-eval.test.ts` fails when the keyword numbers drop.
 
 The build inlines the private `@mcp-servers/common` and `@mcp-servers/http-host` packages; third-party dependencies,
 including the native modules, stay external.
