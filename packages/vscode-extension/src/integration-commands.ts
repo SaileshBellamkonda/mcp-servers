@@ -1,5 +1,4 @@
-import { existsSync, statSync } from 'node:fs';
-import { appendFile, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
 import path from 'node:path';
 import * as vscode from 'vscode';
 import type { FailureReporter } from './commands';
@@ -14,6 +13,8 @@ import {
   type ShellPlatform,
 } from './core/client-config';
 import type { EmbeddedServerAdapter } from './core/embedded-server-adapter';
+import { excludeFromGit, isGitDirectory } from './core/git-exclude';
+import { readRegularFile, writeFileAtomic } from './core/safe-file';
 import type { ServerRegistry } from './core/server-registry';
 import type { SecretStorageTokenProvider, SecretStore } from './core/token-provider';
 
@@ -150,26 +151,6 @@ export function registerIntegrationCommands(deps: IntegrationDeps): vscode.Dispo
     return { servers, notes };
   };
 
-  const isGitRepository = (folder: string): boolean => {
-    try {
-      return statSync(path.join(folder, '.git')).isDirectory();
-    } catch {
-      return false;
-    }
-  };
-
-  const excludeFromGit = async (folder: string): Promise<void> => {
-    const file = path.join(folder, '.git', 'info', 'exclude');
-    let current = '';
-    try {
-      current = await readFile(file, 'utf8');
-    } catch {
-      await mkdir(path.dirname(file), { recursive: true });
-    }
-    if (current.split(/\r?\n/).some((line) => line.trim() === '.mcp.json' || line.trim() === '/.mcp.json')) return;
-    await appendFile(file, `${current === '' || current.endsWith('\n') ? '' : '\n'}.mcp.json\n`);
-  };
-
   const writeMcpJson = async (entries: Record<string, ClientServerEntry>): Promise<void> => {
     const folder = deps.firstWorkspaceFolder();
     if (folder === undefined) {
@@ -179,19 +160,18 @@ export function registerIntegrationCommands(deps: IntegrationDeps): vscode.Dispo
     const file = path.join(folder, '.mcp.json');
     let existing: string | undefined;
     try {
-      existing = await readFile(file, 'utf8');
+      // Never through a symbolic link: the write would land wherever the link points.
+      existing = await readRegularFile(file);
     } catch (error) {
-      if ((error as { code?: unknown }).code !== 'ENOENT') {
-        void vscode.window.showErrorMessage(`Cannot read ${file}: ${errorMessage(error)}`);
-        return;
-      }
+      void vscode.window.showErrorMessage(`Cannot use ${file}: ${errorMessage(error)}`);
+      return;
     }
     const merged = mergeMcpJson(existing, entries);
     if (!merged.ok) {
       void vscode.window.showErrorMessage(merged.error);
       return;
     }
-    const offerExclude = isGitRepository(folder);
+    const offerExclude = isGitDirectory(folder);
     const names = Object.keys(entries).join(', ');
     const choice = await vscode.window.showWarningMessage(
       `Write ${names} to ${file}?`,
@@ -207,11 +187,18 @@ export function registerIntegrationCommands(deps: IntegrationDeps): vscode.Dispo
     );
     if (choice !== WRITE && choice !== WRITE_AND_EXCLUDE) return;
     try {
-      await writeFile(file, merged.text, 'utf8');
-      if (choice === WRITE_AND_EXCLUDE) await excludeFromGit(folder);
+      await writeFileAtomic(file, merged.text);
     } catch (error) {
       void vscode.window.showErrorMessage(`Could not write ${file}: ${errorMessage(error)}`);
       return;
+    }
+    if (choice === WRITE_AND_EXCLUDE) {
+      try {
+        await excludeFromGit(folder, '.mcp.json');
+      } catch (error) {
+        void vscode.window.showErrorMessage(`.mcp.json was written to ${file}, but it could not be excluded from git: ${errorMessage(error)}`);
+        return;
+      }
     }
     void vscode.window.showInformationMessage(
       `Wrote ${names} to ${file}${choice === WRITE_AND_EXCLUDE ? ' and excluded it from git' : ''}. Start Claude Code in this folder (or run /mcp) to use it.`

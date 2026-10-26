@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -336,6 +336,56 @@ describe('mcpServers.addToClaudeCode', () => {
       warning.mockResolvedValueOnce('Write and exclude from git');
       await fixture.run(COMMAND_ADD_TO_CLAUDE_CODE);
       expect(readFileSync(exclude, 'utf8')).toBe('/.mcp.json\n');
+    });
+
+    it.runIf(process.platform !== 'win32')('refuses a symlinked .mcp.json with a clear error and writes nothing, not even through the link', async () => {
+      fixture = await setup();
+      const target = path.join(fixture.root, 'elsewhere.json');
+      writeFileSync(target, '{"mcpServers":{"mine":{"command":"x"}}}');
+      symlinkSync(target, path.join(fixture.workspace, '.mcp.json'));
+      pick(['git'], 'write');
+      await fixture.run(COMMAND_ADD_TO_CLAUDE_CODE);
+      expect(error.mock.calls.flat().join(' ')).toMatch(/symbolic link/i);
+      expect(warning).not.toHaveBeenCalled();
+      expect(readFileSync(target, 'utf8')).toBe('{"mcpServers":{"mine":{"command":"x"}}}');
+      expect(readdirSync(fixture.root)).not.toContain('.mcp.json');
+    });
+
+    it('writes .mcp.json through a temporary file (no leftovers in the folder)', async () => {
+      fixture = await setup();
+      pick(['git'], 'write');
+      warning.mockResolvedValueOnce('Write .mcp.json');
+      await fixture.run(COMMAND_ADD_TO_CLAUDE_CODE);
+      expect(readdirSync(fixture.workspace)).toEqual(['.mcp.json']);
+    });
+
+    it.runIf(process.platform !== 'win32')('does not offer to exclude through a symlinked .git, so nothing is written through it', async () => {
+      fixture = await setup();
+      const outside = path.join(fixture.root, 'outside-git');
+      mkdirSync(path.join(outside, 'info'), { recursive: true });
+      symlinkSync(outside, path.join(fixture.workspace, '.git'));
+      pick(['git'], 'write');
+      warning.mockResolvedValueOnce('Write .mcp.json');
+      await fixture.run(COMMAND_ADD_TO_CLAUDE_CODE);
+      expect((warning.mock.calls[0] as unknown[]).slice(2)).toEqual(['Write .mcp.json']);
+      expect(readdirSync(path.join(outside, 'info'))).toEqual([]);
+    });
+
+    it.runIf(process.platform !== 'win32')('reports a symlinked .git/info/exclude without writing through it, and says the file itself was written', async () => {
+      fixture = await setup();
+      const exclude = path.join(fixture.workspace, '.git', 'info', 'exclude');
+      mkdirSync(path.dirname(exclude), { recursive: true });
+      const target = path.join(fixture.root, 'precious');
+      writeFileSync(target, 'keep\n');
+      symlinkSync(target, exclude);
+      pick(['git'], 'write');
+      warning.mockResolvedValueOnce('Write and exclude from git');
+      await fixture.run(COMMAND_ADD_TO_CLAUDE_CODE);
+      expect(readFileSync(target, 'utf8')).toBe('keep\n');
+      expect(fixture.mcpJson()).toBeDefined();
+      const text = error.mock.calls.flat().join(' ');
+      expect(text).toMatch(/symbolic link/i);
+      expect(text).toMatch(/\.mcp\.json was written/i);
     });
 
     it('offers only the plain write outside a git repository', async () => {
