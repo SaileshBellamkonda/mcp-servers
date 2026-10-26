@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
 import { EmbeddedServerAdapter } from '../../src/core/embedded-server-adapter';
 import { InMemoryTokenProvider } from '../../src/core/token-provider';
@@ -29,6 +30,17 @@ function fakeInstance(port = 3000, withUpdate = true): FakeInstance {
   return instance;
 }
 
+/** Stable tokens like the real provider, plus a way to change them as another window's rotate would. */
+class RotatingTokens extends InMemoryTokenProvider {
+  private generation = 0;
+  rotate(): void {
+    this.generation++;
+  }
+  override async getToken(serverId: string, scopeKey: string): Promise<string> {
+    return createHash('sha256').update(`${await super.getToken(serverId, scopeKey)}-${String(this.generation)}`).digest('hex');
+  }
+}
+
 interface Harness {
   adapter: EmbeddedServerAdapter;
   descriptor: ServerDescriptor & {
@@ -39,7 +51,7 @@ interface Harness {
   settings: Record<string, unknown>;
   logs: { level: string; data: unknown }[];
   states: ServerInfo[];
-  tokens: InMemoryTokenProvider;
+  tokens: RotatingTokens;
   instances: FakeInstance[];
 }
 
@@ -75,7 +87,7 @@ function makeHarness(
       return Promise.resolve(instance);
     }),
   };
-  const tokens = new InMemoryTokenProvider();
+  const tokens = new RotatingTokens();
   const adapter = new EmbeddedServerAdapter(descriptor, {
     loadModule: vi.fn() as never,
     clock: () => 1_700_000_000_000,
@@ -528,6 +540,48 @@ describe('EmbeddedServerAdapter', () => {
       h.settings['mcpServers.fake.port'] = 4001;
       h.descriptor.activate.mockRejectedValueOnce(Object.assign(new Error('x'), { code: 'EADDRINUSE' }));
       await expect(h.adapter.applyConfiguration()).rejects.toThrow('Port 4001 is already in use');
+    });
+  });
+
+  describe('applyTokenChange()', () => {
+    const authToken = (h: Harness, call: number): unknown => h.descriptor.activate.mock.calls[call]?.[0].authToken;
+
+    it('restarts a running server whose token is no longer the one the workspace has (changed in another window)', async () => {
+      const h = makeHarness();
+      await h.adapter.start();
+      const original = authToken(h, 0);
+      h.tokens.rotate();
+      await expect(h.adapter.applyTokenChange()).resolves.toBe('restarted');
+      expect(h.instances[0]?.close).toHaveBeenCalledOnce();
+      expect(h.descriptor.activate).toHaveBeenCalledTimes(2);
+      expect(authToken(h, 1)).not.toBe(original);
+    });
+
+    it('does nothing while the server already runs with the current token', async () => {
+      const h = makeHarness();
+      await h.adapter.start();
+      await expect(h.adapter.applyTokenChange()).resolves.toBe('unchanged');
+      expect(h.descriptor.activate).toHaveBeenCalledOnce();
+    });
+
+    it('does nothing to a server that is not running', async () => {
+      const h = makeHarness();
+      await expect(h.adapter.applyTokenChange()).resolves.toBe('unchanged');
+      await h.adapter.start();
+      await h.adapter.stop();
+      h.tokens.rotate();
+      await expect(h.adapter.applyTokenChange()).resolves.toBe('unchanged');
+      expect(h.descriptor.activate).toHaveBeenCalledOnce();
+    });
+
+    it('waits for a restart in flight and then finds the token current (no second restart)', async () => {
+      const h = makeHarness();
+      await h.adapter.start();
+      h.tokens.rotate();
+      const restarting = h.adapter.restart();
+      await expect(h.adapter.applyTokenChange()).resolves.toBe('unchanged');
+      await restarting;
+      expect(h.descriptor.activate).toHaveBeenCalledTimes(2);
     });
   });
 

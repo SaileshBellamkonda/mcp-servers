@@ -96,8 +96,7 @@ export class SecretStorageTokenProvider implements TokenProvider {
   /** Replaces the token of the workspace with a new random one and returns it. */
   rotate(scopeKey: string): Promise<string> {
     return this.serialised(scopeKey, async () => {
-      const token = randomBytes(32).toString('hex');
-      await this.secrets.store(tokenSecretKey(scopeKey), token);
+      const token = await this.storeAndAdopt(scopeKey, randomBytes(32).toString('hex'));
       await this.mirror(scopeKey, token);
       return token;
     });
@@ -129,18 +128,28 @@ export class SecretStorageTokenProvider implements TokenProvider {
   }
 
   private async resolve(scopeKey: string): Promise<string> {
-    const secretKey = tokenSecretKey(scopeKey);
-    const stored = await this.secrets.get(secretKey);
+    const stored = await this.secrets.get(tokenSecretKey(scopeKey));
     let token: string;
     if (isUsableToken(stored)) {
       token = stored;
     } else {
       const fromFile = await this.readMirror(scopeKey);
-      token = fromFile ?? randomBytes(32).toString('hex');
-      await this.secrets.store(secretKey, token);
+      token = await this.storeAndAdopt(scopeKey, fromFile ?? randomBytes(32).toString('hex'));
     }
     await this.mirror(scopeKey, token);
     return token;
+  }
+
+  /**
+   * Stores `token` and returns what SecretStorage holds afterwards. Windows share one SecretStorage but not this
+   * process's memory, so when two of them store at once the last writer wins and both must adopt that value (a
+   * window that kept its own would run servers with a token nobody else, nor the file, knows).
+   */
+  private async storeAndAdopt(scopeKey: string, token: string): Promise<string> {
+    const secretKey = tokenSecretKey(scopeKey);
+    await this.secrets.store(secretKey, token);
+    const stored = await this.secrets.get(secretKey);
+    return isUsableToken(stored) ? stored : token;
   }
 
   private async readMirror(scopeKey: string): Promise<string | undefined> {

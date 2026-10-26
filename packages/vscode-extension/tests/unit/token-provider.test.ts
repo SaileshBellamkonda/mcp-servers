@@ -217,6 +217,46 @@ describe('SecretStorageTokenProvider', () => {
     expect(readdirSync(dir)).toEqual([`${SCOPE}.json`]);
   });
 
+  describe('two windows sharing one SecretStorage', () => {
+    /** Delays every store until `expected` calls arrived, then applies them in arrival order (a first-run race). */
+    class RacingSecrets extends MemorySecrets {
+      private waiting: { key: string; value: string; done: () => void }[] = [];
+      constructor(private readonly expected: number) {
+        super();
+      }
+      override store(key: string, value: string): Promise<void> {
+        return new Promise<void>((resolve) => {
+          this.waiting.push({ key, value, done: resolve });
+          if (this.waiting.length < this.expected) return;
+          for (const { key: k, value: v, done } of this.waiting) {
+            this.values.set(k, v);
+            done();
+          }
+          this.waiting = [];
+        });
+      }
+    }
+
+    it('adopts the stored value after generating a token, so providers racing the first run end up with one token', async () => {
+      const shared = new RacingSecrets(2);
+      const a = new SecretStorageTokenProvider(shared, dir, { onMirrorError });
+      const b = new SecretStorageTokenProvider(shared, dir, { onMirrorError });
+      const [fromA, fromB] = await Promise.all([a.getToken('git', SCOPE), b.getToken('git', SCOPE)]);
+      expect(fromA).toBe(fromB);
+      expect(fromA).toBe(shared.values.get(tokenSecretKey(SCOPE)));
+      expect(readFileToken()).toBe(fromA);
+    });
+
+    it('rotate() also returns whatever ended up stored when two windows rotate at the same time', async () => {
+      const shared = new RacingSecrets(2);
+      const a = new SecretStorageTokenProvider(shared, dir, { onMirrorError });
+      const b = new SecretStorageTokenProvider(shared, dir, { onMirrorError });
+      const [fromA, fromB] = await Promise.all([a.rotate(SCOPE), b.rotate(SCOPE)]);
+      expect(fromA).toBe(fromB);
+      expect(readFileToken()).toBe(fromA);
+    });
+  });
+
   it('exposes where the mirror lives', () => {
     expect(make().tokensDir).toBe(dir);
   });

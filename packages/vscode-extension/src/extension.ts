@@ -7,7 +7,7 @@ import { installHeadersHelper } from './core/helper-installer';
 import { createLineLogger } from './core/logger';
 import type { ServerDescriptor, ServerLogger } from './core/server-descriptor';
 import { ServerRegistry } from './core/server-registry';
-import { computeScopeKey, SecretStorageTokenProvider, type TokenProvider } from './core/token-provider';
+import { computeScopeKey, SecretStorageTokenProvider, tokenSecretKey, type TokenProvider } from './core/token-provider';
 import { CODERAG_API_KEY_SECRET, registerIntegrationCommands } from './integration-commands';
 import { registerMcpProvider } from './mcp-provider';
 import { createCodeRagDescriptor } from './servers/coderag-descriptor';
@@ -18,6 +18,8 @@ import { McpServersTreeProvider } from './tree-provider';
 
 /** Settings are applied once they stop changing for this long, so editing several settings restarts a server once. */
 const SETTINGS_DEBOUNCE_MS = 500;
+/** Debouncer key of the token-changed restart (server ids are plain words, so this cannot collide). */
+const TOKEN_CHANGE_KEY = 'secret:token';
 
 /**
  * The servers this extension hosts. Adding a server means adding its descriptor here (and its module to the
@@ -148,9 +150,33 @@ export function activate(context: vscode.ExtensionContext): void {
     apiKeyChanged.add(coderag.id);
     debouncer.trigger(coderag.id, () => { applySettings(coderag); });
   };
+  /**
+   * The workspace token was replaced (another window rotated it, or won a first-run race): servers that still run
+   * with the old one restart. Our own rotate/first-run is a no-op here, the servers already have the stored value.
+   */
+  const applyTokenChange = async (): Promise<void> => {
+    const restarted: string[] = [];
+    await Promise.all(
+      registry.servers.map(async (server) => {
+        try {
+          if ((await server.applyTokenChange()) === 'restarted') restarted.push(server.label);
+        } catch (error) {
+          reporter.report(server, 'restart', error);
+        }
+      })
+    );
+    if (restarted.length === 0) return;
+    mcp?.provider.notifyChanged({ newToken: true });
+    void vscode.window.showInformationMessage(`The MCP server token was changed in another window; ${restarted.join(', ')} restarted to use it.`);
+  };
   context.subscriptions.push(
     context.secrets.onDidChange((event) => {
       if (event.key === CODERAG_API_KEY_SECRET) onApiKeyChanged();
+      else if (event.key === tokenSecretKey(workspaceScopeKey())) {
+        debouncer.trigger(TOKEN_CHANGE_KEY, () => {
+          void applyTokenChange();
+        });
+      }
     }),
     ...registerIntegrationCommands({
       registry,

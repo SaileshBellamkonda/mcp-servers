@@ -28,7 +28,7 @@ export interface AdapterDeps {
 /** What `syncWorkspace()` did. */
 export type WorkspaceSyncResult = 'updated' | 'restarted' | 'became-available' | 'became-unavailable' | 'unchanged';
 
-/** What `applyConfiguration()` did. */
+/** What `applyConfiguration()` and `applyTokenChange()` did. */
 export type ConfigurationResult = 'restarted' | 'unchanged';
 
 const MAX_PORT = 65535;
@@ -150,6 +150,20 @@ export class EmbeddedServerAdapter implements Disposable {
   async applyConfiguration(): Promise<ConfigurationResult> {
     if (this.state !== 'running') return 'unchanged';
     if (this.settingsFingerprint(this.readPort()) === this.startedSettings) return 'unchanged';
+    await this.restart();
+    return 'restarted';
+  }
+
+  /**
+   * Call after the workspace token may have changed (another window rotated or replaced it): restarts a running
+   * server that still serves the token it was started with. Waits for a start or stop in flight first, so a
+   * restart that already picked up the new token is not repeated.
+   */
+  async applyTokenChange(): Promise<ConfigurationResult> {
+    if (this.stopPromise) await this.stopPromise.catch(() => undefined);
+    if (this.startPromise) await this.startPromise.catch(() => undefined);
+    if (this.state !== 'running' || this.token === undefined) return 'unchanged';
+    if ((await this.deps.tokens.getToken(this.id, this.deps.scopeKey())) === this.token) return 'unchanged';
     await this.restart();
     return 'restarted';
   }

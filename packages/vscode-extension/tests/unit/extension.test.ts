@@ -642,6 +642,73 @@ describe('extension', () => {
     });
   });
 
+  describe('token changed in another window', () => {
+    const NEW_TOKEN = 'n'.repeat(64);
+    const tokenKey = (): string => {
+      const key = [...ctx.secrets.values.keys()].find((candidate) => candidate.startsWith('mcpServers.token.'));
+      if (!key) throw new Error('no token secret stored yet');
+      return key;
+    };
+
+    beforeEach(() => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    });
+
+    it('restarts the running servers with the new token after the usual debounce, and says so', async () => {
+      activate(ctx as never);
+      await until('running');
+      const listener = vi.fn();
+      test.mcpProviders().get('mcpServers.servers')?.onDidChangeMcpServerDefinitions?.(listener);
+      const before = gitToken();
+      await ctx.secrets.store(tokenKey(), NEW_TOKEN);
+      await vi.advanceTimersByTimeAsync(499);
+      expect(git.activateGitServer).toHaveBeenCalledOnce();
+      await vi.advanceTimersByTimeAsync(1);
+      await vi.waitFor(() => {
+        expect(git.activateGitServer).toHaveBeenCalledTimes(2);
+      });
+      const after = (git.activateGitServer.mock.calls[1]?.[0] as unknown as { authToken: string }).authToken;
+      expect(after).not.toBe(before);
+      expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(expect.stringMatching(/token.*another window.*Git/i));
+      expect(listener).toHaveBeenCalled();
+      expect(outputLines().join('\n')).not.toContain(NEW_TOKEN);
+    });
+
+    it('several quick changes cause one restart', async () => {
+      activate(ctx as never);
+      await until('running');
+      await ctx.secrets.store(tokenKey(), 'a'.repeat(64));
+      await vi.advanceTimersByTimeAsync(200);
+      await ctx.secrets.store(tokenKey(), 'b'.repeat(64));
+      await vi.advanceTimersByTimeAsync(600);
+      await vi.waitFor(() => {
+        expect(git.activateGitServer).toHaveBeenCalledTimes(2);
+      });
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(git.activateGitServer).toHaveBeenCalledTimes(2);
+    });
+
+    it('rotating here restarts once (the command) and the change event does not restart a second time', async () => {
+      activate(ctx as never);
+      await until('running');
+      vi.mocked(vscode.window.showWarningMessage).mockResolvedValueOnce('Rotate' as never);
+      await handler('mcpServers.rotateToken')();
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(git.activateGitServer).toHaveBeenCalledTimes(2);
+      expect(vscode.window.showInformationMessage).not.toHaveBeenCalledWith(expect.stringMatching(/another window/i));
+    });
+
+    it('does nothing for the token of another workspace, for the API key or for servers that are not running', async () => {
+      activate(ctx as never);
+      await until('running');
+      await ctx.secrets.store('mcpServers.token.0123456789abcdef', NEW_TOKEN);
+      await ctx.secrets.store(CODERAG_API_KEY_SECRET, 'sk-x');
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(git.activateGitServer).toHaveBeenCalledOnce();
+      expect(rag.activateCodeRagServer).not.toHaveBeenCalled();
+    });
+  });
+
   describe('VS Code MCP integration', () => {
     const provider = (): { provide(): vscode.McpHttpServerDefinition[]; resolve(d: vscode.McpHttpServerDefinition): Promise<vscode.McpHttpServerDefinition> } => {
       const registered = test.mcpProviders().get('mcpServers.servers') as vscode.McpServerDefinitionProvider<vscode.McpHttpServerDefinition> | undefined;
