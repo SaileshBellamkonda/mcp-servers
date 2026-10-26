@@ -320,7 +320,35 @@ async function waitFor(what, predicate, timeoutMs = 20000) {
   }
 }
 
-async function runExtension() {
+/**
+ * The extension run uses fixed ports (the settings name them), so a port that was free when `freePort()` returned
+ * can be taken by a parallel test suite (or an outgoing connection that happens to use it as its source port)
+ * before the extension binds it. Such a failure says nothing about the bundle: the run is repeated with fresh
+ * ports, up to `maxAttempts` times. A genuine defect fails every attempt and is reported as usual.
+ */
+const PORT_RACE = /EADDRINUSE|already in use|ECONNREFUSED|still open|fetch failed/i;
+
+function failedOnPortRace(outcome) {
+  const messages = [...Object.values(outcome.steps).filter((entry) => !entry.ok).map((entry) => entry.error ?? ''), outcome.fatal ?? ''];
+  return messages.some((message) => PORT_RACE.test(message));
+}
+
+async function runExtension(maxAttempts = 3) {
+  for (let attempt = 1; ; attempt++) {
+    result.steps = {};
+    delete result.fatal;
+    try {
+      await runExtensionOnce();
+    } catch (error) {
+      result.fatal = error instanceof Error ? error.stack : String(error);
+    }
+    result.attempts = attempt;
+    if (attempt >= maxAttempts || !failedOnPortRace(result)) return;
+    process.stderr.write(`bundle-smoke: attempt ${String(attempt)} failed on a port conflict, retrying with new ports\n`);
+  }
+}
+
+async function runExtensionOnce() {
   const bundle = path.resolve(arg('bundle'));
   const work = fs.mkdtempSync(path.join(os.tmpdir(), 'bundle-smoke-ext-'));
   const repo = path.join(work, 'repo');
@@ -376,8 +404,9 @@ async function runExtension() {
   Module._load = function patched(request, parent, isMain) {
     return request === 'vscode' ? stub : originalLoad.call(this, request, parent, isMain);
   };
+  let extension;
+  let deactivated = false;
   try {
-    let extension;
     await step('extension.load', () => {
       extension = require(bundle);
       assert(typeof extension.activate === 'function', 'bundle does not export activate');
@@ -519,6 +548,7 @@ async function runExtension() {
     // VS Code calls deactivate(), then disposes the subscriptions.
     await step('extension.deactivate', async () => {
       await extension.deactivate();
+      deactivated = true;
       await assertClosed(gitPort, 'after deactivate()');
       if (ragRunning) await assertClosed(ragPort, 'after deactivate()');
       assert(item('git')?.contextValue === 'server.stopped', `expected server.stopped, got ${String(item('git')?.contextValue)}`);
@@ -527,6 +557,9 @@ async function runExtension() {
       for (const disposable of context.subscriptions) disposable.dispose();
     });
   } finally {
+    // A failed run must not leave servers listening or the bundle cached for the next attempt.
+    if (extension && !deactivated) await Promise.resolve().then(() => extension.deactivate()).catch(() => undefined);
+    delete require.cache[require.resolve(bundle)];
     Module._load = originalLoad;
     embeddings.server.close();
     fs.rmSync(work, { recursive: true, force: true });
