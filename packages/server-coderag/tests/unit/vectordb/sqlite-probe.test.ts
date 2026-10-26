@@ -30,7 +30,7 @@ describe('probeSqliteSupport', () => {
     });
     expect(result).toMatchObject({ ok: false });
     expect(result.ok === false && result.reason).toMatch(/22\.14/);
-    expect(result.ok === false && result.needs).toBeUndefined();
+    expect(result.ok === false && result.needs).toBe('node');
     expect(loaded).toBe(false);
   });
 
@@ -43,6 +43,7 @@ describe('probeSqliteSupport', () => {
     const result = probeSqliteSupport({ loadNodeSqlite: () => undefined });
     expect(result).toMatchObject({ ok: false });
     expect(result.ok === false && result.reason).toMatch(/node:sqlite/);
+    expect(result.ok === false && result.needs).toBe('node');
   });
 
   it('reports a loader that throws, without throwing itself', () => {
@@ -52,6 +53,7 @@ describe('probeSqliteSupport', () => {
       },
     });
     expect(result.ok === false && result.reason).toMatch(/boom-load/);
+    expect(result.ok === false && result.needs).toBe('node');
   });
 
   it('reports a database that cannot be opened with extensions allowed', () => {

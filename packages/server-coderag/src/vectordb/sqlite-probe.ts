@@ -9,8 +9,11 @@ export type SqliteProbeResult =
       ok: false;
       /** Human-readable cause, safe to show to users. */
       reason: string;
-      /** Set when only keyword search (FTS5) is missing; vector search itself works. */
-      needs?: 'fts5';
+      /**
+       * Set when one known remedy applies: `'fts5'` = only keyword search is missing (vector search works; needs
+       * Node.js >= 22.16 / VS Code >= 1.103); `'node'` = Node.js is too old or has no `node:sqlite`.
+       */
+      needs?: 'fts5' | 'node';
     };
 
 export interface SqliteProbeDeps {
@@ -42,16 +45,16 @@ function nodeIsSupported(version: string): boolean {
 export function probeSqliteSupport(deps: SqliteProbeDeps = {}): SqliteProbeResult {
   const nodeVersion = deps.nodeVersion ?? process.versions.node;
   if (!nodeIsSupported(nodeVersion)) {
-    return { ok: false, reason: `Node.js ${nodeVersion} is too old; coderag needs Node.js >= ${String(MIN_NODE.major)}.${String(MIN_NODE.minor)}` };
+    return { ok: false, reason: `Node.js ${nodeVersion} is too old; coderag needs Node.js >= ${String(MIN_NODE.major)}.${String(MIN_NODE.minor)}`, needs: 'node' };
   }
 
   let sqlite: NodeSqliteModule | undefined;
   try {
     sqlite = (deps.loadNodeSqlite ?? ((): NodeSqliteModule | undefined => process.getBuiltinModule('node:sqlite')))();
   } catch (err) {
-    return { ok: false, reason: `node:sqlite failed to load: ${describe(err)}` };
+    return { ok: false, reason: `node:sqlite failed to load: ${describe(err)}`, needs: 'node' };
   }
-  if (!sqlite) return { ok: false, reason: 'node:sqlite is not available in this runtime' };
+  if (!sqlite) return { ok: false, reason: 'node:sqlite is not available in this runtime', needs: 'node' };
 
   let db: SqliteDatabase | undefined;
   try {
