@@ -29,11 +29,12 @@ interface OpenSection {
 }
 
 // gray-matter's default `---js` / `---javascript` engines eval the header. Documents are untrusted input,
-// so those engines are disabled (the resulting error makes the file fall back to body-only). Passing an
-// options object also bypasses gray-matter's global per-input cache, which would otherwise grow without
-// bound and hand back shared mutable objects.
+// so those engines are disabled everywhere frontmatter is read or written (this module is the only place
+// that touches gray-matter). Passing an options object also bypasses gray-matter's global per-input cache
+// (it is only consulted when no options are given), so a result parsed here can never be served from, or
+// stored for, a parse made with the default eval-capable engines.
 function disabledEngine(): never {
-  throw new Error('Code frontmatter is not supported');
+  throw new Error('Code frontmatter (---js / ---javascript) is not supported');
 }
 const MATTER_OPTIONS = { engines: { js: disabledEngine, javascript: disabledEngine } };
 
@@ -54,14 +55,30 @@ function noFrontmatter(source: string): Frontmatter {
 }
 
 /**
+ * Parses YAML (or JSON) frontmatter with code engines disabled. Returns an empty mapping when the header is
+ * absent or never closed. Throws on code (`---js`), malformed or non-mapping frontmatter, so callers that
+ * would rewrite the file can refuse instead of silently overwriting it.
+ */
+export function parseFrontmatter(source: string): { data: Record<string, unknown>; content: string } {
+  // gray-matter treats an unterminated header as running to the end of the file, so never hand it one.
+  if (HAS_FRONTMATTER_OPEN.test(source) && !CLOSED_FRONTMATTER.test(source)) return { data: {}, content: source };
+  const parsed = matter(source, MATTER_OPTIONS);
+  if (!isRecord(parsed.data)) throw new Error('Frontmatter must be a mapping of keys to values');
+  return { data: parsed.data, content: parsed.content };
+}
+
+/** Writes `data` as YAML frontmatter above `content` without re-parsing `content` for another header. */
+export function stringifyFrontmatter(content: string, data: Record<string, unknown>): string {
+  return matter.stringify({ content }, data, MATTER_OPTIONS);
+}
+
+/**
  * Splits YAML frontmatter from the body. Unterminated, malformed, non-mapping or code (`---js`) frontmatter
  * is left in the body.
  */
 export function splitFrontmatter(source: string): Frontmatter {
-  if (HAS_FRONTMATTER_OPEN.test(source) && !CLOSED_FRONTMATTER.test(source)) return noFrontmatter(source);
   try {
-    const parsed = matter(source, MATTER_OPTIONS);
-    if (!isRecord(parsed.data)) return noFrontmatter(source);
+    const parsed = parseFrontmatter(source);
     const prefix = source.slice(0, source.length - parsed.content.length);
     return { data: parsed.data, body: parsed.content, lineOffset: countNewlines(prefix) };
   } catch {

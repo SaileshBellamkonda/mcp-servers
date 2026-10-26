@@ -1,7 +1,8 @@
 import { type McpServer, fromJsonSchema } from '@modelcontextprotocol/server';
 import { z } from 'zod';
 import { readFileSync, writeFileSync } from 'node:fs';
-import matter from 'gray-matter';
+import { assertFrontmatterFile } from '../indexer/loaders/index.js';
+import { parseFrontmatter, stringifyFrontmatter } from '../indexer/loaders/markdown.js';
 import type { PathGuard } from '../core/path-guard.js';
 
 const AddFrontmatterSchema = z.object({
@@ -34,8 +35,9 @@ export function registerAddFrontmatter(server: McpServer, pathGuard: PathGuard):
     (input: unknown) => {
       const { filepath: requested, domain, doc_type, language, tags, project } = AddFrontmatterSchema.parse(input);
       const filepath = pathGuard.assertAllowed(requested);
+      assertFrontmatterFile(filepath);
       const raw = readFileSync(filepath, 'utf8');
-      const parsed = matter(raw);
+      const parsed = parseFrontmatter(raw);
 
       // Only add if no frontmatter exists
       if (Object.keys(parsed.data).length > 0) {
@@ -52,7 +54,7 @@ export function registerAddFrontmatter(server: McpServer, pathGuard: PathGuard):
       if (project) newData['project'] = project;
       newData['updated_at'] = new Date().toISOString().split('T')[0];
 
-      const output = matter.stringify(parsed.content, newData);
+      const output = stringifyFrontmatter(parsed.content, newData);
       writeFileSync(filepath, output, 'utf8');
 
       return Promise.resolve({
