@@ -46,7 +46,7 @@ const input = vi.mocked(vscode.window.showInputBox) as unknown as ReturnType<typ
 const clipboard = vi.mocked(vscode.env.clipboard.writeText);
 
 async function setup(
-  specs: Parameters<typeof makeRegistry>[0] = [['git', 'running', 3000], ['coderag', 'stopped', 3100]],
+  specs: Parameters<typeof makeRegistry>[0] = [['git', 'running', 3000], ['coderag', 'running', 3100]],
   options: { workspace?: boolean; helper?: boolean; platform?: NodeJS.Platform } = {}
 ): Promise<Fixture> {
   const root = mkdtempSync(path.join(tmpdir(), 'integration-'));
@@ -206,7 +206,7 @@ describe('mcpServers.rotateToken', () => {
   });
 
   it('rotates: new secret and file, running servers restarted with it, stopped ones untouched, VS Code told', async () => {
-    fixture = await setup();
+    fixture = await setup([['git', 'running', 3000], ['coderag', 'stopped', 3100]]);
     warning.mockResolvedValueOnce('Rotate');
     await fixture.run(COMMAND_ROTATE_TOKEN);
     const rotated = fixture.secrets.values.get(tokenSecretKey(SCOPE));
@@ -258,7 +258,7 @@ describe('mcpServers.addToClaudeCode', () => {
     });
 
     it('lists only servers that can run, with their URLs, and offers all of them preselected', async () => {
-      fixture = await setup([['git', 'running', 3000], ['coderag', 'unavailable', 3100], ['zero', 'stopped', 0]]);
+      fixture = await setup([['git', 'running', 3000], ['coderag', 'unavailable', 3100], ['zero', 'running', 0]]);
       pick(undefined);
       await fixture.run(COMMAND_ADD_TO_CLAUDE_CODE);
       const [items, options] = quickPick.mock.calls[0] as [{ id: string; picked: boolean; description: string }[], { canPickMany?: boolean }];
@@ -268,7 +268,7 @@ describe('mcpServers.addToClaudeCode', () => {
     });
 
     it('tells the user why a port-0 or unavailable server is not offered', async () => {
-      fixture = await setup([['git', 'running', 3000], ['zero', 'stopped', 0], ['coderag', 'unavailable', 3100]]);
+      fixture = await setup([['git', 'running', 3000], ['zero', 'running', 0], ['coderag', 'unavailable', 3100]]);
       pick(undefined);
       await fixture.run(COMMAND_ADD_TO_CLAUDE_CODE);
       const [items] = quickPick.mock.calls[0] as [{ id: string }[]];
@@ -410,6 +410,31 @@ describe('mcpServers.addToClaudeCode', () => {
     quickPick.mockResolvedValueOnce(undefined);
     await fixture.run(COMMAND_ADD_TO_CLAUDE_CODE);
     expect(clipboard).not.toHaveBeenCalled();
+    expect(fixture.mcpJson()).toBeUndefined();
+  });
+
+  it('offers only running servers: a stopped, starting or failed one is left out with a reason that says what to do', async () => {
+    fixture = await setup([['git', 'running', 3000], ['coderag', 'stopped', 3100], ['files', 'starting', 3200], ['broken', 'error', 3300]]);
+    pick(undefined);
+    await fixture.run(COMMAND_ADD_TO_CLAUDE_CODE);
+    const [items] = quickPick.mock.calls[0] as [{ id: string }[]];
+    expect(items.map((item) => item.id)).toEqual(['git']);
+    const text = info.mock.calls.flat().join(' ');
+    expect(text).toMatch(/CODERAG is not running/);
+    expect(text).toMatch(/FILES is still starting/);
+    expect(text).toMatch(/BROKEN failed to start/);
+  });
+
+  it('with no server running, explains that one has to be started and offers to show the servers', async () => {
+    fixture = await setup([['git', 'stopped', 3000], ['coderag', 'error', 3100]]);
+    info.mockResolvedValueOnce('Show MCP Servers');
+    await fixture.run(COMMAND_ADD_TO_CLAUDE_CODE);
+    expect(quickPick).not.toHaveBeenCalled();
+    const [message, ...buttons] = info.mock.calls[0] as string[];
+    expect(message).toMatch(/no mcp server is running/i);
+    expect(message).toMatch(/start/i);
+    expect(buttons).toEqual(['Show MCP Servers']);
+    expect(vscode.commands.executeCommand).toHaveBeenCalledWith('mcpServers.focus');
     expect(fixture.mcpJson()).toBeUndefined();
   });
 

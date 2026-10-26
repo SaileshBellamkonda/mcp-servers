@@ -28,6 +28,7 @@ export const CODERAG_API_KEY_SECRET = 'mcpServers.coderag.embeddingApiKey';
 const WRITE = 'Write .mcp.json';
 const WRITE_AND_EXCLUDE = 'Write and exclude from git';
 const ROTATE = 'Rotate';
+const SHOW_SERVERS = 'Show MCP Servers';
 
 export interface IntegrationDeps {
   registry: ServerRegistry<EmbeddedServerAdapter>;
@@ -113,7 +114,11 @@ export function registerIntegrationCommands(deps: IntegrationDeps): vscode.Dispo
   };
 
   // ----------------------------------------------------------------------------------------- Claude Code
-  /** The servers a client configuration can point at: available ones with a fixed port. */
+  /**
+   * The servers a client configuration can point at: running ones with a fixed port. A server that is not
+   * running would give the client an entry that cannot connect (and the helper's token is only valid for a
+   * server that was started), so the others are left out with a note on what to do.
+   */
   const offerable = (): { servers: { server: EmbeddedServerAdapter; url: string }[]; notes: string[] } => {
     const servers: { server: EmbeddedServerAdapter; url: string }[] = [];
     const notes: string[] = [];
@@ -121,6 +126,18 @@ export function registerIntegrationCommands(deps: IntegrationDeps): vscode.Dispo
       const info = server.getInfo();
       if (info.state === 'unavailable') {
         notes.push(info.reason ?? `${server.label} is unavailable`);
+        continue;
+      }
+      if (info.state === 'error') {
+        notes.push(`${server.label} failed to start${info.reason ? ` (${info.reason})` : ''}; fix that and start it first.`);
+        continue;
+      }
+      if (info.state === 'starting') {
+        notes.push(`${server.label} is still starting; try again in a moment.`);
+        continue;
+      }
+      if (info.state !== 'running') {
+        notes.push(`${server.label} is not running; start it from the MCP Servers view first.`);
         continue;
       }
       const port = server.plannedPort();
@@ -204,7 +221,10 @@ export function registerIntegrationCommands(deps: IntegrationDeps): vscode.Dispo
   const addToClaudeCode = async (): Promise<void> => {
     const { servers, notes } = offerable();
     if (servers.length === 0) {
-      void vscode.window.showInformationMessage(`No MCP server can be added right now. ${notes.join(' ')}`.trim());
+      const startable = deps.registry.servers.some((server) => ['stopped', 'starting', 'error'].includes(server.getInfo().state));
+      const headline = startable ? 'No MCP server is running. Start one, then add it to Claude Code.' : 'No MCP server can be added right now.';
+      const choice = await vscode.window.showInformationMessage(`${headline} ${notes.join(' ')}`.trim(), SHOW_SERVERS);
+      if (choice === SHOW_SERVERS) await vscode.commands.executeCommand('mcpServers.focus');
       return;
     }
     if (notes.length > 0) void vscode.window.showInformationMessage(notes.join(' '));
