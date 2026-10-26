@@ -184,45 +184,33 @@ describe('searchSymbolsByKeywords', () => {
   });
 });
 
-describe('insertRelations and findSymbolRelations', () => {
-  let chunkId: number;
-
+describe('relations stored with a code document', () => {
   beforeEach(() => {
     const chunk = makeCodeChunk({ symbolName: 'caller' });
-    db.insertCodeDocument('/src/caller.ts', new Date(), [chunk], [[0.1, 0.2, 0.3, 0.4]]);
-    chunkId = db.getChunkIdBySymbol('/src/caller.ts', 'caller')!;
-    db.insertRelations([
-      { sourceChunkId: chunkId, targetChunkId: undefined, relationType: 'calls', targetName: 'callee', targetFile: '/src/callee.ts', confidence: 1.0 },
-    ]);
+    db.insertCodeDocument('/src/caller.ts', new Date(), [chunk], [[0.1, 0.2, 0.3, 0.4]], {
+      relations: [{ type: 'calls', sourcePosition: 0, targetName: 'callee', line: 4 }],
+      truncated: [],
+    });
   });
 
   it('finds outgoing relations', () => {
-    const results = db.findSymbolRelations('caller', 'outgoing', '');
-    expect(results.length).toBeGreaterThan(0);
-    expect(results[0]?.targetName).toBe('callee');
+    const { hits } = db.queryRelations({ symbol: 'caller', direction: 'out', limit: 10, offset: 0 });
+    expect(hits[0]).toMatchObject({ type: 'calls', targetName: 'callee', line: 4 });
   });
 
   it('finds incoming relations', () => {
-    const results = db.findSymbolRelations('callee', 'incoming', '');
-    expect(results.length).toBeGreaterThan(0);
-    expect(results[0]?.sourceName).toBe('caller');
+    const { hits } = db.queryRelations({ symbol: 'callee', direction: 'in', limit: 10, offset: 0 });
+    expect(hits[0]?.source.name).toBe('caller');
   });
 
-  it('finds both directions', () => {
-    const results = db.findSymbolRelations('caller', 'both', '');
-    expect(results.length).toBeGreaterThan(0);
+  it('finds both directions and filters by type', () => {
+    expect(db.queryRelations({ symbol: 'caller', direction: 'both', limit: 10, offset: 0 }).total).toBe(1);
+    expect(db.queryRelations({ symbol: 'caller', direction: 'out', types: ['calls'], limit: 10, offset: 0 }).total).toBe(1);
+    expect(db.queryRelations({ symbol: 'caller', direction: 'out', types: ['imports'], limit: 10, offset: 0 }).total).toBe(0);
   });
 
-  it('filters by relationType', () => {
-    const results = db.findSymbolRelations('caller', 'outgoing', 'calls');
-    expect(results.length).toBeGreaterThan(0);
-    const none = db.findSymbolRelations('caller', 'outgoing', 'imports');
-    expect(none.length).toBe(0);
-  });
-
-  it('returns empty array when no relations exist', () => {
-    const results = db.findSymbolRelations('foo', 'both', '');
-    expect(results).toEqual([]);
+  it('returns nothing for an unknown symbol', () => {
+    expect(db.queryRelations({ symbol: 'foo', direction: 'both', limit: 10, offset: 0 })).toMatchObject({ hits: [], total: 0, symbols: 0 });
   });
 });
 

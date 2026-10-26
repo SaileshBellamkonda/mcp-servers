@@ -298,10 +298,9 @@ describe('index_code', () => {
 });
 
 describe('search_relations', () => {
-  it('returns empty relations for unknown symbol', async () => {
+  it('answers an unknown symbol with a hint', async () => {
     const result = await getHandler('search_relations')({ symbol: 'NonExistentFunc' }) as { content: Array<{ text: string }> };
-    const data = JSON.parse(result.content[0]!.text) as { count: number };
-    expect(data.count).toBe(0);
+    expect(result.content[0]!.text).toMatch(/^No indexed symbol or file matches "NonExistentFunc"/);
   });
 });
 

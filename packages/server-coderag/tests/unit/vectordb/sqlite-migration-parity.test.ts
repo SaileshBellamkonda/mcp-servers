@@ -81,9 +81,9 @@ describe('a database written by the pre-node:sqlite code path', () => {
 
   it('keeps relations readable', () => {
     const db = VectorDB.open(dbPath, DIM);
-    const rels = db.findSymbolRelations('sub', 'incoming', '');
-    expect(rels).toHaveLength(1);
-    expect(rels[0]).toMatchObject({ relationType: 'calls', targetName: 'sub', sourceName: 'add', sourceFile: '/src/math.ts', confidence: 0.9 });
+    const { hits } = db.queryRelations({ symbol: 'sub', direction: 'in', limit: 10, offset: 0 });
+    expect(hits).toHaveLength(1);
+    expect(hits[0]).toMatchObject({ type: 'calls', targetName: 'sub', source: { name: 'add', file: '/src/math.ts' }, confidence: 0.9 });
     db.close();
   });
 

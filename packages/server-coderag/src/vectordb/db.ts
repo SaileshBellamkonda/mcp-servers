@@ -11,16 +11,20 @@ import {
 } from './schema.js';
 import { FTS_VERSION, buildFtsQueries, buildFtsRow, symbolNameCandidates, type FtsRow } from './fts-text.js';
 import { openSqliteDatabase, loadSqliteVec, type SqlParam, type SqliteDatabase } from './sqlite-db.js';
+import { RelationStore, ensureRelationsSchema, type RelationPage, type RelationQuery, type ResolveOptions } from './relations-store.js';
+import { moduleStems } from '../indexer/module-resolver.js';
+import type { ExtractedRelations } from '../indexer/relations.js';
 import type {
   MarkdownChunk,
   CodeChunk,
-  CodeRelation,
   DocumentRecord,
   DocumentMetadata,
   SearchResult,
   SearchFilter,
   GlobConfig,
 } from '../core/types.js';
+
+export type { RelationEndpoint, RelationHit, RelationPage, RelationQuery, ResolveOptions } from './relations-store.js';
 
 export interface VectorDBOpenOptions {
   /** Directory whose `node_modules` holds sqlite-vec (bundled builds); default: this package's own resolution. */
@@ -66,6 +70,8 @@ function runMigrations(db: SqliteDatabase): void {
     }
     db.prepare('INSERT OR REPLACE INTO db_meta (key, value) VALUES (?, ?)').run('docs_reindex_required', '1');
   }
+  // Migration 4: relation columns and bookkeeping tables. Rows written earlier keep what they have.
+  ensureRelationsSchema(db);
 }
 
 const FTS_INSERT_SQL = 'INSERT INTO fts_chunks(rowid, symbol_name, signature, context, content) VALUES (?, ?, ?, ?, ?)';
@@ -159,9 +165,11 @@ interface SearchRow {
 
 export class VectorDB {
   private readonly db: SqliteDatabase;
+  private readonly relations: RelationStore;
 
   private constructor(db: SqliteDatabase) {
     this.db = db;
+    this.relations = new RelationStore(db);
   }
 
   static readStoredDimensions(dbPath: string): number | null {
@@ -301,10 +309,25 @@ export class VectorDB {
     return result;
   }
 
+  /**
+   * Removes a document with its chunks, vectors and keyword entries. For a code file its relations go with it
+   * (foreign-key cascade); edges of other files that pointed at its symbols lose their target and are re-resolved by
+   * the next `resolvePendingRelations` (or the next `queryRelations`).
+   */
   deleteDocument(filename: string): void {
-    const doc = this.db.prepare<{ id: number }>('SELECT id FROM documents WHERE filename = ?').get(filename);
+    const doc = this.db.prepare<{ id: number; doc_type: string }>('SELECT id, doc_type FROM documents WHERE filename = ?').get(filename);
     if (!doc) throw new Error(`Document not found: ${filename}`);
-    this.db.prepare('DELETE FROM documents WHERE id = ?').run(doc.id);
+    const run = this.db.transaction(() => {
+      if (doc.doc_type === 'code') this.relations.markDirty({ names: this.relations.symbolNamesOf(doc.id), gone: [filename] });
+      this.db.prepare('DELETE FROM documents WHERE id = ?').run(doc.id);
+    });
+    try {
+      run();
+    } catch (err) {
+      this.relations.invalidate();
+      throw err;
+    }
+    this.relations.noteFileRemoved(filename);
   }
 
   insertDocument(
@@ -385,7 +408,11 @@ export class VectorDB {
     run();
   }
 
-  insertCodeDocument(filename: string, modifiedAt: Date, chunks: CodeChunk[], embeddings: number[][]): void {
+  /**
+   * Stores a code file with its chunks. `relations` are the file's imports, inheritance and calls as extracted by the
+   * parser; they replace the relations of the previous version of the file and are resolved against the index.
+   */
+  insertCodeDocument(filename: string, modifiedAt: Date, chunks: CodeChunk[], embeddings: number[][], relations?: ExtractedRelations): void {
     if (chunks.length !== embeddings.length) {
       throw new Error(`chunks (${String(chunks.length)}) and embeddings (${String(embeddings.length)}) count mismatch`);
     }
@@ -402,15 +429,19 @@ export class VectorDB {
     const deleteChunks = this.db.prepare('DELETE FROM chunks WHERE document_id = ?');
 
     const run = this.db.transaction(() => {
+      const previous = this.db.prepare<{ id: number }>('SELECT id FROM documents WHERE filename = ?').get(filename);
+      const previousNames = previous ? this.relations.symbolNamesOf(previous.id) : [];
       const docResult = insertDoc.run(filename, modifiedAt.toISOString());
       const docId = docResult.lastInsertRowid;
       deleteChunks.run(docId);
+      const chunkIds: number[] = [];
       for (let i = 0; i < chunks.length; i++) {
         const chunk = chunks[i];
         const embedding = embeddings[i];
         if (!chunk || !embedding) continue;
         const chunkResult = insertChunk.run(docId, chunk.position, chunk.content);
         const chunkId = chunkResult.lastInsertRowid;
+        chunkIds[chunk.position] = chunkId;
         insertVec.run(chunkId, serializeVector(embedding));
         insertFts.run(...ftsParams(chunkId, buildFtsRow({
           filename,
@@ -421,21 +452,20 @@ export class VectorDB {
         })));
         insertMeta.run(chunkId, chunk.symbolName, chunk.symbolType, chunk.language, chunk.startLine, chunk.endLine, chunk.parentSymbol, chunk.signature);
       }
+      // Edges of other files may now resolve differently: to these symbols, or (for imports) to this file.
+      this.relations.markDirty({
+        names: new Set([...previousNames, ...chunks.map((c) => c.symbolName)]),
+        stems: previous ? [] : moduleStems(filename),
+      });
+      this.relations.noteFileAdded(filename);
+      this.relations.replaceForChunks(filename, chunks[0]?.language ?? '', chunkIds, relations);
     });
-    run();
-  }
-
-  insertRelations(relations: CodeRelation[]): void {
-    if (relations.length === 0) return;
-    const stmt = this.db.prepare(
-      'INSERT INTO code_relations (source_chunk_id, target_chunk_id, relation_type, target_name, target_file, confidence) VALUES (?, ?, ?, ?, ?, ?)'
-    );
-    const run = this.db.transaction(() => {
-      for (const rel of relations) {
-        stmt.run(rel.sourceChunkId, rel.targetChunkId ?? null, rel.relationType, rel.targetName, rel.targetFile, rel.confidence);
-      }
-    });
-    run();
+    try {
+      run();
+    } catch (err) {
+      this.relations.invalidate();
+      throw err;
+    }
   }
 
   getChunkIdBySymbol(filename: string, symbolName: string): number | null {
@@ -541,44 +571,6 @@ export class VectorDB {
       document: r.filename, chunk: r.content, similarity: 1.0, position: r.position,
       metadata: { symbolName: r.symbol_name, symbolType: r.symbol_type, language: r.language,
                   startLine: r.start_line, endLine: r.end_line, parentSymbol: r.parent_symbol, signature: r.signature },
-    }));
-  }
-
-  findSymbolRelations(symbol: string, direction: string, relationType: string): CodeRelation[] {
-    let sql: string;
-    const args: SqlParam[] = [];
-    if (direction === 'incoming') {
-      sql = `SELECT cr.id, cr.source_chunk_id, cr.target_chunk_id, cr.relation_type, cr.target_name, cr.target_file, cr.confidence,
-               cm.symbol_name as source_name, d.filename as source_file
-             FROM code_relations cr JOIN code_metadata cm ON cr.source_chunk_id = cm.chunk_id
-             JOIN chunks c ON cm.chunk_id = c.id JOIN documents d ON c.document_id = d.id
-             WHERE cr.target_name = ?`;
-      args.push(symbol);
-    } else if (direction === 'outgoing') {
-      sql = `SELECT cr.id, cr.source_chunk_id, cr.target_chunk_id, cr.relation_type, cr.target_name, cr.target_file, cr.confidence,
-               cm.symbol_name as source_name, d.filename as source_file
-             FROM code_relations cr JOIN code_metadata cm ON cr.source_chunk_id = cm.chunk_id
-             JOIN chunks c ON cm.chunk_id = c.id JOIN documents d ON c.document_id = d.id
-             WHERE cm.symbol_name = ?`;
-      args.push(symbol);
-    } else {
-      sql = `SELECT cr.id, cr.source_chunk_id, cr.target_chunk_id, cr.relation_type, cr.target_name, cr.target_file, cr.confidence,
-               cm.symbol_name as source_name, d.filename as source_file
-             FROM code_relations cr JOIN code_metadata cm ON cr.source_chunk_id = cm.chunk_id
-             JOIN chunks c ON cm.chunk_id = c.id JOIN documents d ON c.document_id = d.id
-             WHERE cr.target_name = ? OR cm.symbol_name = ?`;
-      args.push(symbol, symbol);
-    }
-    if (relationType) { sql += ' AND cr.relation_type = ?'; args.push(relationType); }
-    const rows = this.db.prepare<{
-      id: number; source_chunk_id: number; target_chunk_id: number | null;
-      relation_type: string; target_name: string; target_file: string;
-      confidence: number; source_name: string; source_file: string;
-    }>(sql).all(...args);
-    return rows.map((r) => ({
-      id: r.id, sourceChunkId: r.source_chunk_id, targetChunkId: r.target_chunk_id ?? undefined,
-      relationType: r.relation_type, targetName: r.target_name, targetFile: r.target_file,
-      confidence: r.confidence, sourceName: r.source_name, sourceFile: r.source_file,
     }));
   }
 
@@ -732,6 +724,62 @@ export class VectorDB {
             domain: r.dm_domain ?? '', project: r.dm_project ?? '' }
         : undefined,
     }));
+  }
+
+  // ─── Relations ─────────────────────────────────────────────────────────────
+
+  /** `RELATIONS_VERSION` in effect when the relations of the code documents were last filled; null when never recorded. */
+  getRelationsVersion(): number | null {
+    const row = this.db.prepare<{ value: string }>("SELECT value FROM db_meta WHERE key = 'relations_version'").get();
+    const version = row ? parseInt(row.value, 10) : NaN;
+    return Number.isNaN(version) ? null : version;
+  }
+
+  setRelationsVersion(version: number): void {
+    this.db.prepare('INSERT OR REPLACE INTO db_meta (key, value) VALUES (?, ?)').run('relations_version', String(version));
+  }
+
+  /**
+   * Fills the relations of a file whose chunks are already stored (relations backfill): chunks and vectors are not
+   * touched. `chunks` must be what the parser produces now; returns false, changing nothing, when they do not match the
+   * stored chunks (the file changed since it was indexed, so a normal re-index will rebuild its relations).
+   */
+  replaceRelations(filename: string, chunks: readonly CodeChunk[], relations: ExtractedRelations): boolean {
+    const doc = this.db.prepare<{ id: number }>("SELECT id FROM documents WHERE filename = ? AND doc_type = 'code'").get(filename);
+    if (!doc) return false;
+    const stored = this.db
+      .prepare<{ id: number; position: number; symbol_name: string | null; start_line: number | null }>(
+        'SELECT c.id, c.position, cm.symbol_name, cm.start_line FROM chunks c LEFT JOIN code_metadata cm ON cm.chunk_id = c.id WHERE c.document_id = ? ORDER BY c.position',
+      )
+      .all(doc.id);
+    if (stored.length !== chunks.length) return false;
+    const chunkIds: number[] = [];
+    for (const [i, row] of stored.entries()) {
+      const chunk = chunks[i];
+      if (chunk?.position !== row.position || chunk.symbolName !== row.symbol_name || chunk.startLine !== row.start_line) return false;
+      chunkIds[row.position] = row.id;
+    }
+    try {
+      this.db.transaction(() => { this.relations.replaceForChunks(filename, chunks[0]?.language ?? '', chunkIds, relations); })();
+    } catch (err) {
+      this.relations.invalidate();
+      throw err;
+    }
+    return true;
+  }
+
+  /** Re-resolves the edges affected by files that were indexed or deleted since the last pass; yields between batches. */
+  resolvePendingRelations(options: ResolveOptions = {}): Promise<number> {
+    return this.relations.resolvePending(options);
+  }
+
+  /** Relations of a symbol (`name`, `Class.method`) or a file, see `RelationQuery`. Resolves pending changes first. */
+  queryRelations(query: RelationQuery): RelationPage {
+    return this.relations.query(query);
+  }
+
+  getRelationCount(): number {
+    return this.relations.count();
   }
 }
 

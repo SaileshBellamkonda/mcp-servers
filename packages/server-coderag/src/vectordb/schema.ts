@@ -55,6 +55,61 @@ export const FTS_DELETE_TRIGGER_DDL = `CREATE TRIGGER IF NOT EXISTS fts_chunks_d
   DELETE FROM fts_chunks WHERE rowid = old.id;
 END`;
 
+/**
+ * Relations between code symbols. `target_chunk_id` is set when the target name matches exactly one indexed symbol;
+ * `target_file` is the file an import resolves to; `confidence` is 1.0 for a resolved import, 0.9 for a unique name
+ * match, 0.5 for an ambiguous name (target_chunk_id NULL), 0.3 for an unresolved one. `line` is the line of the call,
+ * base type or import in the source file; `names` lists the imported names as `,a,b,`.
+ */
+export const RELATIONS_TABLE_DDL = `
+CREATE TABLE IF NOT EXISTS code_relations (
+  id              INTEGER PRIMARY KEY AUTOINCREMENT,
+  source_chunk_id INTEGER NOT NULL,
+  target_chunk_id INTEGER,
+  relation_type   TEXT    NOT NULL,
+  target_name     TEXT    NOT NULL,
+  target_file     TEXT,
+  confidence      REAL    DEFAULT 1.0,
+  line            INTEGER,
+  names           TEXT,
+  FOREIGN KEY (source_chunk_id) REFERENCES chunks(id) ON DELETE CASCADE,
+  FOREIGN KEY (target_chunk_id) REFERENCES chunks(id) ON DELETE SET NULL
+);`;
+
+/** Columns added to `code_relations` after the table first shipped; each is added only when it is missing. */
+export const RELATIONS_ADDED_COLUMNS = [
+  { name: 'line', ddl: 'ALTER TABLE code_relations ADD COLUMN line INTEGER' },
+  { name: 'names', ddl: 'ALTER TABLE code_relations ADD COLUMN names TEXT' },
+] as const;
+
+/**
+ * Indexes of `code_relations` and the two small tables around it. `relation_caps` counts what was left out of a chunk
+ * when it reached its per-type cap. `relation_dirty` lists names (and file stems or removed paths) whose edges must be
+ * resolved again; `watermark` is the highest relation id that existed when the change happened, because later edges
+ * were already resolved against it.
+ */
+export const RELATIONS_AUX_DDL = `
+CREATE INDEX IF NOT EXISTS idx_rel_source ON code_relations(source_chunk_id);
+CREATE INDEX IF NOT EXISTS idx_rel_target ON code_relations(target_chunk_id);
+CREATE INDEX IF NOT EXISTS idx_rel_type   ON code_relations(relation_type);
+CREATE INDEX IF NOT EXISTS idx_rel_name   ON code_relations(target_name);
+CREATE INDEX IF NOT EXISTS idx_rel_file   ON code_relations(target_file);
+
+CREATE TABLE IF NOT EXISTS relation_caps (
+  source_chunk_id INTEGER NOT NULL,
+  relation_type   TEXT    NOT NULL,
+  dropped         INTEGER NOT NULL,
+  PRIMARY KEY (source_chunk_id, relation_type),
+  FOREIGN KEY (source_chunk_id) REFERENCES chunks(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS relation_dirty (
+  kind      TEXT    NOT NULL CHECK(kind IN ('name','stem','gone')),
+  value     TEXT    NOT NULL,
+  watermark INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (kind, value)
+);`;
+
 export function buildSchema(dimensions: number): string {
   return `
 CREATE TABLE IF NOT EXISTS db_meta (
@@ -102,21 +157,8 @@ CREATE INDEX IF NOT EXISTS idx_code_symbol   ON code_metadata(symbol_name);
 CREATE INDEX IF NOT EXISTS idx_code_language ON code_metadata(language);
 CREATE INDEX IF NOT EXISTS idx_code_type     ON code_metadata(symbol_type);
 
-CREATE TABLE IF NOT EXISTS code_relations (
-  id              INTEGER PRIMARY KEY AUTOINCREMENT,
-  source_chunk_id INTEGER NOT NULL,
-  target_chunk_id INTEGER,
-  relation_type   TEXT    NOT NULL,
-  target_name     TEXT    NOT NULL,
-  target_file     TEXT,
-  confidence      REAL    DEFAULT 1.0,
-  FOREIGN KEY (source_chunk_id) REFERENCES chunks(id) ON DELETE CASCADE,
-  FOREIGN KEY (target_chunk_id) REFERENCES chunks(id) ON DELETE SET NULL
-);
-CREATE INDEX IF NOT EXISTS idx_rel_source ON code_relations(source_chunk_id);
-CREATE INDEX IF NOT EXISTS idx_rel_target ON code_relations(target_chunk_id);
-CREATE INDEX IF NOT EXISTS idx_rel_type   ON code_relations(relation_type);
-CREATE INDEX IF NOT EXISTS idx_rel_name   ON code_relations(target_name);
+${RELATIONS_TABLE_DDL}
+${RELATIONS_AUX_DDL}
 
 CREATE TABLE IF NOT EXISTS index_rules (
   id        INTEGER PRIMARY KEY AUTOINCREMENT,

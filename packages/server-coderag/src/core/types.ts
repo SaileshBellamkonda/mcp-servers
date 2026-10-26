@@ -97,18 +97,6 @@ export interface SearchFilter {
   project?: string | undefined;
 }
 
-export interface CodeRelation {
-  id?: number | undefined;
-  sourceChunkId: number;
-  targetChunkId?: number | undefined;
-  relationType: string;
-  targetName: string;
-  targetFile: string;
-  confidence: number;
-  sourceName?: string | undefined;
-  sourceFile?: string | undefined;
-}
-
 export interface DocumentRecord {
   filename: string;
   modifiedAt: Date;
