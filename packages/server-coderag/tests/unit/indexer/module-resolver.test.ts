@@ -59,6 +59,32 @@ describe('CodeFileIndex: Python', () => {
   });
 });
 
+describe('CodeFileIndex: Python absolute imports and shadowing', () => {
+  const idx = index([
+    '/p/src/flask/__init__.py',
+    '/p/src/flask/json/__init__.py',
+    '/p/src/flask/json/provider.py',
+    '/p/src/flask/app.py',
+    '/p/tests/test_basic.py',
+    '/p/tests/helpers.py',
+    '/p/tests/apps/__init__.py',
+    '/p/tests/apps/flask.py',
+  ]);
+
+  it('does not take a module inside a package for the top-level module of the same name', () => {
+    // `import json` in flask/json/provider.py is the standard library, not flask.json.
+    expect(idx.resolveImport('python', 'json', [], '/p/src/flask/json/provider.py')).toBeNull();
+    // tests/apps/flask.py is apps.flask, so `import flask` is the package under src.
+    expect(idx.resolveImport('python', 'flask', [], '/p/tests/test_basic.py')).toBe('/p/src/flask/__init__.py');
+  });
+
+  it('still resolves dotted modules of a package and top-level modules next to the importer', () => {
+    expect(idx.resolveImport('python', 'flask.json.provider', [], '/p/tests/test_basic.py')).toBe('/p/src/flask/json/provider.py');
+    expect(idx.resolveImport('python', 'flask.json', [], '/p/tests/test_basic.py')).toBe('/p/src/flask/json/__init__.py');
+    expect(idx.resolveImport('python', 'helpers', [], '/p/tests/test_basic.py')).toBe('/p/tests/helpers.py');
+  });
+});
+
 describe('CodeFileIndex: Go', () => {
   const idx = index(['/r/pkg/util/a.go', '/r/pkg/util/b.go', '/r/cmd/main.go']);
 

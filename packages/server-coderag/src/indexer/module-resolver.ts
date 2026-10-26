@@ -141,7 +141,19 @@ export class CodeFileIndex {
       return this.firstExisting(rest === '' ? [`${base}/__init__.py`] : [`${base}/${rest}.py`, `${base}/${rest}/__init__.py`]);
     }
     if (rest === '') return null;
-    return this.closest([...this.withSuffix(`${rest}.py`), ...this.withSuffix(`${rest}/__init__.py`)], source);
+    // A file inside a package (its folder has an `__init__.py`) is imported as `package.module`, never as the bare
+    // module: `import json` in flask/json/provider.py is the standard library, not flask/json/__init__.py.
+    const candidates = [
+      ...this.withSuffix(`${rest}.py`).filter((file) => !this.inPackage(file, `${rest}.py`)),
+      ...this.withSuffix(`${rest}/__init__.py`).filter((file) => !this.inPackage(file, `${rest}/__init__.py`)),
+    ];
+    return this.closest(candidates, source);
+  }
+
+  /** True when the part of `file` before `suffix` is itself a Python package. */
+  private inPackage(file: string, suffix: string): boolean {
+    const root = file.slice(0, file.length - suffix.length).replace(/\/$/, '');
+    return root !== '' && this.files.has(`${root}/__init__.py`);
   }
 
   private resolveGo(module: string, source: string): string | null {
