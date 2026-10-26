@@ -30,9 +30,9 @@ describe('getLanguageByExtension', () => {
     expect(config?.name).toBe('typescript');
   });
 
-  it('maps .tsx to typescript', () => {
+  it('maps .tsx to tsx', () => {
     const config = getLanguageByExtension('.tsx');
-    expect(config?.name).toBe('typescript');
+    expect(config?.name).toBe('tsx');
   });
 
   it('maps .py to python', () => {

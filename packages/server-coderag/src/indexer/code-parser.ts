@@ -8,8 +8,9 @@ import { getLanguageByExtension, SUPPORTED_LANGUAGES } from './languages.js';
  * Version of what `CodeParser` stores per symbol (signature rules, symbol selection). Bump it when the output for an
  * unchanged file would differ: the next startup sync then re-parses every indexed code file.
  * 2: signatures come from the tree-sitter `body` field instead of the first `=>` or `{` in the text.
+ * 3: `.tsx` files are parsed with the tsx grammar (language `tsx`) instead of the TypeScript grammar.
  */
-export const CODE_PARSER_VERSION = 2;
+export const CODE_PARSER_VERSION = 3;
 
 let defaultRequire: NodeJS.Require | undefined;
 

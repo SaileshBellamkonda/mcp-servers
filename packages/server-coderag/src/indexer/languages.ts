@@ -5,18 +5,28 @@ export interface LanguageConfig {
   grammarKey: string;
 }
 
-export const SUPPORTED_LANGUAGES: Record<string, LanguageConfig> = {
-  typescript: {
-    name: 'typescript',
-    grammarKey: 'typescript',
-    extensions: ['.ts', '.tsx'],
-    query: `
+const TYPESCRIPT_QUERY = `
 (function_declaration name: (identifier) @name) @function
 (lexical_declaration (variable_declarator name: (identifier) @name value: (arrow_function))) @function
 (class_declaration name: (type_identifier) @name) @class
 (interface_declaration name: (type_identifier) @name) @interface
 (method_definition name: (property_identifier) @name) @method
-`,
+`;
+
+export const SUPPORTED_LANGUAGES: Record<string, LanguageConfig> = {
+  typescript: {
+    name: 'typescript',
+    grammarKey: 'typescript',
+    extensions: ['.ts'],
+    query: TYPESCRIPT_QUERY,
+  },
+
+  // .tsx needs the tsx grammar: the plain TypeScript grammar cannot parse JSX and loses every component after it.
+  tsx: {
+    name: 'tsx',
+    grammarKey: 'tsx',
+    extensions: ['.tsx'],
+    query: TYPESCRIPT_QUERY,
   },
 
   javascript: {
