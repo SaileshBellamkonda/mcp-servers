@@ -4,6 +4,21 @@ interface EmbeddingResponse {
   data: { index: number; embedding: number[] }[];
 }
 
+const MAX_ERROR_BODY_CHARS = 200;
+const BEARER_TOKEN = /\bBearer\s+[^\s"',;]+/gi;
+
+/**
+ * Makes an upstream error body safe to put in an error message, log line or tool result: the configured
+ * key and any `Bearer <token>` are redacted first (so truncation cannot leave a partial secret), then the
+ * text is cut to a short excerpt.
+ */
+function sanitizeErrorBody(body: string, apiKey: string | undefined): string {
+  let text = body;
+  if (apiKey) text = text.split(apiKey).join('[REDACTED]');
+  text = text.replace(BEARER_TOKEN, 'Bearer [REDACTED]');
+  return text.length > MAX_ERROR_BODY_CHARS ? `${text.slice(0, MAX_ERROR_BODY_CHARS)}... (truncated)` : text;
+}
+
 export class Embedder {
   private readonly config: EmbeddingConfig;
   private readonly fetchFn: typeof fetch;
@@ -59,7 +74,7 @@ export class Embedder {
 
     if (!response.ok) {
       const errorText = await response.text();
-      throw new Error(`Embedding API returned ${String(response.status)}: ${errorText}`);
+      throw new Error(`Embedding API returned ${String(response.status)}: ${sanitizeErrorBody(errorText, this.config.apiKey)}`);
     }
 
     const json = (await response.json()) as EmbeddingResponse;
