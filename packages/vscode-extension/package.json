@@ -25,6 +25,16 @@
     "claude"
   ],
   "main": "./dist/extension.js",
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false,
+      "description": "The servers read and run what a workspace contains (git repositories, their configuration and settings, files to index), so they only run in a workspace you trust."
+    },
+    "virtualWorkspaces": {
+      "supported": false,
+      "description": "The servers need real folders on a local or remote file system (git and the CodeRAG index cannot work on a virtual file system)."
+    }
+  },
   "engines": {
     "vscode": "^1.101.0",
     "node": ">=22.16"
@@ -73,7 +83,7 @@
           "type": "integer",
           "default": 768,
           "minimum": 1,
-          "description": "Number of dimensions of the embedding vectors; must match the model. If the existing index uses another dimension, its vectors are reset and the workspace is re-indexed."
+          "description": "Number of dimensions of the embedding vectors; must match the model. It applies when a new index is created. An existing index keeps the dimension it was created with: a different value here is ignored and a warning is written to the MCP Servers output. To change the dimension, delete coderag.db in the workspace storage so the index is created again."
         },
         "mcpServers.coderag.chunkSize": {
           "type": "integer",

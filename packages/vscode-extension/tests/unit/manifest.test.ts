@@ -28,6 +28,7 @@ interface Manifest {
     mcpServerDefinitionProviders?: { id: string; label: string }[];
   };
   engines: { vscode: string };
+  capabilities?: Record<string, { supported?: unknown; description?: unknown }>;
 }
 const manifest = JSON.parse(readFileSync(path.resolve(import.meta.dirname, '../../package.json'), 'utf8')) as Manifest;
 
@@ -188,6 +189,26 @@ describe('package.json contributes', () => {
     expect(titleMenu.map((entry) => entry.command)).toEqual(
       expect.arrayContaining(['mcpServers.addToClaudeCode', 'mcpServers.rotateToken', 'mcpServers.coderag.setApiKey', 'mcpServers.coderag.clearApiKey'])
     );
+  });
+
+  it('declares explicitly that untrusted and virtual workspaces are not supported, each with a reason for the user', () => {
+    // A workspace folder's settings, git config and files steer what the servers read and run: no Restricted Mode.
+    for (const capability of ['untrustedWorkspaces', 'virtualWorkspaces']) {
+      const declared = manifest.capabilities?.[capability];
+      expect(declared?.supported, capability).toBe(false);
+      expect(declared?.description, capability).toEqual(expect.stringMatching(/\S{3,}/));
+    }
+    expect(String(manifest.capabilities?.['untrustedWorkspaces']?.description)).toMatch(/trust/i);
+    expect(String(manifest.capabilities?.['virtualWorkspaces']?.description)).toMatch(/file system|local|virtual/i);
+  });
+
+  it('describes embeddingDim as the code behaves: an existing index keeps its stored dimension', () => {
+    const description = manifest.contributes.configuration.properties['mcpServers.coderag.embeddingDim']?.description ?? '';
+    expect(description).toMatch(/new index/i);
+    expect(description).toMatch(/keeps? the dimension|stored dimension/i);
+    expect(description).toMatch(/warning/i);
+    expect(description).toMatch(/coderag\.db/);
+    expect(description).not.toMatch(/vectors are reset|re-indexed automatically/i);
   });
 
   it('still activates on startup so auto-start works', () => {
