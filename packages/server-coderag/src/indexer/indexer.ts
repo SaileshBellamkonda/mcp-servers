@@ -24,6 +24,18 @@ export interface IndexerOptions {
   nativeModulesDir?: string | undefined;
 }
 
+/**
+ * Parsing and SQLite writes are synchronous. Yield to the event loop after this many files so that an
+ * in-process host (the VS Code extension host) stays responsive during a large index run.
+ */
+const FILES_PER_TICK = 5;
+
+function yieldToEventLoop(): Promise<void> {
+  return new Promise((resolve) => {
+    setImmediate(resolve);
+  });
+}
+
 /** Text sent to the embedder: document title, heading breadcrumb and tags give the chunk its context. */
 function buildDocEmbeddingText(metadata: DocumentMetadata, chunk: MarkdownChunk): string {
   const header: string[] = [];
@@ -164,7 +176,8 @@ export class Indexer {
       : this.db.listDocumentsByType('code');
     const result: CodeSyncResult = { indexed: 0, skipped: 0, failed: 0, added: 0, updated: 0 };
 
-    for (const filePath of files) {
+    for (const [index, filePath] of files.entries()) {
+      if (index > 0 && index % FILES_PER_TICK === 0) await yieldToEventLoop();
       if (this.pathGuard && !this.pathGuard.isAllowed(filePath)) {
         this.log('warning', `Skipping ${filePath}: it resolves outside the allowed roots (set CODERAG_ALLOWED_ROOTS to allow it)`);
         result.skipped++;
