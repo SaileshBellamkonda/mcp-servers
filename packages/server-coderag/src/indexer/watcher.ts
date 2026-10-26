@@ -5,14 +5,11 @@ import type { Indexer } from './indexer.js';
 import type { CodeRagLogger } from '../core/logger.js';
 import type { SyncManager } from './sync-manager.js';
 import type { GlobMatcher } from '../core/glob-utils.js';
-import { isSupportedExtension } from './languages.js';
+import { FileRefresher } from './refresher.js';
 
 export class CodeRagWatcher {
-  private readonly db: VectorDB;
-  private readonly indexer: Indexer;
+  private readonly refresher: FileRefresher;
   private readonly syncManager: SyncManager;
-  private readonly docsMatcher: GlobMatcher;
-  private readonly codeMatcher: GlobMatcher;
   private readonly logger: CodeRagLogger;
   private readonly debounceMs: number;
   private readonly watchers: FSWatcher[] = [];
@@ -27,11 +24,8 @@ export class CodeRagWatcher {
     logger: CodeRagLogger,
     debounceMs = 500,
   ) {
-    this.db = db;
-    this.indexer = indexer;
+    this.refresher = new FileRefresher(db, indexer, docsMatcher, codeMatcher, logger);
     this.syncManager = syncManager;
-    this.docsMatcher = docsMatcher;
-    this.codeMatcher = codeMatcher;
     this.logger = logger;
     this.debounceMs = debounceMs;
   }
@@ -85,33 +79,6 @@ export class CodeRagWatcher {
   private async handleChange(filePath: string): Promise<void> {
     // Don't conflict with an ongoing manual sync
     if (this.syncManager.inProgress) return;
-
-    if (!existsSync(filePath)) {
-      try {
-        this.db.deleteDocument(filePath);
-        this.logger.info(`Watcher: removed stale index entry ${filePath}`);
-      } catch {
-        // File was not indexed — nothing to remove
-      }
-      return;
-    }
-
-    const ext = path.extname(filePath).toLowerCase();
-
-    if (this.indexer.isDocumentFile(filePath)) {
-      if (!this.docsMatcher.isIncluded(filePath)) return;
-      try {
-        await this.indexer.indexFile(filePath);
-      } catch (err) {
-        this.logger.warning(`Watcher: failed to re-index ${filePath}: ${String(err)}`);
-      }
-    } else if (isSupportedExtension(ext)) {
-      if (!this.codeMatcher.isIncluded(filePath)) return;
-      try {
-        await this.indexer.indexCodeFile(filePath);
-      } catch (err) {
-        this.logger.warning(`Watcher: failed to re-index code ${filePath}: ${String(err)}`);
-      }
-    }
+    await this.refresher.refresh(filePath);
   }
 }

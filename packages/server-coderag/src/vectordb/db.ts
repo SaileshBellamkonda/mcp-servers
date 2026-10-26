@@ -230,6 +230,12 @@ export class VectorDB {
     return result;
   }
 
+  /** Stored modification time of one indexed file; null when the file is not in the index. */
+  getModifiedAt(filename: string): Date | null {
+    const row = this.db.prepare<{ modified_at: string }>('SELECT modified_at FROM documents WHERE filename = ?').get(filename);
+    return row ? new Date(row.modified_at) : null;
+  }
+
   listDocumentsByType(docType: 'doc' | 'code'): Map<string, Date> {
     const rows = this.db.prepare<{ filename: string; modified_at: string }>('SELECT filename, modified_at FROM documents WHERE doc_type = ?').all(docType);
     const result = new Map<string, Date>();
