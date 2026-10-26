@@ -9,6 +9,13 @@ type FolderListener = (event: { added: unknown[]; removed: unknown[] }) => void;
 const configListeners: ConfigListener[] = [];
 const folderListeners: FolderListener[] = [];
 const settings = new Map<string, unknown>();
+const mcpProviders = new Map<string, McpDefinitionProvider>();
+
+interface McpDefinitionProvider {
+  onDidChangeMcpServerDefinitions?: (listener: () => void) => { dispose(): void };
+  provideMcpServerDefinitions(token: unknown): unknown;
+  resolveMcpServerDefinition?(server: unknown, token: unknown): unknown;
+}
 
 function disposableFor<T>(list: T[], listener: T): { dispose: () => void } {
   list.push(listener);
@@ -23,8 +30,10 @@ function disposableFor<T>(list: T[], listener: T): { dispose: () => void } {
 export const __test = {
   /** Replaces the workspace folders (an empty list means "no folder open"). */
   setFolders(paths: string[]): void {
-    workspace.workspaceFolders = paths.length === 0 ? undefined : paths.map((fsPath, index) => ({ uri: { fsPath, scheme: 'file' }, name: `ws-${String(index)}`, index }));
+    workspace.workspaceFolders = paths.length === 0 ? undefined : paths.map((fsPath, index) => ({ uri: Uri.file(fsPath), name: `ws-${String(index)}`, index }));
   },
+  /** The MCP server definition providers registered through `lm.registerMcpServerDefinitionProvider`, by id. */
+  mcpProviders: (): ReadonlyMap<string, McpDefinitionProvider> => mcpProviders,
   /** Sets settings by full key, e.g. `{ 'mcpServers.git.port': 4000 }`. */
   setSettings(values: Record<string, unknown>): void {
     for (const [key, value] of Object.entries(values)) settings.set(key, value);
@@ -51,7 +60,9 @@ export const __test = {
     settings.clear();
     configListeners.length = 0;
     folderListeners.length = 0;
+    mcpProviders.clear();
     workspace.workspaceFolders = undefined;
+    env.remoteName = undefined;
   },
 };
 
@@ -82,6 +93,34 @@ export class EventEmitter<T = void> {
 }
 
 // ---------------------------------------------------------------------------
+// Uri — the subset of vscode.Uri the extension uses
+// ---------------------------------------------------------------------------
+export class Uri {
+  private constructor(
+    readonly scheme: string,
+    readonly path: string
+  ) {}
+
+  static file(fsPath: string): Uri {
+    return new Uri('file', fsPath.replaceAll('\\', '/'));
+  }
+
+  static parse(value: string): Uri {
+    const match = /^([a-z][a-z0-9+.-]*):(?:\/\/)?(.*)$/i.exec(value);
+    if (!match) throw new Error(`Invalid URI: ${value}`);
+    return new Uri(match[1] ?? '', match[2] ?? '');
+  }
+
+  get fsPath(): string {
+    return this.path;
+  }
+
+  toString(): string {
+    return this.scheme === 'file' ? `file://${this.path}` : `${this.scheme}://${this.path}`;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // window
 // ---------------------------------------------------------------------------
 export const window = {
@@ -93,6 +132,7 @@ export const window = {
   showWarningMessage: vi.fn(),
   showInformationMessage: vi.fn(),
   showQuickPick: vi.fn(),
+  showInputBox: vi.fn(),
   createStatusBarItem: vi.fn(() => ({
     text: '' as string,
     tooltip: '' as string,
@@ -115,7 +155,7 @@ export const workspace = {
     }),
   })),
   workspaceFolders: undefined as
-    | Array<{ uri: { fsPath: string; scheme: string }; name: string; index: number }>
+    | Array<{ uri: Uri; name: string; index: number }>
     | undefined,
   workspaceFile: undefined as { toString(): string } | undefined,
   onDidChangeConfiguration: vi.fn((listener: ConfigListener) => disposableFor(configListeners, listener)),
@@ -137,6 +177,17 @@ export const env = {
   clipboard: {
     writeText: vi.fn(),
   },
+  remoteName: undefined as string | undefined,
+};
+
+// ---------------------------------------------------------------------------
+// lm — the MCP server definition provider API (VS Code >= 1.101)
+// ---------------------------------------------------------------------------
+export const lm = {
+  registerMcpServerDefinitionProvider: vi.fn((id: string, provider: McpDefinitionProvider) => {
+    mcpProviders.set(id, provider);
+    return { dispose: () => { mcpProviders.delete(id); } };
+  }),
 };
 
 // ---------------------------------------------------------------------------
@@ -172,6 +223,19 @@ export class TreeItem {
   ) {
     this.label = label;
     this.collapsibleState = collapsibleState;
+  }
+}
+
+export class McpHttpServerDefinition {
+  version?: string;
+
+  constructor(
+    readonly label: string,
+    public uri: Uri,
+    public headers: Record<string, string> = {},
+    version?: string
+  ) {
+    if (version !== undefined) this.version = version;
   }
 }
 

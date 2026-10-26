@@ -4,7 +4,7 @@ import { EmbeddedServerAdapter, type AdapterDeps } from './core/embedded-server-
 import { createLineLogger } from './core/logger';
 import type { ServerDescriptor, ServerLogger } from './core/server-descriptor';
 import { ServerRegistry } from './core/server-registry';
-import { InMemoryTokenProvider, type TokenProvider } from './core/token-provider';
+import { computeScopeKey, InMemoryTokenProvider, type TokenProvider } from './core/token-provider';
 import { gitDescriptor } from './servers/git-descriptor';
 import { loadServerModule } from './servers/module-loader';
 import { StatusBarController } from './status-bar';
@@ -22,9 +22,18 @@ interface Runtime {
 }
 let runtime: Runtime | undefined;
 
+function fileFolders(): readonly vscode.WorkspaceFolder[] {
+  return (vscode.workspace.workspaceFolders ?? []).filter((folder) => folder.uri.scheme === 'file');
+}
+
 /** The folders servers may use: those on the local (or remote-host) file system. */
 function fileSystemFolders(): string[] {
-  return (vscode.workspace.workspaceFolders ?? []).filter((folder) => folder.uri.scheme === 'file').map((folder) => folder.uri.fsPath);
+  return fileFolders().map((folder) => folder.uri.fsPath);
+}
+
+/** Identifies the workspace (and with it the token): a hash of the sorted file-scheme folder URIs. */
+function workspaceScopeKey(): string {
+  return computeScopeKey(fileFolders().map((folder) => folder.uri.toString()));
 }
 
 function createDeps(logger: ServerLogger, tokens: TokenProvider): AdapterDeps {
@@ -37,7 +46,7 @@ function createDeps(logger: ServerLogger, tokens: TokenProvider): AdapterDeps {
       get: <T>(section: string, key: string, fallback: T): T => vscode.workspace.getConfiguration(section).get<T>(key, fallback),
     },
     workspaceFolders: fileSystemFolders,
-    scopeKey: () => (vscode.workspace.workspaceFolders?.[0]?.uri.toString() ?? 'no-workspace'),
+    scopeKey: workspaceScopeKey,
   };
 }
 

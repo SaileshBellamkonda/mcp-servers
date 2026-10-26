@@ -286,16 +286,28 @@ describe('extension', () => {
   });
 
   describe('workspace folder changes', () => {
-    it('re-scopes the running git server without restarting it', async () => {
+    it('restarts the running git server with the new folders and the token of the new folder set', async () => {
       activate(ctx as never);
       await until('running');
       test.setFolders(['/work/repo', '/work/other']);
       test.fireFolderChange();
       await vi.waitFor(() => {
-        expect(git.state.instances[0]?.updateAllowedRepositories).toHaveBeenCalledWith(['/work/repo', '/work/other']);
+        expect(git.activateGitServer).toHaveBeenCalledTimes(2);
       });
+      await until('running');
+      expect(git.state.instances[0]?.close).toHaveBeenCalledOnce();
+      expect(git.activateGitServer).toHaveBeenLastCalledWith(expect.objectContaining({ workspaceFolders: ['/work/repo', '/work/other'] }));
+      const tokens = git.activateGitServer.mock.calls.map((c) => (c[0] as unknown as { authToken: string }).authToken);
+      expect(tokens[1]).not.toBe(tokens[0]);
+    });
+
+    it('keeps the token while the folder set stays the same (a folder moves position or another window fires the event)', async () => {
+      activate(ctx as never);
+      await until('running');
+      test.fireFolderChange();
+      await new Promise((resolve) => setImmediate(resolve));
       expect(git.activateGitServer).toHaveBeenCalledOnce();
-      expect(gitState()).toBe('running');
+      expect(git.state.instances[0]?.updateAllowedRepositories).toHaveBeenCalledWith(['/work/repo']);
     });
 
     it('stops the server and shows it as unavailable when the last folder is closed', async () => {
@@ -347,10 +359,20 @@ describe('extension', () => {
       vi.mocked(git.state.instances[0]?.updateAllowedRepositories as (f: string[]) => void).mockImplementationOnce(() => {
         throw new Error('rescope failed');
       });
-      test.setFolders(['/work/other']);
       test.fireFolderChange();
       await vi.waitFor(() => {
         expect(vscode.window.showErrorMessage).toHaveBeenCalledExactlyOnceWith('Git server failed to update its workspace folders: rescope failed');
+      });
+    });
+
+    it('reports a failing restart after a folder change once', async () => {
+      activate(ctx as never);
+      await until('running');
+      git.activateGitServer.mockRejectedValueOnce(new Error('restart failed'));
+      test.setFolders(['/work/other']);
+      test.fireFolderChange();
+      await vi.waitFor(() => {
+        expect(vscode.window.showErrorMessage).toHaveBeenCalledExactlyOnceWith('Git server failed to update its workspace folders: restart failed');
       });
     });
   });
