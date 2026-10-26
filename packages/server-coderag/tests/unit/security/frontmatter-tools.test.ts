@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, realpathSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, realpathSync, rmSync, symlinkSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import type { McpServer } from '@modelcontextprotocol/server';
@@ -109,5 +109,15 @@ describe('shared hardened parse', () => {
     expect(matter(source).data).toEqual({ domain: 'cached' });
     expect(() => parseFrontmatter(source)).toThrow(/not supported/i);
     expect(splitFrontmatter(source).data).toEqual({});
+  });
+});
+
+describe.each(['add_frontmatter', 'update_frontmatter'])('%s symlinked files', (tool) => {
+  it('judges the file type by the real target, not the link name', async () => {
+    const hook = path.join(root, 'hook.sh');
+    writeFileSync(hook, 'echo hello\n');
+    symlinkSync(hook, path.join(root, 'innocent.md'));
+    await expect(call(tool, { filepath: path.join(root, 'innocent.md'), domain: 'backend' })).rejects.toThrow(/\.md/);
+    expect(readFileSync(hook, 'utf8')).toBe('echo hello\n');
   });
 });

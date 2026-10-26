@@ -275,3 +275,19 @@ describe.skipIf(process.platform === 'win32')('computeAllowedRoots', () => {
       .toEqual(['/extra']);
   });
 });
+
+describe.skipIf(process.platform === 'win32')('PathGuard.assertAllowedReal', () => {
+  it('returns the real path of a symlink that stays inside the roots', () => {
+    writeFileSync(path.join(root, 'real.md'), '# r');
+    symlinkSync(path.join(root, 'real.md'), path.join(root, 'alias.md'));
+    const guard = new PathGuard([root]);
+    expect(guard.assertAllowedReal(path.join(root, 'alias.md'))).toBe(path.join(root, 'real.md'));
+    expect(guard.assertAllowed(path.join(root, 'alias.md'))).toBe(path.join(root, 'alias.md'));
+  });
+
+  it('throws for a symlink that leaves the roots', () => {
+    writeFileSync(path.join(outside, 'secret.md'), '# s');
+    symlinkSync(path.join(outside, 'secret.md'), path.join(root, 'leak.md'));
+    expect(() => new PathGuard([root]).assertAllowedReal(path.join(root, 'leak.md'))).toThrow(PathNotAllowedError);
+  });
+});

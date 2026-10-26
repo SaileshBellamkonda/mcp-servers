@@ -34,7 +34,8 @@ export function registerUpdateFrontmatter(server: McpServer, pathGuard: PathGuar
     },
     (input: unknown) => {
       const { filepath: requested, domain, doc_type, language, tags, project } = UpdateFrontmatterSchema.parse(input);
-      const filepath = pathGuard.assertAllowed(requested);
+      // Operate on the resolved path, and judge the file type by what the link points at, not its name.
+      const filepath = pathGuard.assertAllowedReal(requested);
       assertFrontmatterFile(filepath);
       const raw = readFileSync(filepath, 'utf8');
       const parsed = parseFrontmatter(raw);

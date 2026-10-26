@@ -143,7 +143,8 @@ export class CodeParser {
     // tree-sitter Node.js parsers don't need explicit cleanup in v0.21.x
   }
 
-  parseFile(filePath: string): CodeChunk[] {
+  /** `readFrom` is the path actually opened (the guard-resolved real path); the language still comes from `filePath`. */
+  parseFile(filePath: string, readFrom: string = filePath): CodeChunk[] {
     const ext = path.extname(filePath).toLowerCase();
     const langConfig = getLanguageByExtension(ext);
     if (!langConfig) {
@@ -158,7 +159,7 @@ export class CodeParser {
       throw new Error(`Grammar not loaded for language: ${langKey}`);
     }
 
-    const source = readFileSync(filePath, 'utf8');
+    const source = readFileSync(readFrom, 'utf8');
     const tree = parser.parse(source);
     return this.extractSymbols(tree.rootNode, source, langKey, query);
   }

@@ -136,3 +136,23 @@ describe('Indexer with a PathGuard', () => {
     expect(db.listDocuments().has(path.join(outside, 'secret.md'))).toBe(true);
   });
 });
+
+describe('Indexer reads through the guard-resolved path', () => {
+  it('indexes the content of the path the guard resolved, keyed by the requested path', async () => {
+    const requested = path.join(root, 'requested.md');
+    const resolved = path.join(root, 'resolved.md');
+    writeFileSync(requested, '# Requested\n\nlexical content');
+    writeFileSync(resolved, '# Resolved\n\nreal content');
+    class ResolvingGuard extends PathGuard {
+      override assertAllowedReal(): string { return resolved; }
+    }
+    const embedder = makeEmbedder();
+    const spy = vi.spyOn(embedder, 'embedBatch');
+    const indexer = new Indexer(db, embedder, 500, { pathGuard: new ResolvingGuard([root]), logger: fakeLogger() });
+    await indexer.indexFile(requested);
+    expect([...db.listDocuments().keys()]).toEqual([requested]);
+    const embeddedTexts = spy.mock.calls.flatMap((c) => c[0]).join('\n');
+    expect(embeddedTexts).toContain('real content');
+    expect(embeddedTexts).not.toContain('lexical content');
+  });
+});

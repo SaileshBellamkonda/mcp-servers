@@ -101,15 +101,15 @@ export class Indexer {
   }
 
   async indexFile(filePath: string): Promise<void> {
-    this.pathGuard?.assertAllowed(filePath);
+    const readPath = this.pathGuard?.assertAllowedReal(filePath) ?? filePath;
     this.log('info', `Indexing markdown: ${filePath}`);
     const loader = this.loaders.getForFile(filePath);
     if (!loader) {
       throw new Error(`Unsupported document type: ${path.extname(filePath).toLowerCase()}`);
     }
 
-    const stat = statSync(filePath);
-    const doc = loader.load(filePath, readFileSync(filePath, 'utf8'));
+    const stat = statSync(readPath);
+    const doc = loader.load(filePath, readFileSync(readPath, 'utf8'));
     const chunks = chunkSections(doc.sections, this.chunkSize);
 
     if (chunks.length === 0) {
@@ -125,11 +125,11 @@ export class Indexer {
   }
 
   async indexCodeFile(filePath: string): Promise<void> {
-    this.pathGuard?.assertAllowed(filePath);
+    const readPath = this.pathGuard?.assertAllowedReal(filePath) ?? filePath;
     this.log('info', `Indexing code: ${filePath}`);
-    const stat = statSync(filePath);
+    const stat = statSync(readPath);
     const parser = this.getCodeParser();
-    const chunks = parser.parseFile(filePath);
+    const chunks = parser.parseFile(filePath, readPath);
 
     if (chunks.length === 0) {
       this.log('warning', `No symbols from ${filePath}`);

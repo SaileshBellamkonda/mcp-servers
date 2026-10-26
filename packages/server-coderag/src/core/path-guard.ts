@@ -81,14 +81,26 @@ export class PathGuard {
   /**
    * Returns the absolute (lexical) path when its real path lies inside a root and throws
    * PathNotAllowedError otherwise. Relative inputs resolve against the first root.
+   *
+   * The lexical path is a stable identity (index keys, messages) but must not be used for file I/O:
+   * a symlink swapped in after the check would be followed. Use `assertAllowedReal` for reads and writes.
    */
   assertAllowed(p: string): string {
+    return this.check(p).abs;
+  }
+
+  /** Like `assertAllowed`, but returns the resolved real path so the caller operates on exactly what was checked. */
+  assertAllowedReal(p: string): string {
+    return this.check(p).real;
+  }
+
+  private check(p: string): { abs: string; real: string } {
     const abs = path.resolve(this.lexicalRoots[0] ?? process.cwd(), p);
     const real = resolveReal(abs);
     if (real === null || !this.realRoots.some((root) => isPathWithin(root, real))) {
       throw new PathNotAllowedError(p, this.lexicalRoots);
     }
-    return abs;
+    return { abs, real };
   }
 
   isAllowed(p: string): boolean {
