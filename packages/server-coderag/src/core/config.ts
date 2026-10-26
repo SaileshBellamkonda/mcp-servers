@@ -91,21 +91,21 @@ export function loadConfigFromVsCode(
   const url = vsConfig.get('embeddingUrl');
   if (!url || typeof url !== 'string' || url.trim() === '') {
     throw new ConfigError(
-      'coderag.embeddingUrl is required. Configure it in VS Code settings to point to your OpenAI-compatible embedding endpoint.'
+      'mcpServers.coderag.embeddingUrl is required. Configure it in VS Code settings to point to your OpenAI-compatible embedding endpoint.'
     );
   }
 
   const model = vsConfig.get('embeddingModel');
   if (!model || typeof model !== 'string' || model.trim() === '') {
     throw new ConfigError(
-      'coderag.embeddingModel is required. Configure it in VS Code settings with your embedding model name.'
+      'mcpServers.coderag.embeddingModel is required. Configure it in VS Code settings with your embedding model name.'
     );
   }
 
   const dbPath = vsConfig.get('dbPath');
   if (!dbPath || typeof dbPath !== 'string' || dbPath.trim() === '') {
     throw new ConfigError(
-      'coderag.dbPath is required. Configure it in VS Code settings with the path to the CodeRAG SQLite database file.'
+      'mcpServers.coderag.dbPath is required. Configure it in VS Code settings with the path to the CodeRAG SQLite database file.'
     );
   }
 

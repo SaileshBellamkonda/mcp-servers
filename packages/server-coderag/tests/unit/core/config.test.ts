@@ -197,7 +197,14 @@ describe('loadConfigFromVsCode', () => {
         return undefined;
       },
     };
-    expect(() => loadConfigFromVsCode(mockConfig, [])).toThrow('coderag.embeddingUrl');
+    expect(() => loadConfigFromVsCode(mockConfig, [])).toThrow('mcpServers.coderag.embeddingUrl is required');
+  });
+
+  it('names the real setting (mcpServers.coderag.embeddingModel) when the model is missing', () => {
+    const mockConfig = {
+      get: (key: string): unknown => (key === 'embeddingUrl' ? 'http://localhost:11434/v1' : key === 'dbPath' ? './coderag.db' : undefined),
+    };
+    expect(() => loadConfigFromVsCode(mockConfig, [])).toThrow('mcpServers.coderag.embeddingModel is required');
   });
 
   it('throws when dbPath is missing from VS Code config', () => {
@@ -209,7 +216,7 @@ describe('loadConfigFromVsCode', () => {
         return undefined;
       },
     };
-    expect(() => loadConfigFromVsCode(mockConfig, [])).toThrow('coderag.dbPath');
+    expect(() => loadConfigFromVsCode(mockConfig, [])).toThrow('mcpServers.coderag.dbPath is required');
   });
 
   it('uses workspace folder as default docsInclude when not configured', () => {

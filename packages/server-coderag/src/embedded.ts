@@ -6,6 +6,8 @@ import { resolveDimensions } from './core/dimensions.js';
 import { createStderrLogger, type CodeRagLogger } from './core/logger.js';
 import { Embedder } from './embedder/embedder.js';
 import { VectorDB } from './vectordb/db.js';
+import { probeSqliteSupport, type SqliteProbeDeps, type SqliteProbeResult } from './vectordb/sqlite-probe.js';
+import { CodeParser } from './indexer/code-parser.js';
 import { Indexer } from './indexer/indexer.js';
 import { GlobMatcher } from './core/glob-utils.js';
 import { PathGuard, computeAllowedRoots } from './core/path-guard.js';
@@ -128,6 +130,35 @@ export async function activateCodeRagServer(options: ActivateCodeRagServerOption
       return closing;
     },
   };
+}
+
+export type { SqliteProbeResult as CodeRagProbeResult };
+
+/** Replaceable steps of {@link probeCodeRagSupport}; the defaults are the real probes. */
+export interface CodeRagProbeDeps {
+  probeSqlite?: (deps?: SqliteProbeDeps) => SqliteProbeResult;
+  /** Constructs the tree-sitter parser (which loads every grammar available) from `nativeModulesDir`; throws on failure. */
+  createParser?: (nativeModulesDir: string | undefined) => void;
+}
+
+/**
+ * Whether this runtime can run CodeRAG: Node.js, `node:sqlite` (with extensions, FTS5), sqlite-vec, then
+ * tree-sitter with its grammars. Never throws; a failure is `{ ok: false, reason }` (`needs: 'fts5'` when only
+ * keyword search is missing). The VS Code extension calls this before offering the server.
+ */
+export function probeCodeRagSupport(
+  options: { nativeModulesDir?: string | undefined } = {},
+  deps: CodeRagProbeDeps = {},
+): SqliteProbeResult {
+  const { nativeModulesDir } = options;
+  const sqlite = (deps.probeSqlite ?? probeSqliteSupport)({ nativeModulesDir });
+  if (!sqlite.ok) return sqlite;
+  try {
+    (deps.createParser ?? ((dir: string | undefined): void => { new CodeParser({ nativeModulesDir: dir }); }))(nativeModulesDir);
+  } catch (err) {
+    return { ok: false, reason: `tree-sitter is unavailable: ${err instanceof Error ? err.message : String(err)}` };
+  }
+  return { ok: true };
 }
 
 export async function deactivateCodeRagServer(instance: CodeRagServerInstance): Promise<void> {
