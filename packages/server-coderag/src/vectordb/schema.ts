@@ -19,6 +19,17 @@ CREATE TABLE IF NOT EXISTS doc_tags (
 CREATE INDEX IF NOT EXISTS idx_doc_tags_tag ON doc_tags(tag);
 `;
 
+/**
+ * DDL for the vec0 vector table. New tables use chunk_size=256: the default (1024) allocates ~3 MB blobs at 768
+ * dimensions, which blocks the event loop for seconds during bulk inserts. Existing tables are never altered.
+ */
+export function buildVecChunksDdl(dimensions: number, ifNotExists = false): string {
+  return `CREATE VIRTUAL TABLE ${ifNotExists ? 'IF NOT EXISTS ' : ''}vec_chunks USING vec0(
+  embedding FLOAT[${String(dimensions)}],
+  chunk_size=256
+)`;
+}
+
 export function buildSchema(dimensions: number): string {
   return `
 CREATE TABLE IF NOT EXISTS db_meta (
@@ -48,9 +59,7 @@ CREATE TABLE IF NOT EXISTS chunks (
 );
 CREATE INDEX IF NOT EXISTS idx_document_id ON chunks(document_id);
 
-CREATE VIRTUAL TABLE IF NOT EXISTS vec_chunks USING vec0(
-  embedding FLOAT[${String(dimensions)}]
-);
+${buildVecChunksDdl(dimensions, true)};
 
 CREATE TABLE IF NOT EXISTS code_metadata (
   id            INTEGER PRIMARY KEY AUTOINCREMENT,

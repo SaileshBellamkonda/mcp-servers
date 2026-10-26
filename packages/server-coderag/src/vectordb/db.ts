@@ -1,7 +1,5 @@
-import Database from 'better-sqlite3';
-import { createRequire } from 'node:module';
-import path from 'node:path';
-import { buildSchema, buildMigrations, buildDocMetadataMigration } from './schema.js';
+import { buildSchema, buildMigrations, buildDocMetadataMigration, buildVecChunksDdl } from './schema.js';
+import { openSqliteDatabase, loadSqliteVec, type SqlParam, type SqliteDatabase } from './sqlite-db.js';
 import type {
   MarkdownChunk,
   CodeChunk,
@@ -13,21 +11,9 @@ import type {
   GlobConfig,
 } from '../core/types.js';
 
-const defaultRequire = createRequire(import.meta.url);
-
 export interface VectorDBOpenOptions {
   /** Directory whose `node_modules` holds sqlite-vec (bundled builds); default: this package's own resolution. */
   nativeModulesDir?: string | undefined;
-}
-
-function loadSqliteVec(db: Database.Database, nativeModulesDir: string | undefined): void {
-  try {
-    const require = nativeModulesDir === undefined ? defaultRequire : createRequire(path.join(nativeModulesDir, 'index.js'));
-    const sqliteVec = require('sqlite-vec') as { load: (db: Database.Database) => void };
-    sqliteVec.load(db);
-  } catch (err) {
-    throw new Error(`Failed to load sqlite-vec extension: ${String(err)}`, { cause: err });
-  }
 }
 
 function serializeVector(vec: number[]): Buffer {
@@ -38,28 +24,22 @@ function serializeVector(vec: number[]): Buffer {
   return buf;
 }
 
-function columnExists(db: Database.Database, table: string, column: string): boolean {
-  const row = db
-    .prepare(`SELECT COUNT(*) as cnt FROM pragma_table_info(?) WHERE name=?`)
-    .get(table, column) as { cnt: number };
-  return row.cnt > 0;
+function columnExists(db: SqliteDatabase, table: string, column: string): boolean {
+  const row = db.prepare<{ cnt: number }>(`SELECT COUNT(*) as cnt FROM pragma_table_info(?) WHERE name=?`).get(table, column);
+  return (row?.cnt ?? 0) > 0;
 }
 
-function tableExists(db: Database.Database, table: string): boolean {
-  const row = db
-    .prepare(`SELECT COUNT(*) as cnt FROM sqlite_master WHERE type='table' AND name=?`)
-    .get(table) as { cnt: number };
-  return row.cnt > 0;
+function tableExists(db: SqliteDatabase, table: string): boolean {
+  const row = db.prepare<{ cnt: number }>(`SELECT COUNT(*) as cnt FROM sqlite_master WHERE type='table' AND name=?`).get(table);
+  return (row?.cnt ?? 0) > 0;
 }
 
-function virtualTableExists(db: Database.Database, table: string): boolean {
-  const row = db
-    .prepare(`SELECT COUNT(*) as cnt FROM sqlite_master WHERE type='table' AND name=?`)
-    .get(table) as { cnt: number };
-  return row.cnt > 0;
+function virtualTableExists(db: SqliteDatabase, table: string): boolean {
+  const row = db.prepare<{ cnt: number }>(`SELECT COUNT(*) as cnt FROM sqlite_master WHERE type='table' AND name=?`).get(table);
+  return (row?.cnt ?? 0) > 0;
 }
 
-function runMigrations(db: Database.Database): void {
+function runMigrations(db: SqliteDatabase): void {
   const migrations = buildMigrations();
   // Migration 1: add doc_type column
   if (tableExists(db, 'documents') && !columnExists(db, 'documents', 'doc_type')) {
@@ -121,18 +101,18 @@ interface SearchRow {
 }
 
 export class VectorDB {
-  private readonly db: Database.Database;
+  private readonly db: SqliteDatabase;
 
-  private constructor(db: Database.Database) {
+  private constructor(db: SqliteDatabase) {
     this.db = db;
   }
 
   static readStoredDimensions(dbPath: string): number | null {
     if (dbPath === ':memory:') return null;
     try {
-      const db = new Database(dbPath, { readonly: true });
+      const db = openSqliteDatabase(dbPath, { readonly: true });
       try {
-        const row = db.prepare('SELECT value FROM db_meta WHERE key = ?').get('dimensions') as { value: string } | undefined;
+        const row = db.prepare<{ value: string }>('SELECT value FROM db_meta WHERE key = ?').get('dimensions');
         return row ? parseInt(row.value, 10) : null;
       } finally {
         db.close();
@@ -143,7 +123,7 @@ export class VectorDB {
   }
 
   static open(dbPath: string, dimensions: number, options: VectorDBOpenOptions = {}): VectorDB {
-    const db = new Database(dbPath);
+    const db = openSqliteDatabase(dbPath, { allowExtension: true });
     try {
       loadSqliteVec(db, options.nativeModulesDir);
     } catch (err) {
@@ -154,14 +134,14 @@ export class VectorDB {
     db.pragma('journal_mode = WAL');
 
     db.exec(`CREATE TABLE IF NOT EXISTS db_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);`);
-    const stored = (db.prepare('SELECT value FROM db_meta WHERE key = ?').get('dimensions') as { value: string } | undefined)?.value;
+    const stored = db.prepare<{ value: string }>('SELECT value FROM db_meta WHERE key = ?').get('dimensions')?.value;
 
     if (stored !== undefined) {
       const storedDim = parseInt(stored, 10);
       if (storedDim !== dimensions) {
         // Dimension mismatch: drop and recreate vec_chunks, update stored dim
         db.exec('DROP TABLE IF EXISTS vec_chunks');
-        db.exec(`CREATE VIRTUAL TABLE vec_chunks USING vec0(embedding FLOAT[${String(dimensions)}])`);
+        db.exec(buildVecChunksDdl(dimensions));
         db.prepare('INSERT OR REPLACE INTO db_meta (key, value) VALUES (?, ?)').run('dimensions', String(dimensions));
         db.prepare('DELETE FROM db_meta WHERE key = ?').run('last_docs_sync_at');
         db.prepare('DELETE FROM db_meta WHERE key = ?').run('last_code_sync_at');
@@ -180,17 +160,17 @@ export class VectorDB {
   }
 
   getStoredDimensions(): number | null {
-    const row = this.db.prepare('SELECT value FROM db_meta WHERE key = ?').get('dimensions') as { value: string } | undefined;
+    const row = this.db.prepare<{ value: string }>('SELECT value FROM db_meta WHERE key = ?').get('dimensions');
     return row ? parseInt(row.value, 10) : null;
   }
 
   dimensionMismatchOccurred(): boolean {
-    const row = this.db.prepare("SELECT value FROM db_meta WHERE key = 'dim_reset'").get() as { value: string } | undefined;
+    const row = this.db.prepare<{ value: string }>("SELECT value FROM db_meta WHERE key = 'dim_reset'").get();
     return row?.value === '1';
   }
 
   isDocsReindexRequired(): boolean {
-    const row = this.db.prepare("SELECT value FROM db_meta WHERE key = 'docs_reindex_required'").get() as { value: string } | undefined;
+    const row = this.db.prepare<{ value: string }>("SELECT value FROM db_meta WHERE key = 'docs_reindex_required'").get();
     return row?.value === '1';
   }
 
@@ -203,17 +183,17 @@ export class VectorDB {
   }
 
   getDocumentCount(): number {
-    const row = this.db.prepare('SELECT COUNT(*) as cnt FROM documents').get() as { cnt: number };
-    return row.cnt;
+    const row = this.db.prepare<{ cnt: number }>('SELECT COUNT(*) as cnt FROM documents').get();
+    return row?.cnt ?? 0;
   }
 
   getDocumentCountByType(docType: 'doc' | 'code'): number {
-    const row = this.db.prepare('SELECT COUNT(*) as cnt FROM documents WHERE doc_type = ?').get(docType) as { cnt: number };
-    return row.cnt;
+    const row = this.db.prepare<{ cnt: number }>('SELECT COUNT(*) as cnt FROM documents WHERE doc_type = ?').get(docType);
+    return row?.cnt ?? 0;
   }
 
   listDocuments(): Map<string, Date> {
-    const rows = this.db.prepare('SELECT filename, modified_at FROM documents').all() as { filename: string; modified_at: string }[];
+    const rows = this.db.prepare<{ filename: string; modified_at: string }>('SELECT filename, modified_at FROM documents').all();
     const result = new Map<string, Date>();
     for (const row of rows) {
       result.set(row.filename, new Date(row.modified_at));
@@ -222,7 +202,7 @@ export class VectorDB {
   }
 
   listDocumentsByType(docType: 'doc' | 'code'): Map<string, Date> {
-    const rows = this.db.prepare('SELECT filename, modified_at FROM documents WHERE doc_type = ?').all(docType) as { filename: string; modified_at: string }[];
+    const rows = this.db.prepare<{ filename: string; modified_at: string }>('SELECT filename, modified_at FROM documents WHERE doc_type = ?').all(docType);
     const result = new Map<string, Date>();
     for (const row of rows) {
       result.set(row.filename, new Date(row.modified_at));
@@ -231,7 +211,7 @@ export class VectorDB {
   }
 
   deleteDocument(filename: string): void {
-    const doc = this.db.prepare('SELECT id FROM documents WHERE filename = ?').get(filename) as { id: number } | undefined;
+    const doc = this.db.prepare<{ id: number }>('SELECT id FROM documents WHERE filename = ?').get(filename);
     if (!doc) throw new Error(`Document not found: ${filename}`);
     this.db.prepare('DELETE FROM documents WHERE id = ?').run(doc.id);
   }
@@ -247,7 +227,7 @@ export class VectorDB {
       throw new Error(`chunks (${String(chunks.length)}) and embeddings (${String(embeddings.length)}) count mismatch`);
     }
 
-    const findDoc = this.db.prepare('SELECT id FROM documents WHERE filename = ?');
+    const findDoc = this.db.prepare<{ id: number }>('SELECT id FROM documents WHERE filename = ?');
     const deleteMeta = this.db.prepare('DELETE FROM doc_metadata WHERE document_id = ?');
     const deleteTags = this.db.prepare('DELETE FROM doc_tags WHERE document_id = ?');
     const insertDoc = this.db.prepare(
@@ -266,14 +246,14 @@ export class VectorDB {
 
     const run = this.db.transaction(() => {
       // Metadata rows hang off the old document id; remove them explicitly before the REPLACE assigns a new id.
-      const existing = findDoc.get(filename) as { id: number } | undefined;
+      const existing = findDoc.get(filename);
       if (existing) {
         deleteMeta.run(existing.id);
         deleteTags.run(existing.id);
       }
 
       const docResult = insertDoc.run(filename, modifiedAt.toISOString());
-      const docId = Number(docResult.lastInsertRowid);
+      const docId = docResult.lastInsertRowid;
       deleteChunks.run(docId);
       for (let i = 0; i < chunks.length; i++) {
         const chunk = chunks[i];
@@ -288,7 +268,7 @@ export class VectorDB {
           chunk.startLine ?? null,
           chunk.endLine ?? null,
         );
-        const chunkId = BigInt(chunkResult.lastInsertRowid);
+        const chunkId = chunkResult.lastInsertRowid;
         insertVec.run(chunkId, serializeVector(embedding));
         const ftsHeading = [metadata?.title ?? '', ...(headingPath ?? [])].filter((part) => part !== '').join(' ');
         insertFts.run(chunkId, chunk.content, ftsHeading);
@@ -328,14 +308,14 @@ export class VectorDB {
 
     const run = this.db.transaction(() => {
       const docResult = insertDoc.run(filename, modifiedAt.toISOString());
-      const docId = Number(docResult.lastInsertRowid);
+      const docId = docResult.lastInsertRowid;
       deleteChunks.run(docId);
       for (let i = 0; i < chunks.length; i++) {
         const chunk = chunks[i];
         const embedding = embeddings[i];
         if (!chunk || !embedding) continue;
         const chunkResult = insertChunk.run(docId, chunk.position, chunk.content);
-        const chunkId = BigInt(chunkResult.lastInsertRowid);
+        const chunkId = chunkResult.lastInsertRowid;
         insertVec.run(chunkId, serializeVector(embedding));
         insertFts.run(chunkId, chunk.content, chunk.symbolName);
         insertMeta.run(chunkId, chunk.symbolName, chunk.symbolType, chunk.language, chunk.startLine, chunk.endLine, chunk.parentSymbol, chunk.signature);
@@ -358,12 +338,12 @@ export class VectorDB {
   }
 
   getChunkIdBySymbol(filename: string, symbolName: string): number | null {
-    const row = this.db.prepare(`
+    const row = this.db.prepare<{ chunk_id: number }>(`
       SELECT cm.chunk_id FROM code_metadata cm
       JOIN chunks c ON cm.chunk_id = c.id
       JOIN documents d ON c.document_id = d.id
       WHERE d.filename = ? AND cm.symbol_name = ? LIMIT 1
-    `).get(filename, symbolName) as { chunk_id: number } | undefined;
+    `).get(filename, symbolName);
     return row?.chunk_id ?? null;
   }
 
@@ -385,7 +365,7 @@ export class VectorDB {
 
   getStoredRules(): GlobConfig | null {
     if (!tableExists(this.db, 'index_rules')) return null;
-    const rows = this.db.prepare('SELECT rule_type, pattern FROM index_rules ORDER BY id').all() as { rule_type: string; pattern: string }[];
+    const rows = this.db.prepare<{ rule_type: string; pattern: string }>('SELECT rule_type, pattern FROM index_rules ORDER BY id').all();
     if (rows.length === 0) return null;
     const result: GlobConfig = { docsInclude: [], docsExclude: [], codeInclude: [], codeExclude: [] };
     for (const row of rows) {
@@ -401,7 +381,7 @@ export class VectorDB {
 
   getLastSyncAt(type: 'docs' | 'code'): Date | null {
     const key = type === 'docs' ? 'last_docs_sync_at' : 'last_code_sync_at';
-    const row = this.db.prepare('SELECT value FROM db_meta WHERE key = ?').get(key) as { value: string } | undefined;
+    const row = this.db.prepare<{ value: string }>('SELECT value FROM db_meta WHERE key = ?').get(key);
     return row ? new Date(row.value) : null;
   }
 
@@ -429,7 +409,7 @@ export class VectorDB {
       ORDER BY distance ASC LIMIT ?
     `;
 
-    const rows = this.db.prepare(sql).all(blob, ...args, topK) as (SearchRow & { distance: number | null })[];
+    const rows = this.db.prepare<SearchRow & { distance: number | null }>(sql).all(blob, ...args, topK);
 
     return this.toResults(
       rows.filter((r) => r.distance !== null),
@@ -440,7 +420,7 @@ export class VectorDB {
   searchSymbolsByKeywords(keywords: string[], limit: number): SearchResult[] {
     if (keywords.length === 0) return [];
     const conditions = keywords.map(() => 'LOWER(cm.symbol_name) LIKE ?').join(' OR ');
-    const args: unknown[] = keywords.map((k) => `%${k.toLowerCase()}%`);
+    const args: SqlParam[] = keywords.map((k) => `%${k.toLowerCase()}%`);
     args.push(limit);
     const sql = `
       SELECT d.filename, c.content, c.position, c.id as chunk_id,
@@ -451,11 +431,11 @@ export class VectorDB {
       JOIN documents d ON c.document_id = d.id
       WHERE (${conditions}) LIMIT ?
     `;
-    const rows = this.db.prepare(sql).all(...args) as {
+    const rows = this.db.prepare<{
       filename: string; content: string; position: number; chunk_id: number;
       symbol_name: string; symbol_type: string; language: string;
       start_line: number; end_line: number; parent_symbol: string; signature: string;
-    }[];
+    }>(sql).all(...args);
     return rows.map((r) => ({
       document: r.filename, chunk: r.content, similarity: 1.0, position: r.position,
       metadata: { symbolName: r.symbol_name, symbolType: r.symbol_type, language: r.language,
@@ -465,7 +445,7 @@ export class VectorDB {
 
   findSymbolRelations(symbol: string, direction: string, relationType: string): CodeRelation[] {
     let sql: string;
-    const args: unknown[] = [];
+    const args: SqlParam[] = [];
     if (direction === 'incoming') {
       sql = `SELECT cr.id, cr.source_chunk_id, cr.target_chunk_id, cr.relation_type, cr.target_name, cr.target_file, cr.confidence,
                cm.symbol_name as source_name, d.filename as source_file
@@ -489,11 +469,11 @@ export class VectorDB {
       args.push(symbol, symbol);
     }
     if (relationType) { sql += ' AND cr.relation_type = ?'; args.push(relationType); }
-    const rows = this.db.prepare(sql).all(...args) as {
+    const rows = this.db.prepare<{
       id: number; source_chunk_id: number; target_chunk_id: number | null;
       relation_type: string; target_name: string; target_file: string;
       confidence: number; source_name: string; source_file: string;
-    }[];
+    }>(sql).all(...args);
     return rows.map((r) => ({
       id: r.id, sourceChunkId: r.source_chunk_id, targetChunkId: r.target_chunk_id ?? undefined,
       relationType: r.relation_type, targetName: r.target_name, targetFile: r.target_file,
@@ -502,7 +482,7 @@ export class VectorDB {
   }
 
   getAllDocumentRecords(): DocumentRecord[] {
-    const rows = this.db.prepare('SELECT filename, modified_at, doc_type FROM documents').all() as { filename: string; modified_at: string; doc_type: string }[];
+    const rows = this.db.prepare<{ filename: string; modified_at: string; doc_type: string }>('SELECT filename, modified_at, doc_type FROM documents').all();
     return rows.map((r) => ({ filename: r.filename, modifiedAt: new Date(r.modified_at), docType: r.doc_type as 'doc' | 'code' }));
   }
 
@@ -528,7 +508,7 @@ export class VectorDB {
       LIMIT ?
     `;
 
-    const rows = this.db.prepare(sql).all(ftsQuery, ...args, topK) as (SearchRow & { bm25_score: number })[];
+    const rows = this.db.prepare<SearchRow & { bm25_score: number }>(sql).all(ftsQuery, ...args, topK);
 
     // bm25() returns negative values; normalize to (0,1] — lower bm25 = more relevant
     return this.toResults(rows, (r) => 1.0 / (1.0 + Math.abs(r.bm25_score)));
@@ -590,8 +570,8 @@ export class VectorDB {
     if (docIds.length === 0) return tagsByDoc;
     const placeholders = docIds.map(() => '?').join(',');
     const rows = this.db
-      .prepare(`SELECT document_id, tag FROM doc_tags WHERE document_id IN (${placeholders}) ORDER BY tag`)
-      .all(...docIds) as { document_id: number; tag: string }[];
+      .prepare<{ document_id: number; tag: string }>(`SELECT document_id, tag FROM doc_tags WHERE document_id IN (${placeholders}) ORDER BY tag`)
+      .all(...docIds);
     for (const row of rows) {
       const tags = tagsByDoc.get(row.document_id) ?? [];
       tags.push(row.tag);
@@ -649,9 +629,9 @@ function parseHeadingPath(raw: string | null): string[] | undefined {
  * Builds the shared WHERE conditions for semantic and keyword search (aliases d=documents, dm=doc_metadata).
  * Any metadata filter implicitly excludes documents that have no doc_metadata row, such as code files.
  */
-function buildFilterConditions(filter: SearchFilter | null): { conditions: string[]; args: unknown[] } {
+function buildFilterConditions(filter: SearchFilter | null): { conditions: string[]; args: SqlParam[] } {
   const conditions: string[] = [];
-  const args: unknown[] = [];
+  const args: SqlParam[] = [];
   if (!filter) return { conditions, args };
 
   if (filter.directory) {

@@ -3,7 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { mkdirSync, rmSync } from 'node:fs';
-import Database from 'better-sqlite3';
+import { DatabaseSync } from 'node:sqlite';
 import { VectorDB } from '../../../src/vectordb/db.js';
 import type { DocumentMetadata, MarkdownChunk } from '../../../src/core/types.js';
 
@@ -51,8 +51,8 @@ describe('schema migration', () => {
     first.close();
 
     // Simulate a database created before this feature existed.
-    const raw = new Database(dbPath);
-    (require('sqlite-vec') as { load: (db: Database.Database) => void }).load(raw);
+    const raw = new DatabaseSync(dbPath, { allowExtension: true });
+    (require('sqlite-vec') as { load: (db: DatabaseSync) => void }).load(raw);
     raw.exec(
       'DROP TABLE doc_tags; DROP TABLE doc_metadata;' +
         ' ALTER TABLE chunks DROP COLUMN heading_path;' +
