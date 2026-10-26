@@ -68,7 +68,8 @@ describe('activateCodeRagServer', () => {
   });
 
   it('rejects a missing token', async () => {
-    const { authToken: _omit, ...options } = base();
+    const options: Record<string, unknown> = { ...base() };
+    delete options['authToken'];
     await expect(activateCodeRagServer(options as never)).rejects.toThrow(/token is required/);
   });
 

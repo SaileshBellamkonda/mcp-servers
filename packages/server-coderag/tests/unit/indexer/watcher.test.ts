@@ -17,26 +17,6 @@ import { CodeRagWatcher } from '../../../src/indexer/watcher.js';
 const mockWatch = vi.mocked(fs.watch);
 const mockExistsSync = vi.mocked(fs.existsSync);
 
-function createFakeWatcher(): FSWatcher & { triggerCallback: (event: string, filename: string | null) => void } {
-  let capturedCallback: ((event: string, filename: string | null) => void) | undefined;
-
-  const fakeWatcher = {
-    on: vi.fn().mockReturnThis(),
-    close: vi.fn(),
-    triggerCallback: (event: string, filename: string | null) => {
-      if (capturedCallback) capturedCallback(event, filename);
-    },
-  };
-
-  // Capture the callback when watch() is called
-  mockWatch.mockImplementation((_dir: unknown, _opts: unknown, callback: unknown) => {
-    capturedCallback = callback as (event: string, filename: string | null) => void;
-    return fakeWatcher as unknown as FSWatcher;
-  });
-
-  return fakeWatcher as FSWatcher & { triggerCallback: (event: string, filename: string | null) => void };
-}
-
 describe('CodeRagWatcher', () => {
   let watcher: CodeRagWatcher;
   let mockDb: VectorDB;
