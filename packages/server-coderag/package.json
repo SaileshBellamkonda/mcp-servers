@@ -32,6 +32,7 @@
     "test:coverage": "vitest run --coverage",
     "bench": "tsx --conditions=@mcp-servers/source scripts/bench-search.ts",
     "eval": "tsx --conditions=@mcp-servers/source scripts/retrieval-eval.ts",
+    "eval:relations": "tsx --conditions=@mcp-servers/source scripts/relations-eval.ts",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist"
   },
