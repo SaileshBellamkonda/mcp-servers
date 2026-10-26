@@ -46,7 +46,10 @@ export class EmbeddedServerAdapter implements Disposable {
   private state: ServerState = 'stopped';
   private reason: string | undefined;
   private instance: ServerInstance | undefined;
-  private requestedPort: number | undefined;
+  /** The restart-relevant settings the running server was started with (see `ServerDescriptor.restartSettings`). */
+  private startedSettings: string | undefined;
+  /** The workspace scope (and therefore the token) the running server was started with. */
+  private startedScope: string | undefined;
   private startedAt: number | undefined;
   private startPromise: Promise<void> | undefined;
   private stopPromise: Promise<void> | undefined;
@@ -123,6 +126,12 @@ export class EmbeddedServerAdapter implements Disposable {
     }
     if (this.state === 'running' && this.instance) {
       const folders = [...this.deps.workspaceFolders()];
+      // The token belongs to the folder set: a different set is a different workspace scope, so the server must
+      // pick up the token of the new scope (an in-place update would keep serving the old one).
+      if (this.deps.scopeKey() !== this.startedScope) {
+        await this.restart();
+        return 'restarted';
+      }
       if (this.instance.updateWorkspaceFolders) {
         await this.instance.updateWorkspaceFolders(folders);
         this.log().info(`workspace folders updated: ${folders.join(', ')}`);
@@ -134,12 +143,24 @@ export class EmbeddedServerAdapter implements Disposable {
     return 'unchanged';
   }
 
-  /** Call after the settings changed: restarts a running server whose configured port is no longer the one it uses. */
+  /**
+   * Call after the settings changed: restarts a running server whose port, or any of the descriptor's
+   * `restartSettings`, is no longer what it was started with.
+   */
   async applyConfiguration(): Promise<ConfigurationResult> {
     if (this.state !== 'running') return 'unchanged';
-    if (this.readPort() === this.requestedPort) return 'unchanged';
+    if (this.settingsFingerprint(this.readPort()) === this.startedSettings) return 'unchanged';
     await this.restart();
     return 'restarted';
+  }
+
+  /** The port the next start would use, or undefined when the `port` setting is invalid. */
+  plannedPort(): number | undefined {
+    try {
+      return this.readPort();
+    } catch {
+      return undefined;
+    }
   }
 
   dispose(): void {
@@ -169,7 +190,9 @@ export class EmbeddedServerAdapter implements Disposable {
         return;
       }
       port = this.readPort();
-      const authToken = await this.deps.tokens.getToken(this.id, this.deps.scopeKey());
+      const settings = this.settingsFingerprint(port);
+      const scope = this.deps.scopeKey();
+      const authToken = await this.deps.tokens.getToken(this.id, scope);
       this.token = authToken;
       const instance = await this.descriptor.activate({
         serverId: this.id,
@@ -181,7 +204,8 @@ export class EmbeddedServerAdapter implements Disposable {
         loadModule: this.deps.loadModule,
       });
       this.instance = instance;
-      this.requestedPort = port;
+      this.startedSettings = settings;
+      this.startedScope = scope;
       this.startedAt = this.deps.clock();
       this.setState('running');
       this.log().info(`started on ${instance.host}:${String(instance.port)}`);
@@ -214,7 +238,8 @@ export class EmbeddedServerAdapter implements Disposable {
 
   private clearRuntime(): void {
     this.instance = undefined;
-    this.requestedPort = undefined;
+    this.startedSettings = undefined;
+    this.startedScope = undefined;
     this.startedAt = undefined;
   }
 
@@ -234,6 +259,11 @@ export class EmbeddedServerAdapter implements Disposable {
       throw new Error(`Invalid port ${JSON.stringify(value)} (change ${this.portSetting})`);
     }
     return value;
+  }
+
+  private settingsFingerprint(port: number): string {
+    const { settingsSection, restartSettings = [] } = this.descriptor;
+    return JSON.stringify([port, ...restartSettings.map((key) => this.deps.config.get<unknown>(settingsSection, key, null))]);
   }
 
   private classify(error: unknown, port: number | undefined): string {

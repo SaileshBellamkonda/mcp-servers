@@ -53,6 +53,11 @@ export interface ServerDescriptor {
   /** Settings section holding `port` and `autoStart`, e.g. `mcpServers.git`. */
   settingsSection: string;
   defaultPort: number;
+  /**
+   * Further keys of `settingsSection` (besides `port`) whose change requires a restart of the running server; the
+   * adapter compares their values with the ones the server was started with.
+   */
+  restartSettings?: readonly string[];
   /** When true the server is `unavailable` while no workspace folder is open. */
   requiresWorkspace: boolean;
   /** Probes whether the server can run here (modules, platform, ...). Called before every start. */

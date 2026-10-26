@@ -43,7 +43,15 @@ interface Harness {
   instances: FakeInstance[];
 }
 
-function makeHarness(options: { folders?: string[]; withUpdate?: boolean; settings?: Record<string, unknown> } = {}): Harness {
+function makeHarness(
+  options: {
+    folders?: string[];
+    withUpdate?: boolean;
+    settings?: Record<string, unknown>;
+    restartSettings?: string[];
+    scopeOf?: (folders: string[]) => string;
+  } = {}
+): Harness {
   const folders = options.folders ?? ['/work/a'];
   const settings: Record<string, unknown> = options.settings ?? {};
   const instances: FakeInstance[] = [];
@@ -59,6 +67,7 @@ function makeHarness(options: { folders?: string[]; withUpdate?: boolean; settin
     settingsSection: 'mcpServers.fake',
     defaultPort: 3999,
     requiresWorkspace: true,
+    ...(options.restartSettings && { restartSettings: options.restartSettings }),
     isAvailable: vi.fn<() => Availability | Promise<Availability>>(() => ({ available: true })),
     activate: vi.fn<(context: ActivationContext) => Promise<ServerInstance>>(() => {
       const instance = fakeInstance(3999 + instances.length, options.withUpdate ?? true);
@@ -79,7 +88,7 @@ function makeHarness(options: { folders?: string[]; withUpdate?: boolean; settin
       },
     },
     workspaceFolders: () => folders,
-    scopeKey: () => 'ws',
+    scopeKey: () => options.scopeOf?.(folders) ?? 'ws',
   });
   const states: ServerInfo[] = [];
   adapter.onDidChangeState((info) => states.push(info));
@@ -415,6 +424,19 @@ describe('EmbeddedServerAdapter', () => {
       expect(h.descriptor.activate.mock.calls[1]?.[0].workspaceFolders).toEqual(['/work/b']);
     });
 
+    it('restarts instead of re-scoping when the folder set changes the workspace scope (the token follows the scope)', async () => {
+      const h = makeHarness({ scopeOf: (folders) => folders.join('|') });
+      await h.adapter.start();
+      const first = (h.descriptor.activate.mock.calls[0]?.[0] as ActivationContext).authToken;
+      h.folders.splice(0, h.folders.length, '/work/a', '/work/b');
+      await expect(h.adapter.syncWorkspace()).resolves.toBe('restarted');
+      expect(h.instances[0]?.updateWorkspaceFolders).not.toHaveBeenCalled();
+      expect(h.instances[0]?.close).toHaveBeenCalledOnce();
+      const second = (h.descriptor.activate.mock.calls[1]?.[0] as ActivationContext).authToken;
+      expect(second).not.toBe(first);
+      expect(h.descriptor.activate.mock.calls[1]?.[0].workspaceFolders).toEqual(['/work/a', '/work/b']);
+    });
+
     it('stops a running server and turns unavailable when the last folder is closed', async () => {
       const h = makeHarness();
       await h.adapter.start();
@@ -480,12 +502,44 @@ describe('EmbeddedServerAdapter', () => {
       await expect(h.adapter.applyConfiguration()).resolves.toBe('unchanged');
     });
 
+    it('restarts when a setting listed in restartSettings changed, comparing values (arrays too)', async () => {
+      const h = makeHarness({ restartSettings: ['model', 'globs'], settings: { 'mcpServers.fake.globs': ['a'] } });
+      await h.adapter.start();
+      h.settings['mcpServers.fake.globs'] = ['a'];
+      await expect(h.adapter.applyConfiguration()).resolves.toBe('unchanged');
+      h.settings['mcpServers.fake.model'] = 'm2';
+      await expect(h.adapter.applyConfiguration()).resolves.toBe('restarted');
+      h.settings['mcpServers.fake.globs'] = ['a', 'b'];
+      await expect(h.adapter.applyConfiguration()).resolves.toBe('restarted');
+      expect(h.descriptor.activate).toHaveBeenCalledTimes(3);
+    });
+
+    it('ignores settings that are not listed in restartSettings', async () => {
+      const h = makeHarness({ restartSettings: ['model'] });
+      await h.adapter.start();
+      h.settings['mcpServers.fake.autoStart'] = false;
+      h.settings['mcpServers.fake.other'] = 1;
+      await expect(h.adapter.applyConfiguration()).resolves.toBe('unchanged');
+    });
+
     it('rejects with the real reason when the restart fails', async () => {
       const h = makeHarness({ settings: { 'mcpServers.fake.port': 4000 } });
       await h.adapter.start();
       h.settings['mcpServers.fake.port'] = 4001;
       h.descriptor.activate.mockRejectedValueOnce(Object.assign(new Error('x'), { code: 'EADDRINUSE' }));
       await expect(h.adapter.applyConfiguration()).rejects.toThrow('Port 4001 is already in use');
+    });
+  });
+
+  describe('plannedPort()', () => {
+    it('is the configured port, or the descriptor default', () => {
+      expect(makeHarness().adapter.plannedPort()).toBe(3999);
+      expect(makeHarness({ settings: { 'mcpServers.fake.port': 4100 } }).adapter.plannedPort()).toBe(4100);
+    });
+
+    it('is undefined for an invalid port instead of throwing', () => {
+      expect(makeHarness({ settings: { 'mcpServers.fake.port': 'x' } }).adapter.plannedPort()).toBeUndefined();
+      expect(makeHarness({ settings: { 'mcpServers.fake.port': 70000 } }).adapter.plannedPort()).toBeUndefined();
     });
   });
 
