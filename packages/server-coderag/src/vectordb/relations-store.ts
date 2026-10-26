@@ -167,13 +167,19 @@ interface ImportedFiles {
   names: Map<string, Set<string> | null>;
 }
 
-/** True when an import of the calling document brings in the candidate itself, its class, or everything of its file. */
+/**
+ * True when an import of the calling document brings in the candidate itself: it names the symbol, or it is a plain
+ * function of a file imported as a whole or with a wildcard. Importing a class does not make every method of it the
+ * target of `x.add(y)`, since the type of `x` is not known.
+ */
 function isBroughtIn(candidate: Candidate, imported: ImportedFiles): boolean {
   const file = candidate.filename.replaceAll('\\', '/');
+  const member = candidate.parent_symbol !== null && candidate.parent_symbol !== '';
   for (const where of [file, dirname(file)]) {
     if (!imported.names.has(where)) continue;
     const names = imported.names.get(where);
-    if (names === null || names === undefined || names.has('*') || names.has(candidate.symbol_name) || (candidate.parent_symbol !== null && names.has(candidate.parent_symbol))) return true;
+    if (names?.has(candidate.symbol_name)) return true;
+    if (!member && (names === null || names === undefined || names.has('*'))) return true;
   }
   return false;
 }
@@ -416,21 +422,28 @@ export class RelationStore {
       // A class never inherits from itself, nor from a same-named type of its own file (`impl Error for Error`);
       // `class Config(lib.Config)` names another class that happens to share the name.
       if (edge.relation_type === 'inherits') found = found.filter((c) => c.chunk_id !== edge.source_chunk_id && !(c.document_id === document && source !== null && c.symbol_name === source.name));
+      // A function nested in another function is only visible inside it.
+      found = found.filter((c) => !isHiddenLocal(c, document, source, functionsOf));
       // A call to a very common name (`toString`, `clone`, `contains`) is almost always a library call: it only
-      // resolves to a symbol of its own file or of a file it imports.
+      // resolves to a symbol of its own file or of a file it imports. Any other symbol of that name is shown as
+      // "some symbol has this name" (ambiguous, no target) instead of a target that is nearly always wrong.
+      let nameOnly = false;
       if (edge.weak === 1) {
         const brought = importedOf(document);
-        found = found.filter((c) => c.document_id === document || isBroughtIn(c, brought));
+        const near = found.filter((c) => c.document_id === document || isBroughtIn(c, brought));
+        nameOnly = near.length === 0 && found.length > 0;
+        found = near;
       }
       // `GsonTypes.getRawType(x)`, `flask.views.View`: a candidate that belongs to the named class or module wins.
       if (edge.qualifier !== null && edge.qualifier !== '') {
         const named = found.filter((c) => belongsTo(c, edge.qualifier ?? ''));
         if (named.length > 0) found = named;
       }
-      // A function nested in another function is only visible inside it.
-      const all = collapseSymbols(found.filter((c) => !isHiddenLocal(c, document, source, functionsOf)));
+      const all = collapseSymbols(found);
       let resolved: { chunk: number | null; confidence: number };
-      if (all.length === 0) {
+      if (nameOnly) {
+        resolved = { chunk: null, confidence: CONFIDENCE.ambiguous };
+      } else if (all.length === 0) {
         resolved = { chunk: null, confidence: CONFIDENCE.unresolved };
       } else {
         const sameFile = all.filter((c) => c.document_id === document);

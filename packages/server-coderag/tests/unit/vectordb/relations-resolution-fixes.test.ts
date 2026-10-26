@@ -159,23 +159,25 @@ describe('a function nested in another function is not visible outside it', () =
 describe('calls to common names resolve only through the file itself or an import', () => {
   const weakCall = (name: string): RawRelation => rel('calls', 0, name, { weak: true });
 
-  it('does not attach `value.toString()` to the only toString the index happens to define', async () => {
+  it('does not attach `value.toString()` to the only toString the index happens to define: the name shows as ambiguous (0.5) without a target', async () => {
     put('/p/a.java', [chunk('caller', 0)], relations(weakCall('toString')));
     put('/p/b.java', [chunk('toString', 0, { symbolType: 'method', parentSymbol: 'Number' })]);
     await db.resolvePendingRelations();
-    expect(db.queryRelations(query('caller', { direction: 'out' })).hits).toEqual([]);
-    expect(db.queryRelations(query('toString', { direction: 'in' })).hits).toEqual([]);
+    const hit = db.queryRelations(query('caller', { direction: 'out' })).hits[0];
+    expect(hit).toMatchObject({ targetName: 'toString', confidence: 0.5 });
+    expect(hit?.target).toBeUndefined();
   });
 
-  it('stays hidden when several symbols have the name', async () => {
-    put('/p/a.java', [chunk('caller', 0)], relations(weakCall('contains')));
+  it('is ambiguous (0.5, no target) when several symbols have the name, and hidden when none has it', async () => {
+    put('/p/a.java', [chunk('caller', 0)], relations(weakCall('contains'), weakCall('nowhere')));
     put('/p/b.java', [chunk('contains', 0)]);
     put('/p/c.java', [chunk('contains', 0)]);
     await db.resolvePendingRelations();
-    expect(db.queryRelations(query('caller', { direction: 'out' })).hits).toEqual([]);
+    const hits = db.queryRelations(query('caller', { direction: 'out' })).hits;
+    expect(hits.map((h) => `${h.targetName}:${String(h.confidence)}`)).toEqual(['contains:0.5']);
   });
 
-  it('is shown when the calling file imports the file that defines the name', async () => {
+  it('is shown with its target (0.9) when the calling file imports the file that defines the name', async () => {
     put('/p/util.ts', [chunk('close', 0, { language: 'typescript' })]);
     put('/p/other.ts', [chunk('close', 0, { language: 'typescript' })]);
     put('/p/a.ts', [chunk('caller', 0, { language: 'typescript' })], relations(rel('imports', 0, './util', { names: ['close'] }), weakCall('close')));
@@ -186,25 +188,47 @@ describe('calls to common names resolve only through the file itself or an impor
 
 describe('a common name resolves through an import only to what the import brings in', () => {
   const weakCall = (name: string): RawRelation => rel('calls', 0, name, { weak: true });
-  const setup = (importedNames: string[]): void => {
-    put('/p/types.ts', [chunk('Selection', 0, { symbolType: 'class', language: 'typescript' }), chunk('map', 1, { symbolType: 'method', parentSymbol: 'Selection', language: 'typescript' })]);
+  const setup = (importedNames: string[], member: boolean): void => {
+    put('/p/types.ts', [
+      chunk('Selection', 0, { symbolType: 'class', language: 'typescript' }),
+      chunk('map', 1, member ? { symbolType: 'method', parentSymbol: 'Selection', language: 'typescript' } : { language: 'typescript' }),
+    ]);
     put('/p/a.ts', [chunk('caller', 0, { language: 'typescript' })], relations(rel('imports', 0, './types', { names: importedNames }), weakCall('map')));
   };
+  const resolved = (): ReturnType<VectorDB['queryRelations']>['hits'][number] | undefined => db.queryRelations(query('caller', { direction: 'out', types: ['calls'] })).hits[0];
+  const fresh = (): void => {
+    db.close();
+    db = VectorDB.open(':memory:', 4);
+  };
 
-  it('does not take `opt.map(f)` for Selection.map because the file imports Types from the same module', async () => {
-    setup(['Types']);
-    await db.resolvePendingRelations();
-    expect(db.queryRelations(query('caller', { direction: 'out', types: ['calls'] })).hits).toEqual([]);
+  it('does not take `opt.map(f)` for Selection.map because the file imports Types, or Selection itself, from the same module', async () => {
+    for (const names of [['Types'], ['Selection'], ['*'], []]) {
+      fresh();
+      setup(names, true);
+      await db.resolvePendingRelations();
+      expect(resolved(), `names ${JSON.stringify(names)}`).toMatchObject({ confidence: 0.5 });
+      expect(resolved()?.target).toBeUndefined();
+    }
   });
 
-  it('takes it when the import names the symbol, its class, or everything', async () => {
-    for (const names of [['map'], ['Selection'], ['*'], []]) {
-      db.close();
-      db = VectorDB.open(':memory:', 4);
-      setup(names);
+  it('takes a method only when the import names it', async () => {
+    setup(['map'], true);
+    await db.resolvePendingRelations();
+    expect(resolved()).toMatchObject({ confidence: 0.9, target: { name: 'map', parent: 'Selection' } });
+  });
+
+  it('takes a plain function when the import names it, is a wildcard or brings the whole module', async () => {
+    for (const names of [['map'], ['*'], []]) {
+      fresh();
+      setup(names, false);
       await db.resolvePendingRelations();
-      expect(db.queryRelations(query('caller', { direction: 'out', types: ['calls'] })).hits[0], `names ${JSON.stringify(names)}`).toMatchObject({ confidence: 0.9, target: { name: 'map', parent: 'Selection' } });
+      expect(resolved(), `names ${JSON.stringify(names)}`).toMatchObject({ confidence: 0.9, target: { name: 'map', file: '/p/types.ts' } });
     }
+    fresh();
+    setup(['Types'], false);
+    await db.resolvePendingRelations();
+    expect(resolved()).toMatchObject({ confidence: 0.5 });
+    expect(resolved()?.target).toBeUndefined();
   });
 });
 

@@ -222,8 +222,9 @@ calls  src/indexer/sync.ts:138 pruneExcluded -> VectorDB.deleteDocument [same] (
   call, as in `GsonTypes.getRawType(x)` or `flask.views.View`, wins over others; a function nested in another function is
   only visible inside it), `0.50` several symbols have the name (one row, no target), `0.30` no indexed symbol has it
   (library calls, packages). Calls to very common names (`map`, `push`, `get`, `log`, `toString`, `clone`, ...) are
-  almost always library calls: they are kept when the file defines a symbol of that name or imports the file that does,
-  and otherwise stored hidden. One-letter names are not recorded. A call to the enclosing method's own name (`super.run()`, a wrapper
+  almost always library calls: they get a target (0.90) only from a symbol of the same file or one that an import names,
+  otherwise they are shown at 0.50 without a target when some indexed symbol has the name (and hidden when none has).
+  One-letter names are not recorded. A call to the enclosing method's own name (`super.run()`, a wrapper
   that delegates) is taken to be that method. Module-level statements (and the callbacks of a test file's `it`) belong to
   no symbol, so their calls are not recorded. A symbol keeps at most 50 distinct calls, 20 base types and an import list
   of 200; the output says how many calls were left out.
@@ -238,8 +239,7 @@ calls  src/indexer/sync.ts:138 pruneExcluded -> VectorDB.deleteDocument [same] (
   file (2.57 MB to 2.79 MB).
 - **Quality:** `pnpm --filter @mcp-servers/server-coderag run eval:relations` asks 35 labelled questions about the pinned
   snapshot (who calls X, what does X call, what does a file import, who imports a file, who extends X; expected answers
-  from grep). Calls: precision 1.000, recall 0.993 (23 questions, including common names such as `log` and `close`; the one miss is
-  `logger.info(...)`, a common name that resolves only to a symbol of a file the caller does not import); imports and
+  from grep). Calls: precision 1.000, recall 1.000 (23 questions, including common names such as `log` and `close`); imports and
   inheritance: 1.000 and 1.000. A hand check of 20 random call edges found all 20 calls where recorded and all 14 resolved
   targets right. The snapshot is TypeScript only and has few name clashes, so expect lower numbers on code with many
   same-named methods; the other languages are covered by extraction tests on real grammars. An answer averages 183

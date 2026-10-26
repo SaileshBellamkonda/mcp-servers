@@ -134,17 +134,19 @@ describe('weak edges (calls to common names)', () => {
     expect(db.queryRelations(query('format', { direction: 'in' }))).toMatchObject({ hits: [], total: 0 });
   });
 
-  it('stay hidden when only another file, that is not imported, has a symbol with that name (a library call)', async () => {
+  it('show as ambiguous (0.5, no target) when only a file that is not imported has a symbol with that name (a library call)', async () => {
     put('/p/a.ts', [chunk('caller', 0)], relations(weakCall('format')));
     put('/p/b.ts', [chunk('format', 0)]);
     await db.resolvePendingRelations();
-    expect(db.queryRelations(query('caller', { direction: 'out' })).hits).toEqual([]);
-    put('/p/c.ts', [chunk('format', 0)]);
+    const hit = db.queryRelations(query('caller', { direction: 'out' })).hits[0];
+    expect(hit).toMatchObject({ targetName: 'format', confidence: 0.5 });
+    expect(hit?.target).toBeUndefined();
+    db.deleteDocument('/p/b.ts');
     await db.resolvePendingRelations();
     expect(db.queryRelations(query('caller', { direction: 'out' })).hits).toEqual([]);
   });
 
-  it('appear (0.9) once the calling file imports the file that has a symbol with that name, and disappear with it', async () => {
+  it('appear (0.9) once the calling file imports the file that has a symbol with that name, and fall back when it is deleted', async () => {
     put('/p/a.ts', [chunk('caller', 0)], relations(rel('imports', 0, './b', { names: ['format'] }), weakCall('format')));
     await db.resolvePendingRelations();
     expect(db.queryRelations(query('caller', { direction: 'out', types: ['calls'] })).hits).toEqual([]);
