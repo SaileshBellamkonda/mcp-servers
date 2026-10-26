@@ -30,21 +30,23 @@ function parseStashList(output: string): StashEntry[] {
     // Format: stash@{N}: WIP on <branch>: <hash> <message>
     const match = /^stash@\{(\d+)\}:\s+WIP on ([^:]+):\s+([a-f0-9]+)\s+(.*)$/.exec(trimmed);
     if (match) {
+      const [, idx = '', branch = '', hash = '', message = ''] = match;
       entries.push({
-        index: parseInt(match[1]!, 10),
-        branch: match[2]!.trim(),
-        hash: match[3]!,
-        message: match[4]!.trim(),
+        index: parseInt(idx, 10),
+        branch: branch.trim(),
+        hash,
+        message: message.trim(),
       });
     } else {
       // Fallback: try to extract what we can
       const fallbackMatch = /^stash@\{(\d+)\}:\s+(.*)$/.exec(trimmed);
       if (fallbackMatch) {
+        const [, idx = '', message = ''] = fallbackMatch;
         entries.push({
-          index: parseInt(fallbackMatch[1]!, 10),
+          index: parseInt(idx, 10),
           branch: '',
           hash: '',
-          message: fallbackMatch[2]!.trim(),
+          message: message.trim(),
         });
       }
     }
@@ -93,13 +95,13 @@ export function registerGitStash(server: McpServer, services: Services): void {
           }
           break;
         case 'pop':
-          args = ['stash', 'pop', `stash@{${index}}`];
+          args = ['stash', 'pop', `stash@{${String(index)}}`];
           break;
         case 'list':
           args = ['stash', 'list'];
           break;
         case 'drop':
-          args = ['stash', 'drop', `stash@{${index}}`];
+          args = ['stash', 'drop', `stash@{${String(index)}}`];
           break;
       }
 
