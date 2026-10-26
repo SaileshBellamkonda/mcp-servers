@@ -157,7 +157,7 @@ From the repository root (`pnpm install` first):
 ```sh
 pnpm --filter ./packages/vscode-extension run build            # bundle: dist/extension.js
 pnpm --filter ./packages/vscode-extension run stage:native     # native modules for this machine into dist/native
-pnpm --filter ./packages/vscode-extension run package -- --target linux-x64 --out /path/to/out
+pnpm --filter ./packages/vscode-extension run package --target linux-x64 --out /path/to/out
 ```
 
 `package` builds, stages the natives for the target and runs `vsce package --no-dependencies --target <target>`.
