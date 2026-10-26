@@ -80,7 +80,7 @@ async function main() {
     });
 
     serve(
-      { fetch: app.fetch, port },
+      { fetch: app.fetch, port, hostname: '127.0.0.1' },
       () => { logger.info(`Git MCP Server running on http://127.0.0.1:${String(port)}/mcp. Allowed repositories: ${allowedRepos.join(', ')}`); }
     ) as unknown as Server;
 

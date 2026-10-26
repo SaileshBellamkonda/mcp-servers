@@ -66,6 +66,7 @@ export function activateCodeRagServer(
 
   const transports = new Map<string, WebStandardStreamableHTTPServerTransport>();
   const app = createMcpHonoApp({ host: '127.0.0.1' });
+  let startupSyncStarted = false;
 
   app.post('/mcp', async (c) => {
     const sessionId = c.req.header('mcp-session-id');
@@ -86,12 +87,15 @@ export function activateCodeRagServer(
         };
         await server.connect(transport);
 
-        // Startup sync on first session connect
-        setImmediate(() => {
-          void runStartupSync(db, indexer, syncManager, config, cwd, logger).catch((err: unknown) => {
-            logger.error(`Startup sync failed: ${String(err)}`);
+        // Startup sync once, on the first session connect (not on every session)
+        if (!startupSyncStarted) {
+          startupSyncStarted = true;
+          setImmediate(() => {
+            void runStartupSync(db, indexer, syncManager, config, cwd, logger).catch((err: unknown) => {
+              logger.error(`Startup sync failed: ${String(err)}`);
+            });
           });
-        });
+        }
       }
       return await transport.handleRequest(c.req.raw);
     } catch (err) {
@@ -115,7 +119,7 @@ export function activateCodeRagServer(
   });
 
   const httpServer = serve(
-    { fetch: app.fetch, port },
+    { fetch: app.fetch, port, hostname: '127.0.0.1' },
     () => { logger.info(`CodeRAG MCP Server running on port ${String(port)}`); }
   ) as unknown as Server;
 

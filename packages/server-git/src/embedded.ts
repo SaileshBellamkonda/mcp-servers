@@ -74,7 +74,7 @@ export function activateGitServer(
   });
 
   const httpServer = serve(
-    { fetch: app.fetch, port },
+    { fetch: app.fetch, port, hostname: '127.0.0.1' },
     () => {
       logger.info(`Git MCP Server running on port ${String(port)}. Allowed repositories: ${workspaceFolders.join(', ')}`);
     }

@@ -124,7 +124,7 @@ async function main(): Promise<void> {
     });
 
     const httpServer = serve(
-      { fetch: app.fetch, port },
+      { fetch: app.fetch, port, hostname: '127.0.0.1' },
       () => { logger.info(`CodeRAG MCP Server running on http://127.0.0.1:${String(port)}/mcp (model: ${config.embedding.model}, db: ${config.dbPath})`); }
     ) as unknown as Server;
 
