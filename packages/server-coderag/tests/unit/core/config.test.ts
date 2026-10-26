@@ -216,7 +216,12 @@ describe('loadConfigFromVsCode', () => {
         return undefined;
       },
     };
-    expect(() => loadConfigFromVsCode(mockConfig, [])).toThrow('mcpServers.coderag.dbPath is required');
+    let message = '';
+    try { loadConfigFromVsCode(mockConfig, []); } catch (error) { message = (error as Error).message; }
+    expect(message).toContain('dbPath');
+    expect(message).toMatch(/extension supplies/i);
+    expect(message).not.toContain('mcpServers.coderag.dbPath');
+    expect(message).not.toMatch(/VS Code settings/i);
   });
 
   it('uses workspace folder as default docsInclude when not configured', () => {

@@ -12,7 +12,7 @@ export function resolveDimensions(
 ): number {
   const stored = VectorDB.readStoredDimensions(config.dbPath);
   if (stored !== null && stored !== config.embeddingDim) {
-    logger.warning(`Embedding dimension changed (${String(stored)} → ${String(config.embeddingDim)}). Vectors will be reset and a full re-index will run on startup.`);
+    logger.warning(`Configured embedding dimension ${String(config.embeddingDim)} differs from the stored database dimension ${String(stored)}; keeping the stored dimension ${String(stored)}. Delete the database file to start over with ${String(config.embeddingDim)} dimensions.`);
   }
   if (stored !== null) {
     logger.info(`Using stored embedding dimensions: ${String(stored)}`);

@@ -41,6 +41,10 @@ describe('resolveDimensions', () => {
     VectorDB.open(dbPath, 8).close();
     const log = logger();
     expect(resolveDimensions(config(16), log)).toBe(8);
-    expect(log.warning).toHaveBeenCalledWith(expect.stringMatching(/dimension changed \(8.*16\)/));
+    const warning = String(log.warning.mock.calls[0]?.[0]);
+    expect(warning).toMatch(/16.*differs from the stored.*8/);
+    expect(warning).toMatch(/keeping the stored dimension 8/i);
+    expect(warning).toMatch(/delete the database/i);
+    expect(warning).not.toMatch(/reset|re-index will run/i);
   });
 });

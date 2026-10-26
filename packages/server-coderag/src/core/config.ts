@@ -137,7 +137,8 @@ export function loadConfigFromVsCode(
   const dbPath = vsConfig.get('dbPath');
   if (!dbPath || typeof dbPath !== 'string' || dbPath.trim() === '') {
     throw new ConfigError(
-      'mcpServers.coderag.dbPath is required. Configure it in VS Code settings with the path to the CodeRAG SQLite database file.'
+      'The CodeRAG database path (dbPath) is missing. The VS Code extension supplies it from its storage folder; ' +
+        'an application embedding CodeRAG must pass dbPath in the configuration it hands to activateCodeRagServer.'
     );
   }
 
