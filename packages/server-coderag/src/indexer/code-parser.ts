@@ -16,8 +16,10 @@ import { extractRelations, NO_RELATIONS, type ChunkNode, type ExtractedRelations
  * 6: Java enums, records and annotation types, C# enums, structs and records, TypeScript abstract classes and enums and Rust
  *    impl blocks of generic types are indexed (as classes, structs or interfaces, with a skeleton).
  * 7: the chunk of a Python function or class starts at its first decorator, and that of a Rust item at its first attribute.
+ * 8: JavaScript `var f = function () {}`, `a.b = function () {}`, `exports.f = ...` and `Foo.prototype.m = ...` are indexed (and `var`
+ *    arrow functions in TypeScript), with the signature cut at the function body.
  */
-export const CODE_PARSER_VERSION = 7;
+export const CODE_PARSER_VERSION = 8;
 
 let defaultRequire: NodeJS.Require | undefined;
 
@@ -277,17 +279,24 @@ function tidySignature(text: string): string {
   return `${collapsed.slice(0, MAX_SIGNATURE_CHARS - 1).trimEnd()}…`;
 }
 
-/** The `=>` token of an arrow function assigned to a variable declared by `node` (`const f = (a) => ...`). */
-function findArrowToken(node: TSNode): TSNode | null {
+/** The function a declaration or assignment stores: `const f = () => ...`, `var f = function () {}`, `a.b = function () {}`. */
+function storedFunction(node: TSNode): TSNode | null {
+  if (node.type === 'assignment_expression') return node.childForFieldName('right');
   for (let i = 0; i < node.childCount; i++) {
     const declarator = node.child(i);
-    if (declarator?.type !== 'variable_declarator') continue;
-    const value = declarator.childForFieldName('value');
-    if (value?.type !== 'arrow_function') continue;
-    for (let j = 0; j < value.childCount; j++) {
-      const token = value.child(j);
-      if (token?.type === '=>') return token;
-    }
+    if (declarator?.type === 'variable_declarator') return declarator.childForFieldName('value');
+  }
+  return null;
+}
+
+/** Where the head of such a function ends: after its `=>`, or where the body of a function expression starts. */
+function storedFunctionHeadEnd(node: TSNode): number | null {
+  const value = storedFunction(node);
+  if (value?.type === 'function_expression') return value.childForFieldName('body')?.startIndex ?? null;
+  if (value?.type !== 'arrow_function') return null;
+  for (let j = 0; j < value.childCount; j++) {
+    const token = value.child(j);
+    if (token?.type === '=>') return token.endIndex;
   }
   return null;
 }
@@ -307,8 +316,8 @@ function firstNonDecoratorStart(node: TSNode): number {
  * (struct declarations in Go, abstract methods) falls back to its first line.
  */
 function extractSignature(node: TSNode, source: string): string {
-  const arrow = findArrowToken(node);
-  if (arrow) return tidySignature(source.slice(node.startIndex, arrow.endIndex));
+  const headEnd = storedFunctionHeadEnd(node);
+  if (headEnd !== null) return tidySignature(source.slice(node.startIndex, headEnd));
   const body = node.childForFieldName('body');
   if (body && body.startIndex > node.startIndex) {
     return tidySignature(source.slice(firstNonDecoratorStart(node), body.startIndex));
@@ -558,11 +567,23 @@ function declarationName(node: TSNode): string | null {
   return name.text;
 }
 
+/** JavaScript: `Foo` for `Foo.prototype.bar = function () {}`. */
+function prototypeOwner(assignment: TSNode): string | null {
+  const target = assignment.childForFieldName('left')?.childForFieldName('object');
+  if (target?.type !== 'member_expression' || target.childForFieldName('property')?.text !== 'prototype') return null;
+  const owner = target.childForFieldName('object');
+  return owner?.type === 'identifier' ? owner.text : null;
+}
+
 /** Name of the class, struct, interface, enum, record, trait or impl type around a symbol, or '' at the top level. */
 function findParentSymbol(node: TSNode): string {
   if (node.type === 'method_declaration') {
     const receiver = goReceiverType(node);
     if (receiver !== null) return receiver;
+  }
+  if (node.type === 'assignment_expression') {
+    const owner = prototypeOwner(node);
+    if (owner !== null) return owner;
   }
   for (let current = node.parent; current; current = current.parent) {
     if (!PARENT_TYPES.has(current.type)) continue;

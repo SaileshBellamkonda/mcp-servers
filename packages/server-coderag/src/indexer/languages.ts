@@ -5,9 +5,16 @@ export interface LanguageConfig {
   grammarKey: string;
 }
 
+/** `var f = () => ...`, `var f = function () {}` and `const f = function () {}` (a `const f = () => ...` is the first). */
+const FUNCTION_VARIABLES = `
+(variable_declaration (variable_declarator name: (identifier) @name value: [(arrow_function) (function_expression)])) @function
+(lexical_declaration (variable_declarator name: (identifier) @name value: (function_expression))) @function
+`;
+
 const TYPESCRIPT_QUERY = `
 (function_declaration name: (identifier) @name) @function
 (lexical_declaration (variable_declarator name: (identifier) @name value: (arrow_function))) @function
+${FUNCTION_VARIABLES}
 (class_declaration name: (type_identifier) @name) @class
 (abstract_class_declaration name: (type_identifier) @name) @class
 (enum_declaration name: (identifier) @name) @class
@@ -38,6 +45,10 @@ export const SUPPORTED_LANGUAGES: Record<string, LanguageConfig> = {
     query: `
 (function_declaration name: (identifier) @name) @function
 (lexical_declaration (variable_declarator name: (identifier) @name value: (arrow_function))) @function
+${FUNCTION_VARIABLES}
+(assignment_expression left: (member_expression property: (property_identifier) @name) right: [(arrow_function) (function_expression !name)]) @function
+(assignment_expression left: (member_expression) right: (function_expression name: (identifier) @name)) @function
+(assignment_expression left: (identifier) @name right: [(arrow_function) (function_expression)]) @function
 (class_declaration name: (identifier) @name) @class
 (method_definition name: (property_identifier) @name) @method
 `,
