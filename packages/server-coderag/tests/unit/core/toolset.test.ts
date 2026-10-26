@@ -31,9 +31,9 @@ describe('isToolEnabled', () => {
     for (const name of admin) expect(isToolEnabled('search', name), name).toBe(false);
   });
 
-  it('standard adds the index status and the refresh tool, nothing that writes files or deletes entries', () => {
+  it('standard adds the relation search, the index status and the refresh tool, nothing that writes files or deletes entries', () => {
     const enabled = ['search', ...admin].filter((name) => isToolEnabled('standard', name));
-    expect(enabled.sort()).toEqual(['get_index_status', 'search', 'sync_documents']);
+    expect(enabled.sort()).toEqual(['get_index_status', 'search', 'search_relations', 'sync_documents']);
   });
 
   it('all exposes every tool', () => {

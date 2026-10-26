@@ -50,9 +50,9 @@ async function listedTools(toolset?: Toolset): Promise<{ names: string[]; tokens
 }
 
 describe('createCodeRagServer toolsets', () => {
-  it('registers the standard toolset by default: search, index status and the sync tool', () => {
-    expect(toolNames(build())).toEqual(['get_index_status', 'search', 'sync_documents']);
-    expect(toolNames(build('standard'))).toEqual(['get_index_status', 'search', 'sync_documents']);
+  it('registers the standard toolset by default: search, relation search, index status and the sync tool', () => {
+    expect(toolNames(build())).toEqual(['get_index_status', 'search', 'search_relations', 'sync_documents']);
+    expect(toolNames(build('standard'))).toEqual(['get_index_status', 'search', 'search_relations', 'sync_documents']);
   });
 
   it('registers only search for the search toolset', () => {
@@ -73,12 +73,12 @@ describe('createCodeRagServer toolsets', () => {
     await host?.close();
     const all = await listedTools('all');
     expect(search.names).toEqual(['search']);
-    expect(standard.names).toEqual(['get_index_status', 'search', 'sync_documents']);
+    expect(standard.names).toEqual(['get_index_status', 'search', 'search_relations', 'sync_documents']);
     expect(all.names).toHaveLength(11);
     expect(search.tokens).toBeLessThan(standard.tokens);
     expect(standard.tokens).toBeLessThan(all.tokens);
     // Budget for the default surface (measured: see the README); a regression here costs every session.
-    expect(standard.tokens).toBeLessThan(1100);
+    expect(standard.tokens).toBeLessThan(1050);
     process.stderr.write(`TOOL-DEFINITION TOKENS (chars/4): search=${String(search.tokens)} standard=${String(standard.tokens)} all=${String(all.tokens)}\n`);
   });
 });

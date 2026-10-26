@@ -216,7 +216,7 @@ describe('activateCodeRagServer toolset and watch options', () => {
 
   it('offers the standard toolset by default and every tool for toolset "all"', async () => {
     instance = await activateCodeRagServer(options());
-    expect(await listToolNames(urlOf(instance))).toEqual(['get_index_status', 'search', 'sync_documents']);
+    expect(await listToolNames(urlOf(instance))).toEqual(['get_index_status', 'search', 'search_relations', 'sync_documents']);
     await instance.close();
     instance = await activateCodeRagServer(options({ toolset: 'all' }));
     expect(await listToolNames(urlOf(instance))).toHaveLength(11);

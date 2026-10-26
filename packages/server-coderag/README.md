@@ -4,8 +4,10 @@ Search over your code and Markdown/MDX documents for MCP clients: semantic (vect
 Embeddings come from any OpenAI-compatible `/embeddings` endpoint (Ollama, OpenAI, ...); everything else runs locally in
 one SQLite file. Part of the [mcp-servers](../../README.md) monorepo.
 
-- **A small default tool surface:** by default only `search`, `get_index_status` and `sync_documents` are offered; the
-  other 8 tools (11 in total) are opt-in, see [Tools](#tools).
+- **A small default tool surface:** by default only `search`, `search_relations`, `get_index_status` and
+  `sync_documents` are offered; the other 7 tools (11 in total) are opt-in, see [Tools](#tools).
+- **Code relations:** who calls a function, what a file imports, what extends a class, from the syntax trees of
+  TypeScript, JavaScript, Python, Go, Rust, Java and C# code, see [Relations](#relations).
 - **An index that follows your files:** incremental re-scan at every start, a file watcher and a refresh of changed
   files after each search, see [Freshness](#freshness).
 - **Two modes from one code base:** standalone (stdio or Streamable HTTP) and embedded in the
@@ -115,18 +117,20 @@ set with `CODERAG_TOOLSET` (embedded: the `toolset` option, the extension settin
 | Toolset | Tools | Tool definitions (tokens*) |
 |---|---|---|
 | `search` | `search` | 536 |
-| `standard` (default) | `search`, `get_index_status`, `sync_documents` | 718 |
-| `all` | all 11 tools | 2000 |
+| `standard` (default) | `search`, `search_relations`, `get_index_status`, `sync_documents` | 983 |
+| `all` | all 11 tools | 2105 |
 
 \* The serialised `tools/list` result divided by 4 (the characters / 4 estimate used elsewhere in this README).
 
-`standard` is what an agent needs: find code, see whether the index is healthy, and force a rescan. `sync_documents`
-without a directory rescans the configured documents and source files; the index otherwise follows your files by itself.
-**Behaviour change:** earlier versions offered all tools. Set `CODERAG_TOOLSET=all` to get them back:
+`standard` is what an agent needs: find code, follow its calls, imports and inheritance, see whether the index is healthy,
+and force a rescan. `sync_documents` without a directory rescans the configured documents and source files; the index
+otherwise follows your files by itself. `search_relations` costs about 265 tokens of tool definition per session
+(`standard` was 718 tokens before it was added) and replaces several searches and file reads when you ask who calls a
+function. **Behaviour change:** earlier versions offered all tools. Set `CODERAG_TOOLSET=all` to get them back:
 
-- Search: `search` (modes `semantic` default, `keyword`, `hybrid`), `search_relations` (`all` only: the indexer does not
-  record symbol relations yet, so it returns nothing; its paths are relative like `search`). `search` returns compact
-  text, see [Search output](#search-output)
+- Search: `search` (modes `semantic` default, `keyword`, `hybrid`), `search_relations` (`standard`: calls, imports and
+  inheritance of a symbol or file, see [Relations](#relations)). `search` returns compact text, see
+  [Search output](#search-output)
 - Indexing: `index_markdown`, `index_code`, `reindex_document`, `sync_documents` (`standard`), `delete_document` (removes
   the index entry only, never the file)
 - Inspection: `list_documents`, `get_index_status` (`standard`)
@@ -179,6 +183,63 @@ docs/DESIGN.md:12-30 Design > Search modes (0.74)
 - After an upgrade that changes what is stored per symbol (signatures, skeletons), the next start re-parses and
   re-embeds all indexed code files once (the version is stored in the database).
 
+## Relations
+
+`search_relations` answers "who calls this function", "what does this function call", "what does this file import",
+"who imports this file" and "what extends this class" from relations the indexer records while it parses code with
+tree-sitter. The same syntax tree that yields the symbols yields the relations, so there is no second parse.
+
+```
+search_relations({ symbol: 'deleteDocument', direction: 'in' })
+
+calls  src/indexer/indexer.ts:128 Indexer.indexFile -> VectorDB.deleteDocument [src/vectordb/db.ts:227] (0.90)
+calls  src/indexer/sync.ts:45 syncDocuments -> VectorDB.deleteDocument [same] (0.90)
+calls  src/indexer/sync.ts:138 pruneExcluded -> VectorDB.deleteDocument [same] (0.90)
+...
+```
+
+- **Parameters:** `symbol` (a name, `Class.method`, or a file path such as `src/a.ts`), `relation_type` (`calls`,
+  `imports`, `inherits`; default all, for a file path `imports`), `direction` (`in`: callers, importers, subclasses;
+  `out`: callees, imports, base types; default `both`), `max_tokens` (default 1000), `offset`, and `response_format:
+  "detailed"` for JSON. A name is matched case-sensitively first and case-insensitively only when that finds nothing.
+  Paths are relative to the first allowed root, like `search`; one line per relation, `kind  from-path:line Source ->
+  target [target-path:line] (confidence)`. A target that was not resolved shows the name as written; a resolved target
+  that an earlier line of the answer already named is shortened to `[same]`. With both directions the answer has an
+  `outgoing:` and an `incoming:` part. If more lines than `max_tokens` allows match, the last line says how many were
+  left out and which `offset` continues.
+- **What is recorded:** `calls` (call expressions and constructor calls, attributed to the function, method or class
+  body that contains them; a call is recorded once per symbol), `imports` (one record per import statement with the
+  module as written and the imported names, belonging to the first symbol of the file; `require()` and dynamic
+  `import()` count), `inherits` (`extends`, `implements`, interface `extends`, Python base classes, Rust
+  `impl Trait for Type` and trait bounds, embedded Go structs and interfaces, C# base lists).
+- **Languages:** TypeScript, TSX, JavaScript, Python, Go, Rust, Java and C#. Other languages are indexed as before and
+  have no relations.
+- **Approximate by design.** Targets are found by name, not by type: `a.run()` is a call to `run`. The confidence says
+  how the target was found: `1.00` an import that resolved to an indexed file (relative paths, Python relative and
+  dotted modules, Go module paths, Rust `crate::`/`self::` paths, Java and C# names that mirror the folders), `0.90` the
+  name matches exactly one indexed symbol (a definition in the same file wins, then one in an imported file), `0.50`
+  several symbols have the name (one row, no target), `0.30` no indexed symbol has it (library calls, packages). Calls
+  to very common names (`map`, `push`, `get`, `log`, `println`, `unwrap`, ...) and one-letter names are not recorded, so
+  `this.log(...)` of your own class is missed too. A call to the enclosing method's own name (`super.run()`, a wrapper
+  that delegates) is taken to be that method. Module-level statements (and the callbacks of a test file's `it`) belong to
+  no symbol, so their calls are not recorded. A symbol keeps at most 50 distinct calls, 20 base types and an import list
+  of 200; the output says how many calls were left out.
+- **Freshness:** a file's relations are rebuilt with its chunks whenever it is indexed, and the edges of other files
+  that pointed at its symbols (or imported it) are resolved again for the changed names only, after a scan, a watcher or
+  background refresh, and before a relation query.
+- **First start after an upgrade:** an index written before relations existed has none. The next start parses the
+  indexed code files once more and fills the relations only: chunks, vectors and the keyword index are not touched and
+  nothing is sent to the embedder (`db_meta.relations_version`). A file that changed since it was indexed is left to the
+  normal scan. On the pinned snapshot of this repository (58 files, 381 symbols) this takes 0.7 s and the 836 relations
+  add 6 to 8 % to the database file (2.57 MB to 2.72-2.78 MB).
+- **Quality:** `pnpm --filter @mcp-servers/server-coderag run eval:relations` asks 32 labelled questions about the pinned
+  snapshot (who calls X, what does X call, what does a file import, who imports a file, who extends X; expected answers
+  from grep). Calls: precision 1.000, recall 0.991 (the miss is the `log` method, a stop-listed name); imports and
+  inheritance: 1.000 and 1.000. A hand check of 20 random call edges found all 20 calls where recorded and all 14 resolved
+  targets right. The snapshot is TypeScript only and has few name clashes, so expect lower numbers on code with many
+  same-named methods; the other languages are covered by extraction tests on real grammars. An answer averages 183
+  estimated tokens (largest 527).
+
 ## Security
 
 - **Path confinement:** `index_markdown`, `index_code`, `reindex_document`, `delete_document`, `sync_documents`,
@@ -224,6 +285,7 @@ pnpm --filter @mcp-servers/server-coderag run dev            # standalone entry 
 pnpm lint                                                    # ESLint for the whole repository
 pnpm --filter @mcp-servers/server-coderag run bench          # search response size benchmark (see below)
 pnpm --filter @mcp-servers/server-coderag run eval           # retrieval eval: recall@5, recall@10, MRR
+pnpm --filter @mcp-servers/server-coderag run eval:relations # relation eval: precision and recall of search_relations
 ```
 
 `bench` needs no network: it indexes a pinned git snapshot of this repository (`BENCH_REF`, default `bdb73d5`) with a

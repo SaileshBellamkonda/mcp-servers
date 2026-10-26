@@ -78,11 +78,11 @@
           "enum": ["search", "standard", "all"],
           "enumDescriptions": [
             "Only the search tool.",
-            "search, get_index_status and sync_documents (default).",
-            "Every tool: also indexing, deleting, frontmatter, listing and relation tools. Their definitions add about 1.3k tokens to every session."
+            "search, search_relations, get_index_status and sync_documents (default).",
+            "Every tool: also indexing, deleting, frontmatter and listing tools. Their definitions add about 1.1k tokens to every session."
           ],
           "default": "standard",
-          "description": "Which CodeRAG tools MCP clients see. Tool definitions are sent to the model in every session, so the default offers only search, get_index_status and sync_documents. Changing it restarts a running server."
+          "description": "Which CodeRAG tools MCP clients see. Tool definitions are sent to the model in every session, so the default offers only search, search_relations, get_index_status and sync_documents. Changing it restarts a running server."
         },
         "mcpServers.coderag.embeddingUrl": {
           "type": "string",

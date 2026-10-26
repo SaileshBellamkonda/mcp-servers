@@ -6,18 +6,21 @@ import type { Env } from './config.js';
  * Which tools a server offers. Every tool definition is sent to the model in every session, so the default offers
  * only what an agent needs to find code and to see or refresh the index.
  * - `search`: the search tool only.
- * - `standard` (default): `search`, `get_index_status` and `sync_documents`. The index follows the files by
- *   itself (start-up scan, file watcher, refresh of changed files after a search), so what is left for an agent is
- *   to check how healthy the index is and to force a rescan of documents and code; `sync_documents` is that rescan.
- *   The tools that index single paths, delete entries or write frontmatter are administration, not search.
- * - `all`: every tool, including `search_relations` (which has no data to search yet).
+ * - `standard` (default): `search`, `search_relations`, `get_index_status` and `sync_documents`. `search_relations`
+ *   answers "who calls this", "what does this file import" and "what extends this" in one call, which otherwise takes
+ *   several searches and file reads; the indexer records the relations of TypeScript, JavaScript, Python, Go, Rust, Java
+ *   and C# code. The index follows the files by itself (start-up scan, file watcher, refresh of changed files after a
+ *   search), so what is left for an agent is to check how healthy the index is and to force a rescan of documents and
+ *   code; `sync_documents` is that rescan. The tools that index single paths, delete entries or write frontmatter are
+ *   administration, not search.
+ * - `all`: every tool.
  */
 export const TOOLSETS = ['search', 'standard', 'all'] as const;
 export type Toolset = (typeof TOOLSETS)[number];
 
 export const DEFAULT_TOOLSET: Toolset = 'standard';
 
-const STANDARD_TOOLS: ReadonlySet<string> = new Set(['search', 'get_index_status', 'sync_documents']);
+const STANDARD_TOOLS: ReadonlySet<string> = new Set(['search', 'search_relations', 'get_index_status', 'sync_documents']);
 
 /** Reads a toolset name; blank or unset means the default. `setting` names the source in the error message. */
 export function parseToolset(raw: unknown, setting = 'CODERAG_TOOLSET'): Toolset {
