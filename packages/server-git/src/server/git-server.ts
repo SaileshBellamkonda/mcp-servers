@@ -3,8 +3,7 @@ import { RepositoryManager } from '../core/repository-manager.js';
 import { PathValidator } from '../core/path-validator.js';
 import { GitExecutor } from '../core/git-executor.js';
 import { OutputParser } from '../core/output-parser.js';
-import type { Services } from '../core/types.js';
-import type { McpLogger } from '@mcp-servers/common';
+import type { Services, ServerLogger } from '../core/types.js';
 
 // Import all tool registration functions
 import { registerGitWorkspaces } from '../tools/git-workspaces.js';
@@ -42,7 +41,7 @@ import { registerGitRemoteList, registerGitRemoteAdd, registerGitRemoteRemove } 
 export function createGitServer(
   server: McpServer,
   repoManager: RepositoryManager,
-  logger?: McpLogger,
+  logger?: ServerLogger,
 ): void {
   // Create core services
   const pathValidator = new PathValidator(repoManager);

@@ -1,0 +1,121 @@
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { build, type Metafile } from 'esbuild';
+import { readFileSync, rmSync, existsSync } from 'node:fs';
+import { builtinModules } from 'node:module';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { initializeSession, postJsonRpc } from '@mcp-servers/http-host/testing';
+import { bundleOptions } from '../../../../../scripts/bundle-server.mjs';
+import { TestRepository } from '../../fixtures/test-repo.js';
+import { TOKEN, freePort, spawnStandalone, type StandaloneProcess } from '../../fixtures/standalone-process.js';
+
+const packageRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), '../../..');
+const outdir = path.join(packageRoot, '.tmp-bundle-test');
+const packageJson = JSON.parse(readFileSync(path.join(packageRoot, 'package.json'), 'utf8')) as {
+  dependencies: Record<string, string>;
+  peerDependencies?: Record<string, string>;
+};
+
+/** Package name of a bare specifier, or undefined for relative paths and Node built-ins. */
+function externalPackage(specifier: string): string | undefined {
+  if (specifier.startsWith('.') || specifier.startsWith('/')) return undefined;
+  if (specifier.startsWith('node:') || builtinModules.includes(specifier)) return undefined;
+  const parts = specifier.split('/');
+  return specifier.startsWith('@') ? parts.slice(0, 2).join('/') : parts[0];
+}
+
+describe('server bundle (shared packages inlined at build time)', () => {
+  let metafile: Metafile;
+
+  beforeAll(async () => {
+    rmSync(outdir, { recursive: true, force: true });
+    const result = await build({ ...bundleOptions(packageRoot, { outdir }), write: true });
+    metafile = result.metafile;
+  }, 60000);
+
+  afterAll(() => {
+    rmSync(outdir, { recursive: true, force: true });
+  });
+
+  it('emits standalone.js (with its hashbang) and embedded.js plus source maps', () => {
+    for (const name of ['standalone.js', 'embedded.js', 'standalone.js.map', 'embedded.js.map']) {
+      expect(existsSync(path.join(outdir, name)), name).toBe(true);
+    }
+    expect(readFileSync(path.join(outdir, 'standalone.js'), 'utf8').startsWith('#!/usr/bin/env node\n')).toBe(true);
+  });
+
+  it('leaves no @mcp-servers/* import, require or dynamic import in the output', () => {
+    for (const name of ['standalone.js', 'embedded.js']) {
+      const text = readFileSync(path.join(outdir, name), 'utf8');
+      expect(text, name).not.toMatch(/\b(?:from|import|require)\s*\(?\s*["']@mcp-servers\//);
+    }
+    for (const output of Object.values(metafile.outputs)) {
+      for (const imported of output.imports) {
+        expect(imported.path.startsWith('@mcp-servers/'), imported.path).toBe(false);
+      }
+    }
+  });
+
+  it('only imports Node built-ins and packages declared in dependencies', () => {
+    const declared = new Set([
+      ...Object.keys(packageJson.dependencies),
+      ...Object.keys(packageJson.peerDependencies ?? {}),
+    ]);
+    const used = new Set<string>();
+    for (const output of Object.values(metafile.outputs)) {
+      for (const imported of output.imports) {
+        const pkg = externalPackage(imported.path);
+        if (pkg !== undefined) used.add(pkg);
+      }
+    }
+    expect([...used].filter((p) => !declared.has(p))).toEqual([]);
+    // The inlined shared code's third-party imports are real dependencies of this package.
+    for (const needed of ['hono', '@hono/node-server', '@modelcontextprotocol/server', '@modelcontextprotocol/hono']) {
+      expect(declared.has(needed), needed).toBe(true);
+    }
+  });
+
+  it('inlines the http-host implementation', () => {
+    const text = readFileSync(path.join(outdir, 'standalone.js'), 'utf8');
+    expect(text).toContain('function bearerAuth');
+    expect(text).toContain('function startMcpHttpServer');
+  });
+
+  describe('smoke run of the bundled standalone.js', () => {
+    let repo: TestRepository;
+    let proc: StandaloneProcess | undefined;
+
+    beforeAll(async () => {
+      repo = await TestRepository.create();
+    });
+
+    afterAll(async () => {
+      proc?.kill();
+      await proc?.exited;
+      await repo.cleanup();
+    });
+
+    it('rejects anonymous requests, serves an authenticated initialize and exits 0 on SIGTERM', async () => {
+      const port = await freePort();
+      proc = spawnStandalone(
+        { MCP_TRANSPORT: 'http', MCP_HTTP_PORT: String(port), MCP_AUTH_TOKEN: TOKEN, GIT_ALLOWED_REPOS: repo.path },
+        path.join(outdir, 'standalone.js'),
+      );
+      await proc.waitForStderr(/listening on http:\/\/127\.0\.0\.1:\d+\/mcp/);
+      const url = `http://127.0.0.1:${String(port)}/mcp`;
+
+      expect((await initializeSession(url)).status).toBe(401);
+      const session = await initializeSession(url, { token: TOKEN });
+      expect(session.status).toBe(200);
+      const reply = await postJsonRpc(
+        url,
+        { jsonrpc: '2.0', id: 2, method: 'tools/list', params: {} },
+        { headers: { Authorization: `Bearer ${TOKEN}`, 'mcp-session-id': session.sessionId ?? '' } },
+      );
+      expect(JSON.stringify(reply.message)).toContain('git_status');
+
+      proc.child.kill('SIGTERM');
+      expect((await proc.exited).code).toBe(0);
+    }, 60000);
+  });
+});

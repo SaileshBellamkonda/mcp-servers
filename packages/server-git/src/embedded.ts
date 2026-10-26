@@ -1,8 +1,18 @@
 import { McpServer } from '@modelcontextprotocol/server';
 import { McpLogger } from '@mcp-servers/common';
-import { requireToken, startMcpHttpServer, type HttpHostLogger } from '@mcp-servers/http-host';
+import { requireToken, startMcpHttpServer } from '@mcp-servers/http-host';
 import { createGitServer } from './server/git-server.js';
 import { RepositoryManager } from './core/repository-manager.js';
+
+/**
+ * Receives host-level diagnostics. Declared here, not imported, because the shared packages are bundled
+ * at build time and the published declarations must not reference them.
+ */
+export interface GitServerLogger {
+  info(data: unknown): void;
+  warning(data: unknown): void;
+  error(data: unknown): void;
+}
 
 export interface ActivateGitServerOptions {
   /** Repositories the server may operate on. Must not be empty. */
@@ -12,7 +22,7 @@ export interface ActivateGitServerOptions {
   /** Bearer token clients must send (>= 32 characters). Required: embedded servers always authenticate. */
   authToken: string;
   /** Receives host-level diagnostics (defaults to stderr). */
-  logger?: HttpHostLogger;
+  logger?: GitServerLogger;
 }
 
 export interface GitServerInstance {

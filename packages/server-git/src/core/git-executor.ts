@@ -1,8 +1,7 @@
 import { execFile } from 'node:child_process';
 import which from 'which';
 import { GitMcpError, ErrorCode } from './types.js';
-import type { GitCommandResult, ExecuteOptions } from './types.js';
-import type { McpLogger } from '@mcp-servers/common';
+import type { GitCommandResult, ExecuteOptions, ServerLogger } from './types.js';
 
 /**
  * Executes Git commands safely with timeout protection
@@ -10,9 +9,9 @@ import type { McpLogger } from '@mcp-servers/common';
 export class GitExecutor {
   private static readonly DEFAULT_TIMEOUT = 30000; // 30 seconds
   private static gitPath: string | null = null;
-  private readonly logger: McpLogger | undefined;
+  private readonly logger: ServerLogger | undefined;
 
-  constructor(logger?: McpLogger) {
+  constructor(logger?: ServerLogger) {
     this.logger = logger;
   }
 

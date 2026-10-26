@@ -2,7 +2,6 @@ import type { RepositoryManager } from './repository-manager.js';
 import type { PathValidator } from './path-validator.js';
 import type { GitExecutor } from './git-executor.js';
 import type { OutputParser } from './output-parser.js';
-import type { McpLogger } from '@mcp-servers/common';
 
 /**
  * Result of a Git command execution
@@ -71,6 +70,17 @@ export interface Repository {
 }
 
 /**
+ * Logging sink used by the executor and tools. Structural (satisfied by `McpLogger`) so the published
+ * declarations do not reference the private shared packages that are bundled at build time.
+ */
+export interface ServerLogger {
+  debug(data: unknown): void;
+  info(data: unknown): void;
+  warning(data: unknown): void;
+  error(data: unknown): void;
+}
+
+/**
  * Core services available to tools
  */
 export interface Services {
@@ -78,7 +88,7 @@ export interface Services {
   pathValidator: PathValidator;
   gitExecutor: GitExecutor;
   outputParser: OutputParser;
-  logger?: McpLogger;
+  logger?: ServerLogger;
 }
 
 /**

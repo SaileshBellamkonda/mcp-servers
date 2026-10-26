@@ -5,7 +5,7 @@
   "type": "module",
   "main": "./dist/standalone.js",
   "types": "./dist/standalone.d.ts",
-  "files": ["dist", "README.md"],
+  "files": ["dist", "!dist/.tsbuildinfo", "README.md"],
   "exports": {
     ".": {
       "import": {
@@ -24,7 +24,7 @@
     "coderag-mcp-server": "./dist/standalone.js"
   },
   "scripts": {
-    "build": "tsc -b tsconfig.build.json",
+    "build": "pnpm run clean && node ../../scripts/bundle-server.mjs . && tsc -b tsconfig.build.json",
     "dev": "tsx --conditions=@mcp-servers/source src/standalone.ts",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -36,8 +36,6 @@
   "author": "Development Team",
   "license": "MIT",
   "dependencies": {
-    "@mcp-servers/common": "workspace:*",
-    "@mcp-servers/http-host": "workspace:*",
     "@cfworker/json-schema": "catalog:",
     "@modelcontextprotocol/server": "catalog:",
     "@modelcontextprotocol/hono": "catalog:",
@@ -63,6 +61,9 @@
     "zod": "catalog:"
   },
   "devDependencies": {
+    "@mcp-servers/common": "workspace:*",
+    "@mcp-servers/http-host": "workspace:*",
+    "esbuild": "catalog:",
     "@tsconfig/node22": "catalog:",
     "@types/better-sqlite3": "catalog:",
     "@types/micromatch": "catalog:",

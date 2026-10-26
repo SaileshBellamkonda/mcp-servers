@@ -49,11 +49,17 @@ export interface StandaloneProcess {
   kill(): void;
 }
 
-/** Spawns `src/standalone.ts` from source with the repo's source condition and the given environment. */
-export function spawnStandalone(env: Record<string, string>): StandaloneProcess {
+/**
+ * Spawns `src/standalone.ts` from source with the repo's source condition and the given environment,
+ * or, when `builtScript` is given, that bundled JavaScript file with plain `node` (no source condition).
+ */
+export function spawnStandalone(env: Record<string, string>, builtScript?: string): StandaloneProcess {
+  const args = builtScript === undefined
+    ? ['--conditions=@mcp-servers/source', '--import', 'tsx', 'src/standalone.ts']
+    : [builtScript];
   const child = spawn(
     process.execPath,
-    ['--conditions=@mcp-servers/source', '--import', 'tsx', 'src/standalone.ts'],
+    args,
     { cwd: packageRoot, env: { PATH: process.env['PATH'] ?? '', HOME: process.env['HOME'] ?? '', ...env }, stdio: ['ignore', 'ignore', 'pipe'] },
   );
   let stderr = '';

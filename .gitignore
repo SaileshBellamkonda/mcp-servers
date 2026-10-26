@@ -149,3 +149,6 @@ dist/
 .mastra/
 archive/
 .worktrees/
+
+# Scratch output of tests (bundle test)
+.tmp-*
