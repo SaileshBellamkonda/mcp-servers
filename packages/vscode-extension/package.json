@@ -68,6 +68,22 @@
           "minimum": 0,
           "maximum": 65535
         },
+        "mcpServers.coderag.watch": {
+          "type": "boolean",
+          "default": true,
+          "description": "Watch the workspace folders and re-index files as they change. Turn it off if watching a very large folder strains the system (OS file watcher limits); the index is still updated when CodeRAG starts, after a search that meets changed files and by the sync_documents tool. Changing it restarts a running server."
+        },
+        "mcpServers.coderag.toolset": {
+          "type": "string",
+          "enum": ["search", "standard", "all"],
+          "enumDescriptions": [
+            "Only the search tool.",
+            "search, get_index_status and sync_documents (default).",
+            "Every tool: also indexing, deleting, frontmatter, listing and relation tools. Their definitions add about 1.3k tokens to every session."
+          ],
+          "default": "standard",
+          "description": "Which CodeRAG tools MCP clients see. Tool definitions are sent to the model in every session, so the default offers only search, get_index_status and sync_documents. Changing it restarts a running server."
+        },
         "mcpServers.coderag.embeddingUrl": {
           "type": "string",
           "default": "",

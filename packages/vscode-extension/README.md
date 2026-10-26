@@ -55,6 +55,8 @@ From the palette with several candidates you pick the server; with exactly one i
 | `mcpServers.git.port` | `3000` | Port of the Git server (`0` picks a free port) |
 | `mcpServers.coderag.autoStart` | `false` | Start CodeRAG when a workspace folder is open (indexing costs CPU, disk and embedding requests) |
 | `mcpServers.coderag.port` | `3100` | Port of the CodeRAG server (`0` picks a free port) |
+| `mcpServers.coderag.watch` | `true` | Re-index files as they change in the workspace folders; turn it off if watching a very large folder strains the system |
+| `mcpServers.coderag.toolset` | `standard` | Tools CodeRAG offers: `search`, `standard` (search, get_index_status, sync_documents) or `all` (11 tools; their definitions cost about 1.3k more tokens per session) |
 | `mcpServers.coderag.embeddingUrl` | *(required)* | Base URL of the OpenAI-compatible embeddings endpoint, e.g. `http://localhost:11434/v1`. **Machine scoped** |
 | `mcpServers.coderag.embeddingModel` | *(required)* | Embedding model name, e.g. `nomic-embed-text` |
 | `mcpServers.coderag.embeddingDim` | `768` | Vector dimensions; must match the model. Used only when the workspace database is created: an existing database keeps its stored dimensions (a different value only logs a warning) |

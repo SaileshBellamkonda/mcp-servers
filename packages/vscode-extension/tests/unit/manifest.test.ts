@@ -24,7 +24,7 @@ interface Manifest {
     commands: { command: string; title: string; category?: string; icon?: string }[];
     menus: Record<string, MenuEntry[]>;
     views: Record<string, { id: string }[]>;
-    configuration: { properties: Record<string, { default?: unknown; description?: string; type?: string; scope?: string; minimum?: number; maximum?: number }> };
+    configuration: { properties: Record<string, { default?: unknown; description?: string; type?: string; scope?: string; enum?: string[]; minimum?: number; maximum?: number }> };
     mcpServerDefinitionProviders?: { id: string; label: string }[];
   };
   engines: { vscode: string };
@@ -150,10 +150,19 @@ describe('package.json contributes', () => {
       );
     });
 
-    it('uses the key names loadConfigFromVsCode reads', () => {
+    it('uses the key names loadConfigFromVsCode reads, plus the server options watch and toolset', () => {
       expect([...(coderag.restartSettings ?? [])].sort()).toEqual(
-        ['allowedRoots', 'chunkSize', 'codeExclude', 'codeInclude', 'docsExclude', 'docsInclude', 'embeddingDim', 'embeddingModel', 'embeddingUrl', 'topK', 'useGitignore'].sort()
+        ['allowedRoots', 'chunkSize', 'codeExclude', 'codeInclude', 'docsExclude', 'docsInclude', 'embeddingDim', 'embeddingModel', 'embeddingUrl', 'toolset', 'topK', 'useGitignore', 'watch'].sort()
       );
+    });
+
+    it('contributes watch (default on) and toolset (enum, default standard) in the default window scope', () => {
+      expect(props['mcpServers.coderag.watch']).toMatchObject({ type: 'boolean', default: true });
+      expect(props['mcpServers.coderag.toolset']).toMatchObject({ type: 'string', enum: ['search', 'standard', 'all'], default: 'standard' });
+      expect(props['mcpServers.coderag.watch']?.scope).toBeUndefined();
+      expect(props['mcpServers.coderag.toolset']?.scope).toBeUndefined();
+      expect(props['mcpServers.coderag.toolset']?.description).toMatch(/get_index_status/);
+      expect(props['mcpServers.coderag.watch']?.description).toMatch(/restart/i);
     });
 
     it('scopes every setting that widens file access or redirects data to the machine (a repository settings file cannot set them)', () => {

@@ -65,7 +65,7 @@ describe('coderag descriptor', () => {
   it('restarts for every setting that changes the index or where data goes, but not for autoStart', () => {
     const { descriptor } = setup();
     expect(descriptor.restartSettings).toEqual(
-      expect.arrayContaining(['embeddingUrl', 'embeddingModel', 'embeddingDim', 'chunkSize', 'topK', 'docsInclude', 'docsExclude', 'codeInclude', 'codeExclude', 'useGitignore', 'allowedRoots'])
+      expect.arrayContaining(['embeddingUrl', 'embeddingModel', 'embeddingDim', 'chunkSize', 'topK', 'docsInclude', 'docsExclude', 'codeInclude', 'codeExclude', 'useGitignore', 'allowedRoots', 'watch', 'toolset'])
     );
     expect(descriptor.restartSettings).not.toContain('autoStart');
     expect(descriptor.restartSettings).not.toContain('port');
@@ -197,6 +197,30 @@ describe('coderag descriptor', () => {
       } finally {
         process.umask(previous);
       }
+    });
+
+    it('passes watch (default on) and toolset (default standard) as server options', async () => {
+      const t = setup({ storage });
+      await t.descriptor.activate(t.activation());
+      const options = t.activateCodeRagServer.mock.calls[0]?.[0] as Record<string, unknown>;
+      expect(options['watch']).toBe(true);
+      expect(options['toolset']).toBe('standard');
+    });
+
+    it('passes the configured watch and toolset settings', async () => {
+      const t = setup({ storage, settings: { 'mcpServers.coderag.watch': false, 'mcpServers.coderag.toolset': 'all' } });
+      await t.descriptor.activate(t.activation());
+      const options = t.activateCodeRagServer.mock.calls[0]?.[0] as Record<string, unknown>;
+      expect(options['watch']).toBe(false);
+      expect(options['toolset']).toBe('all');
+    });
+
+    it('does not expose watch or toolset through the vsCodeConfig the server reads', async () => {
+      const t = setup({ storage, settings: { 'mcpServers.coderag.watch': false, 'mcpServers.coderag.toolset': 'all' } });
+      await t.descriptor.activate(t.activation());
+      const { get } = (t.activateCodeRagServer.mock.calls[0]?.[0] as { vsCodeConfig: { get(key: string): unknown } }).vsCodeConfig;
+      expect(get('watch')).toBeUndefined();
+      expect(get('toolset')).toBeUndefined();
     });
 
     it('passes the API key only through the apiKey option', async () => {

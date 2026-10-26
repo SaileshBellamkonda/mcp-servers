@@ -19,8 +19,8 @@ export interface CodeRagEnvironment {
 const SETTINGS_SECTION = 'mcpServers.coderag';
 const DB_FILE = 'coderag.db';
 
-/** Settings (besides `port`) that change what is indexed, how, or where embeddings go: a running server restarts. */
-const RESTART_SETTINGS = [
+/** Settings the server reads through its `vsCodeConfig`. */
+const CONFIG_SETTINGS = [
   'embeddingUrl',
   'embeddingModel',
   'embeddingDim',
@@ -33,6 +33,12 @@ const RESTART_SETTINGS = [
   'useGitignore',
   'allowedRoots',
 ] as const;
+
+/** Settings handed to the server as options (`watch`, `toolset`) rather than through `vsCodeConfig`. */
+const OPTION_SETTINGS = ['watch', 'toolset'] as const;
+
+/** Settings (besides `port`) that change what is indexed, how, or where embeddings go: a running server restarts. */
+const RESTART_SETTINGS = [...CONFIG_SETTINGS, ...OPTION_SETTINGS] as const;
 
 type ProbeResult = { available: true } | { available: false; reason: string };
 
@@ -50,7 +56,7 @@ function configurationFor(config: ConfigReader, dbPath: string): { get(key: stri
     get: (key) => {
       if (key === 'dbPath') return dbPath;
       if (key === 'embeddingApiKey') return undefined;
-      if (!(RESTART_SETTINGS as readonly string[]).includes(key)) return undefined;
+      if (!(CONFIG_SETTINGS as readonly string[]).includes(key)) return undefined;
       const value = config.get<unknown>(SETTINGS_SECTION, key, undefined);
       if (value === '' || (Array.isArray(value) && value.length === 0)) return undefined;
       return value;
@@ -120,6 +126,8 @@ export function createCodeRagDescriptor(environment: CodeRagEnvironment): Server
         port: context.port,
         authToken: context.authToken,
         nativeModulesDir: environment.nativeModulesDir,
+        watch: context.config.get<boolean>(SETTINGS_SECTION, 'watch', true),
+        toolset: context.config.get<string>(SETTINGS_SECTION, 'toolset', 'standard'),
         ...(apiKey !== undefined && apiKey !== '' && { apiKey }),
         logger: withDebug(context.logger),
       });

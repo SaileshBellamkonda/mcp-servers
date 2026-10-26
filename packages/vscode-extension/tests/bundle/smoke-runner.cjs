@@ -197,6 +197,7 @@ async function runCodeRag(entry, nativeDir, work) {
         port: 0,
         authToken: TOKEN,
         nativeModulesDir: nativeDir,
+        toolset: 'all', // the steps below call index_code, which the default toolset does not offer
         logger: silentLogger(),
       });
       return { port: instance.port };
