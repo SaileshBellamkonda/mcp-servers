@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { Hono } from 'hono';
-import { HttpSecurityError, assertSafeBinding, bearerAuth, requireToken, resolveHttpSecurity, tokensEqual } from '../../src/index.js';
+import { HttpSecurityError, MIN_TOKEN_LENGTH, assertSafeBinding, bearerAuth, requireToken, resolveHttpSecurity, tokensEqual } from '../../src/index.js';
 
 const TOKEN = `tok-${'x'.repeat(40)}`;
 
@@ -29,10 +29,16 @@ describe('resolveHttpSecurity', () => {
     expect(resolveHttpSecurity({ MCP_HTTP_HOST: 'localhost' })).toEqual({ host: 'localhost', token: undefined });
   });
 
-  it('treats an empty or whitespace-only token as unset', () => {
+  it('treats an empty token as unset', () => {
     expect(resolveHttpSecurity({ MCP_AUTH_TOKEN: '' }).token).toBeUndefined();
-    expect(resolveHttpSecurity({ MCP_AUTH_TOKEN: '   ' }).token).toBeUndefined();
     expect(resolveHttpSecurity({ MCP_HTTP_HOST: '', MCP_AUTH_TOKEN: '' }).host).toBe('127.0.0.1');
+  });
+
+  it('rejects a whitespace-only token instead of silently running unauthenticated', () => {
+    for (const blank of [' ', '   ', ' '.repeat(40), '\t\n ']) {
+      expect(() => resolveHttpSecurity({ MCP_AUTH_TOKEN: blank }), JSON.stringify(blank)).toThrow(HttpSecurityError);
+    }
+    expect(() => resolveHttpSecurity({ MCP_AUTH_TOKEN: ' '.repeat(40) })).toThrow(/whitespace/);
   });
 
   it('trims surrounding whitespace around a valid token', () => {
@@ -82,6 +88,42 @@ describe('assertSafeBinding', () => {
     }
     expect(message).toMatch(/at least 32/);
     expect(message).not.toContain('tooshort');
+  });
+});
+
+describe('token shape', () => {
+  const blank = ' '.repeat(MIN_TOKEN_LENGTH);
+  const withNewline = `${'a'.repeat(20)}\n${'b'.repeat(20)}`;
+  const withNul = `${'a'.repeat(20)}\0${'b'.repeat(20)}`;
+  const withTab = `${'a'.repeat(20)}\t${'b'.repeat(20)}`;
+  const withDel = `${'a'.repeat(20)}\x7f${'b'.repeat(20)}`;
+
+  it('rejects a token of 32 spaces everywhere, without echoing it', () => {
+    expect(() => { assertSafeBinding({ host: '127.0.0.1', token: blank }); }).toThrow(/whitespace/);
+    expect(() => requireToken(blank)).toThrow(/whitespace/);
+    expect(() => resolveHttpSecurity({ MCP_AUTH_TOKEN: blank })).toThrow(HttpSecurityError);
+  });
+
+  it.each([['newline', withNewline], ['NUL', withNul], ['tab', withTab], ['DEL', withDel]])(
+    'rejects a token containing a %s control character, without echoing it',
+    (_label, token) => {
+      for (const attempt of [
+        () => { assertSafeBinding({ host: '127.0.0.1', token }); },
+        () => requireToken(token),
+        () => resolveHttpSecurity({ MCP_AUTH_TOKEN: token }),
+      ]) {
+        let message = '';
+        try { attempt(); } catch (err) { expect(err).toBeInstanceOf(HttpSecurityError); message = (err as Error).message; }
+        expect(message).toMatch(/control character/);
+        expect(message).not.toContain('aaaaaaaa');
+      }
+    },
+  );
+
+  it('does not trim or otherwise alter a valid token with inner spaces', () => {
+    const spaced = `${'a'.repeat(20)} ${'b'.repeat(20)}`;
+    expect(requireToken(spaced)).toBe(spaced);
+    expect(() => { assertSafeBinding({ host: '127.0.0.1', token: spaced }); }).not.toThrow();
   });
 });
 
