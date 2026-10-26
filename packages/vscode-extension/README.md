@@ -7,8 +7,9 @@ MCP clients can use them without a separate process. Part of the [mcp-servers mo
 - **CodeRAG** - semantic search over code and Markdown through an OpenAI-compatible embeddings endpoint. It runs inside
   the extension host and only where the runtime supports it (see [CodeRAG availability](#coderag-availability)).
 
-Every server listens on `127.0.0.1` only and requires a bearer token (one stable token per workspace, see
-[Token model](#token-model); it is never shown or copied). The **MCP Servers** view in the activity bar and the status
+Every server listens on `127.0.0.1` only and requires its own bearer token (derived from one stable secret per
+workspace, see [Token model](#token-model); it is never shown or copied). The extension works only in trusted,
+non-virtual workspaces (see [Workspace trust](#workspace-trust)). The **MCP Servers** view in the activity bar and the status
 bar entry show the state of each server (stopped, starting, running, error, or unavailable with the reason as the
 description); the status bar counts the running servers.
 
@@ -24,6 +25,9 @@ description); the status bar counts the running servers.
   tells you. Changes are applied 500 ms after the last edit, so editing several settings causes one restart. A taken
   port is reported as "Port N is already in use (change mcpServers.git.port)"; any other startup failure shows its real
   message once.
+- **Several windows:** if another VS Code window on the same workspace rotates the token (or two windows race the first
+  run), this window's running servers restart with the stored token after a short pause and say so, so they keep
+  accepting the helper's token.
 - **Shutdown:** all servers are stopped when the extension deactivates (CodeRAG closes its indexer and database), so no
   port stays bound.
 
@@ -38,8 +42,8 @@ From the palette with several candidates you pick the server; with exactly one i
 | `MCP Servers: Stop Server` | Stop a running server |
 | `MCP Servers: Restart Server` | Restart a running server (keeps its token) |
 | `MCP Servers: Copy Server URL` | Copies `http://127.0.0.1:<port>/mcp` (never the token) |
-| `MCP Servers: Add to Claude Code...` | Pick servers, then write `.mcp.json`, copy `claude mcp add-json` commands, or copy a client config (see [Claude Code](#claude-code)) |
-| `MCP Servers: Rotate Server Token` | Replaces the workspace token (asks first; restarts running servers) |
+| `MCP Servers: Add to Claude Code...` | Pick among the running servers, then write `.mcp.json`, copy `claude mcp add-json` commands, or copy a client config (see [Claude Code](#claude-code)) |
+| `MCP Servers: Rotate Server Token` | Replaces the workspace token and with it every server's token (asks first; restarts running servers) |
 | `MCP Servers: Set CodeRAG API Key` | Stores the embeddings API key in VS Code Secret Storage (masked input) |
 | `MCP Servers: Clear CodeRAG API Key` | Removes it; a running CodeRAG restarts without it |
 
@@ -90,18 +94,23 @@ native crash would take the extension host down with it.
 
 ## Token model
 
-All servers of a workspace share **one bearer token**. It is generated once (`crypto.randomBytes(32)`, 64 hex
-characters), kept in VS Code Secret Storage (the authoritative copy) and mirrored to
+Each workspace has **one secret**, from which every server's own bearer token is derived:
+`serverToken = HMAC-SHA256(key = workspace secret, data = "mcp-servers:<serverId>")` as 64 hex characters (`git`,
+`coderag`). A process that squats one server's port and receives that server's token from a client therefore cannot use
+it against another server, and the workspace secret itself is never sent to a server or printed.
+
+The secret is generated once (`crypto.randomBytes(32)`, 64 hex characters), kept in VS Code Secret Storage (the
+authoritative copy; when two windows race to create it, both adopt the stored value) and mirrored to
 `<globalStorage>/tokens/<scope>.json` as `{"token": "..."}` with mode `0600` inside a `0700` directory, written
 atomically (temporary file, then rename; on Windows POSIX modes are best effort and the file relies on the profile's
 ACL). If the secret is missing but the file holds a valid token (for example after migrating the machine) the file's
-token is adopted. The token never appears in settings, logs, URLs, notifications or `.mcp.json`.
+token is adopted. Neither the secret nor a server token appears in settings, logs, URLs, notifications or `.mcp.json`.
 
 `<scope>` is the first 16 hex characters of the SHA-256 of the sorted `file:` workspace folder URIs: the same folder
-set gives the same token in every window and after every restart; **adding or removing a folder changes the scope and
-therefore the token** (servers restart with the new one, and `.mcp.json` entries written earlier point at the old scope
-until you run "Add to Claude Code" again). Ports are fixed by settings, so URLs stay stable too. `MCP Servers: Rotate
-Server Token` is the only other way the token changes.
+set gives the same tokens in every window and after every restart; **adding or removing a folder changes the scope and
+therefore the tokens** (servers restart with the new ones, and `.mcp.json` entries written earlier point at the old
+scope until you run "Add to Claude Code" again). Ports are fixed by settings, so URLs stay stable too. `MCP Servers:
+Rotate Server Token` is the only other way the tokens change.
 
 ## VS Code MCP servers
 
@@ -116,19 +125,31 @@ Claude Code cannot discover servers registered by a VS Code extension, so `MCP S
 what it needs. After you pick servers it offers:
 
 - **Write `.mcp.json`** in the first workspace folder: entries `vscode-git` / `vscode-coderag` of the form
-  `{"type": "http", "url": "http://127.0.0.1:<port>/mcp", "headersHelper": "node '<helper>' '<scope>' --dir '<tokens dir>'"}`
+  `{"type": "http", "url": "http://127.0.0.1:<port>/mcp", "headersHelper": "node '<helper>' '<scope>' '<serverId>' --dir '<tokens dir>'"}`
   are merged into an existing file (other servers and keys are kept; an invalid file is refused and left untouched).
-  A confirmation warns that the file contains a machine-specific path and offers to add `.mcp.json` to
-  `.git/info/exclude` (only in a git repository, only on your consent).
+  An existing `vscode-*` entry is **replaced** (the confirmation lists it), which is how entries written by an older
+  version, whose helper command lacks the server id, get fixed. A confirmation warns that the file contains a
+  machine-specific path and offers to add `.mcp.json` to `.git/info/exclude` (only in a git repository with a real
+  `.git` directory, only on your consent). A symbolic link at `.mcp.json`, `.git`, `.git/info` or `.git/info/exclude` is
+  refused with an error and never written through; files are written through a temporary file and a rename.
 - **Copy `claude mcp add-json` command(s)** (local scope) with the same JSON.
 - **Copy client config (JSON)** as `{"mcpServers": {...}}`.
 
-The token is never written. The `headersHelper` runs `dist/mcp-headers.js`, a dependency-free script that the extension
-copies to `<globalStorage>/bin/mcp-headers.js` at activation (a path without the extension version, so entries survive
-upgrades). It prints `{"Authorization":"Bearer <token>"}` read from the `0600` file, or exits with code 1 and a message
-on stderr (without any token) - this is also how a stale entry shows itself (wrong scope after a folder change, or no
-VS Code window open on that workspace). Quoting is for the platform VS Code runs on (POSIX single quotes; Windows double
-quotes with forward slashes). Claude Code needs the servers to be running; start them first.
+Only servers that are **running** (with a fixed port) are offered; for the others the message says what to do, and with
+none running it offers to show the MCP Servers view. No token is ever written. The `headersHelper` runs
+`dist/mcp-headers.js`, a dependency-free script that the extension copies to `<globalStorage>/bin/mcp-headers.js` at
+activation (a path without the extension version, so entries survive upgrades). Its command line is
+
+    node mcp-headers.js <scopeKey> <serverId> [--dir <tokens directory>]
+
+(`MCP_SERVERS_TOKENS_DIR` can replace `--dir`; `<serverId>` is `^[a-z][a-z0-9-]{0,31}$`). It reads the workspace secret
+from the `0600` file, derives that server's token and prints `{"Authorization":"Bearer <server token>"}`, or exits
+with code 1 and a message on stderr (without any token) - this is also how a stale entry shows itself (wrong scope after
+a folder change, no VS Code window open on that workspace, or an entry from an older version that lacks the server id).
+Quoting is for the platform VS Code runs on (POSIX single quotes; Windows double quotes with forward slashes).
+The command starts with a bare `node`, so **`node` must be on the `PATH` of the client** (the extension host's own
+binary is VS Code, not Node, so it cannot be used). The Windows quoting is covered by unit tests only, not by a test
+on a Windows machine.
 
 ## Security notes
 
@@ -140,10 +161,18 @@ quotes with forward slashes). Claude Code needs the servers to be running; start
   the workspace folders.
 - The embeddings API key lives in Secret Storage and is passed to CodeRAG in memory; it is not a setting and is never
   logged or shown.
-- The token lives in Secret Storage and in one `0600` file under the extension's global storage; do not copy that
-  directory. Anyone who can read your user profile can use the servers.
+- The workspace secret lives in Secret Storage and in one `0600` file under the extension's global storage; do not copy
+  that directory. Anyone who can read your user profile can use the servers. Directories the extension creates for
+  the CodeRAG index (workspace storage) and the helper (`bin`) get mode `0700`; ones that already existed keep theirs.
 - CodeRAG confines all file-reading and file-writing tools to the workspace folders, the include-pattern bases and
   `allowedRoots`, with symlinks resolved.
+
+## Workspace trust
+
+The manifest declares `untrustedWorkspaces` and `virtualWorkspaces` as **not supported**: in Restricted Mode the
+extension is disabled, and it does not run on virtual file systems. The servers read and run what a workspace contains
+(git repositories and their configuration, files to index, workspace settings), so they should only run in a workspace
+you trust.
 
 ## Supported platforms
 
