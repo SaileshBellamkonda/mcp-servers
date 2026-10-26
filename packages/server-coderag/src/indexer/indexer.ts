@@ -30,6 +30,14 @@ export interface IndexerOptions {
  */
 const FILES_PER_TICK = 5;
 
+/**
+ * True when a file's modification time is the one stored with its index entry. Compared to the millisecond, so an
+ * edit within the same second as the previous indexing is still noticed.
+ */
+export function isUnchangedSince(mtime: Date, indexedModifiedAt: Date): boolean {
+  return mtime.getTime() === indexedModifiedAt.getTime();
+}
+
 function yieldToEventLoop(): Promise<void> {
   return new Promise((resolve) => {
     setImmediate(resolve);
@@ -144,7 +152,9 @@ export class Indexer {
     const chunks = parser.parseFile(filePath, readPath);
 
     if (chunks.length === 0) {
-      this.log('warning', `No symbols from ${filePath}`);
+      // Recorded with no chunks, so a file without symbols is not parsed again by every scan.
+      this.db.insertCodeDocument(filePath, stat.mtime, [], []);
+      this.log('info', `No symbols in ${filePath}`);
       return;
     }
 
@@ -188,7 +198,7 @@ export class Indexer {
         const existingModTime = existingDocs.get(filePath);
 
         if (existingModTime !== undefined && !force) {
-          if (Math.floor(stat.mtimeMs / 1000) === Math.floor(existingModTime.getTime() / 1000)) {
+          if (isUnchangedSince(stat.mtime, existingModTime)) {
             result.skipped++;
             continue;
           }

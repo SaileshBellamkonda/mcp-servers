@@ -76,7 +76,7 @@ describe('runStartupSync with the docs re-index flag', () => {
     expect(db.isDocsReindexRequired()).toBe(false);
   });
 
-  it('does not force a scan when the flag is not set and nothing changed', async () => {
+  it('scans without forcing, and re-indexes nothing, when the flag is not set and nothing changed', async () => {
     writeFileSync(path.join(tmpDir, 'readme.md'), '# Hello\n\nContent.');
     const tmpFwd = tmpDir.replace(/\\/g, '/');
     const globs = { docsInclude: [`${tmpFwd}/**/*.md`], docsExclude: [], codeInclude: [], codeExclude: [] };
@@ -87,8 +87,10 @@ describe('runStartupSync with the docs re-index flag', () => {
 
     await runStartupSync(db, indexer, new SyncManager(), config, tmpDir, logger);
     const scanDocs = vi.spyOn(indexer, 'scanDocs');
+    const indexFile = vi.spyOn(indexer, 'indexFile');
     await runStartupSync(db, indexer, new SyncManager(), config, tmpDir, logger);
 
-    expect(scanDocs).not.toHaveBeenCalled();
+    expect(scanDocs).toHaveBeenCalledWith(false);
+    expect(indexFile).not.toHaveBeenCalled();
   });
 });

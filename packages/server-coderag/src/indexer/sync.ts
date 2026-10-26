@@ -101,31 +101,23 @@ export async function runStartupSync(
       pruneExcluded(db, docsMatcher, codeMatcher, logger);
     }
 
-    if (rulesChanged || noDocsIndexed || docsReindexRequired) {
-      logger.info(docsReindexRequired ? 'Scanning docs (forced re-index)...' : 'Scanning docs...');
-      const docsResult = await indexer.scanDocs(docsReindexRequired);
-      logger.info(`Docs scan: ${String(docsResult.indexed)} indexed, ${String(docsResult.skipped)} skipped, ${String(docsResult.failed)} failed`);
-      db.setLastSyncAt('docs', new Date());
-      if (docsReindexRequired && docsResult.failed === 0) db.clearDocsReindexRequired();
-    }
+    // Every startup scans both kinds incrementally: only the files whose modification time differs from the stored
+    // one are read, parsed and embedded (unchanged files cost one stat), and indexed files that are gone are removed.
+    logger.info(docsReindexRequired ? 'Scanning docs (forced re-index)...' : 'Scanning docs...');
+    const docsResult = await indexer.scanDocs(docsReindexRequired);
+    logger.info(`Docs scan: ${String(docsResult.indexed)} indexed, ${String(docsResult.skipped)} skipped, ${String(docsResult.failed)} failed`);
+    db.setLastSyncAt('docs', new Date());
+    if (docsReindexRequired && docsResult.failed === 0) db.clearDocsReindexRequired();
 
-    if (rulesChanged || noCodeIndexed || codeParserStale) {
-      logger.info(codeParserStale ? 'Scanning code (parser version changed, forced re-parse)...' : 'Scanning code...');
-      const codeResult = await indexer.scanCode(codeParserStale);
-      logger.info(`Code scan: ${String(codeResult.indexed)} indexed, ${String(codeResult.skipped)} skipped, ${String(codeResult.failed)} failed`);
-      db.setLastSyncAt('code', new Date());
-      // A failed forced scan leaves the marker unset, so the next startup tries again.
-      if (!codeParserStale || codeResult.failed === 0) db.setCodeParserVersion(CODE_PARSER_VERSION);
-    }
+    logger.info(codeParserStale ? 'Scanning code (parser version changed, forced re-parse)...' : 'Scanning code...');
+    const codeResult = await indexer.scanCode(codeParserStale);
+    logger.info(`Code scan: ${String(codeResult.indexed)} indexed, ${String(codeResult.skipped)} skipped, ${String(codeResult.failed)} failed`);
+    db.setLastSyncAt('code', new Date());
+    // A failed forced scan leaves the marker unset, so the next startup tries again.
+    if (!codeParserStale || codeResult.failed === 0) db.setCodeParserVersion(CODE_PARSER_VERSION);
 
-    if (!rulesChanged && !noDocsIndexed) {
-      // Incremental: remove stale docs entries
-      await removeStaleDocs(db, logger);
-    }
-
-    if (!rulesChanged && !noCodeIndexed) {
-      await removeStaleCode(db, logger);
-    }
+    await removeStaleDocs(db, logger);
+    await removeStaleCode(db, logger);
 
     db.saveRules(currentGlobs);
     logger.info('Startup sync complete.');

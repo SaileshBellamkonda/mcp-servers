@@ -59,14 +59,16 @@ function storedSignature(): string | undefined {
 }
 
 describe('code parser version', () => {
-  it('is stored by the first startup sync and a later one does not re-parse unchanged files', async () => {
+  it('is stored by the first startup sync and a later one scans without forcing, so unchanged files are not re-parsed', async () => {
     expect(db.getCodeParserVersion()).toBeNull();
     await runStartupSync(db, indexer, new SyncManager(), config, tmpDir, logger);
     expect(db.getCodeParserVersion()).toBe(CODE_PARSER_VERSION);
 
     const scanCode = vi.spyOn(indexer, 'scanCode');
+    const indexCodeFile = vi.spyOn(indexer, 'indexCodeFile');
     await runStartupSync(db, indexer, new SyncManager(), config, tmpDir, logger);
-    expect(scanCode).not.toHaveBeenCalled();
+    expect(scanCode).toHaveBeenCalledWith(false);
+    expect(indexCodeFile).not.toHaveBeenCalled();
   });
 
   it('re-parses unchanged code files when the stored version is older, refreshing their signatures', async () => {
