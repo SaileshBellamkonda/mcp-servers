@@ -169,8 +169,14 @@ docs/DESIGN.md:12-30 Design > Search modes (0.74)
   were left out, the last line says how many and which `offset` continues. `offset` skips hits for paging.
 - `response_format: "detailed"` returns the previous JSON (`results`, `count`, `mode`) with whole chunks, absolute
   paths and metadata; it ignores `max_tokens` and does not drop classes.
-- Signatures are the declaration text up to the start of the body. After an upgrade that changes how signatures are
-  built, the next start re-parses all indexed code files once (the version is stored in the database).
+- Signatures are the declaration text up to the start of the body.
+- A class, struct, interface, impl or trait is indexed as a skeleton, not as its whole body: the doc comment above it, its
+  signature and one line per member (`kind signature`, or a field's first line), at most 60 members and 2000 characters,
+  ending with `+N more members`. Methods and functions keep their own full chunks, so search returns either the skeleton
+  (for a query about the class) or the method (for a query about its behaviour), never both. Skeletons are built for
+  TypeScript, JavaScript, Python, Go, Rust, Java, C# and C++; other languages index the whole class as before.
+- After an upgrade that changes what is stored per symbol (signatures, skeletons), the next start re-parses and
+  re-embeds all indexed code files once (the version is stored in the database).
 
 ## Security
 

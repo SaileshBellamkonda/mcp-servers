@@ -9,8 +9,9 @@ import { getLanguageByExtension, SUPPORTED_LANGUAGES } from './languages.js';
  * unchanged file would differ: the next startup sync then re-parses every indexed code file.
  * 2: signatures come from the tree-sitter `body` field instead of the first `=>` or `{` in the text.
  * 3: `.tsx` files are parsed with the tsx grammar (language `tsx`) instead of the TypeScript grammar.
+ * 4: a class, struct, interface or impl is stored as a skeleton (header and member list) instead of its whole body.
  */
-export const CODE_PARSER_VERSION = 3;
+export const CODE_PARSER_VERSION = 4;
 
 let defaultRequire: NodeJS.Require | undefined;
 
@@ -30,6 +31,8 @@ function requireFor(nativeModulesDir: string | undefined): NodeJS.Require {
 interface TSNode {
   type: string;
   text: string;
+  isNamed: boolean;
+  previousSibling: TSNode | null;
   startPosition: { row: number; column: number };
   endPosition: { row: number; column: number };
   startIndex: number;
@@ -68,6 +71,17 @@ interface TSParser {
 interface TSParserConstructor {
   new (): TSParser;
   Query: new (lang: TSLanguage, source: string) => TSQuery;
+}
+
+interface Symbol {
+  node: TSNode;
+  name: string;
+  type: SymbolType;
+  signature: string;
+}
+
+function rangeKey(node: TSNode): string {
+  return `${String(node.startIndex)}-${String(node.endIndex)}`;
 }
 
 type CaptureType = 'function' | 'method' | 'class' | 'struct' | 'interface';
@@ -178,9 +192,8 @@ export class CodeParser {
 
   private extractSymbols(root: TSNode, source: string, lang: string, query: TSQuery): CodeChunk[] {
     const matches = query.matches(root);
-    const chunks: CodeChunk[] = [];
+    const symbols: Symbol[] = [];
     const seen = new Set<string>();
-    let position = 0;
 
     for (const match of matches) {
       let symbolName = '';
@@ -201,30 +214,30 @@ export class CodeParser {
 
       if (!symbolNode || !symbolName) continue;
 
-      const key = `${String(symbolNode.startIndex)}-${String(symbolNode.endIndex)}`;
+      const key = rangeKey(symbolNode);
       if (seen.has(key)) continue;
       seen.add(key);
-
-      const content = source.slice(symbolNode.startIndex, symbolNode.endIndex);
-      const startLine = symbolNode.startPosition.row + 1;
-      const endLine = symbolNode.endPosition.row + 1;
-      const signature = extractSignature(symbolNode, source);
-      const parentSymbol = findParentSymbol(symbolNode, source, lang);
-
-      chunks.push({
-        content,
-        position: position++,
-        symbolName,
-        symbolType,
-        language: lang,
-        startLine,
-        endLine,
-        parentSymbol,
-        signature,
-      });
+      symbols.push({ node: symbolNode, name: symbolName, type: symbolType, signature: extractSignature(symbolNode, source) });
     }
 
-    return chunks;
+    const byRange = new Map(symbols.map((symbol) => [rangeKey(symbol.node), symbol]));
+    const skeletons = SKELETON_LANGUAGES.has(lang);
+
+    return symbols.map((symbol, position) => {
+      const node = symbol.node;
+      const skeleton = skeletons && CONTAINER_TYPES.has(symbol.type) ? buildSkeleton(symbol, lang, source, byRange) : null;
+      return {
+        content: skeleton ?? source.slice(node.startIndex, node.endIndex),
+        position,
+        symbolName: symbol.name,
+        symbolType: symbol.type,
+        language: lang,
+        startLine: node.startPosition.row + 1,
+        endLine: node.endPosition.row + 1,
+        parentSymbol: findParentSymbol(node, source, lang),
+        signature: symbol.signature,
+      };
+    });
   }
 
   static getEmbeddingText(chunk: CodeChunk): string {
@@ -281,6 +294,160 @@ function extractSignature(node: TSNode, source: string): string {
     return tidySignature(source.slice(firstNonDecoratorStart(node), body.startIndex));
   }
   return tidySignature(source.slice(node.startIndex, node.endIndex).split('\n')[0] ?? '');
+}
+
+// ─── Container skeletons ─────────────────────────────────────────────────────
+
+/** Languages whose class-like symbols are indexed as a skeleton (header and member list) instead of the whole body. */
+const SKELETON_LANGUAGES = new Set(['typescript', 'tsx', 'javascript', 'python', 'go', 'rust', 'java', 'csharp', 'cpp']);
+const CONTAINER_TYPES = new Set<SymbolType>(['class', 'struct', 'interface']);
+const MAX_SKELETON_MEMBERS = 60;
+/** Upper bound for the text of one skeleton chunk. */
+const MAX_SKELETON_CHARS = 2000;
+const MAX_MEMBER_LINE_CHARS = 100;
+const MAX_DOC_CHARS = 160;
+/** Characters kept free for the `+N more members` line. */
+const MORE_LINE_RESERVE = 24;
+
+const COMMENT_TYPES = new Set(['comment', 'line_comment', 'block_comment']);
+/** Nodes between a doc comment and the declaration it documents (Rust attributes, Python decorators). */
+const BETWEEN_DOC_AND_DECLARATION = new Set(['attribute_item', 'decorator']);
+/** Nodes wrapped around a declaration; a doc comment sits above the wrapper. */
+const DECLARATION_WRAPPERS = new Set(['export_statement', 'decorated_definition', 'template_declaration']);
+/** Direct children of a class body that are not members. */
+const NOT_MEMBERS = new Set(['attribute_item', 'inner_attribute_item', 'access_specifier', 'pass_statement', 'decorator', 'ERROR']);
+/** A signature that already starts with its declaration keyword needs no kind label. */
+const DECLARATION_KEYWORD =
+  /^(?:(?:pub(?:\([^)]*\))?|async|static|public|private|protected|internal|export|default|abstract|final|unsafe|const|extern|override|virtual|inline|sealed|partial)\s+)*(?:def|fn|func|function|class|struct|interface|trait|enum|impl|type)\b/;
+
+function clipTo(text: string, max: number): string {
+  return text.length <= max ? text : `${text.slice(0, max - 1).trimEnd()}…`;
+}
+
+/** The node whose named children are the members of a container symbol, or null when it has none. */
+function memberContainer(node: TSNode, name: string): TSNode | null {
+  if (node.type !== 'type_declaration') return node.childForFieldName('body');
+  // Go: `type Name struct { ... }` / `type Name interface { ... }`
+  for (let i = 0; i < node.childCount; i++) {
+    const spec = node.child(i);
+    if (spec?.type !== 'type_spec' || spec.childForFieldName('name')?.text !== name) continue;
+    const type = spec.childForFieldName('type');
+    if (type?.type === 'interface_type') return type;
+    for (let j = 0; type && j < type.childCount; j++) {
+      const list = type.child(j);
+      if (list?.type === 'field_declaration_list') return list;
+    }
+  }
+  return null;
+}
+
+function isDocstring(node: TSNode): boolean {
+  return node.type === 'expression_statement' && node.childCount === 1 && node.child(0)?.type === 'string';
+}
+
+function memberLine(child: TSNode, source: string, byRange: Map<string, Symbol>): string | null {
+  const wrapped = child.childForFieldName('definition');
+  const symbol = byRange.get(rangeKey(child)) ?? (wrapped ? byRange.get(rangeKey(wrapped)) : undefined);
+  if (symbol) {
+    return DECLARATION_KEYWORD.test(symbol.signature) ? symbol.signature : `${symbol.type} ${symbol.signature}`;
+  }
+  // An enum variant's `body` field is its tuple or struct payload, which belongs to the line.
+  const declaration = child.type === 'enum_variant' ? tidySignature(source.slice(child.startIndex, child.endIndex).split('\n')[0] ?? '') : extractSignature(child, source);
+  const text = declaration.replace(/\s*[;,{]+\s*$/, '');
+  return text === '' ? null : text;
+}
+
+function memberLines(container: TSNode, source: string, byRange: Map<string, Symbol>): string[] {
+  const lines: string[] = [];
+  for (let i = 0; i < container.childCount; i++) {
+    const child = container.child(i);
+    if (!child?.isNamed || COMMENT_TYPES.has(child.type) || NOT_MEMBERS.has(child.type) || isDocstring(child)) continue;
+    const line = memberLine(child, source, byRange);
+    if (line !== null) lines.push(clipTo(line, MAX_MEMBER_LINE_CHARS));
+  }
+  return lines;
+}
+
+function firstParagraph(rawLines: readonly string[]): string {
+  const kept: string[] = [];
+  for (const raw of rawLines) {
+    const line = raw.trim();
+    if (line === '' ? kept.length > 0 : line.startsWith('@')) break;
+    if (line !== '') kept.push(line);
+  }
+  return clipTo(kept.join(' '), MAX_DOC_CHARS);
+}
+
+/** Last line a node occupies; a node that ends with its newline (Rust line comments) ends on the line before. */
+function lastRow(node: TSNode): number {
+  return node.endPosition.column === 0 && node.endPosition.row > node.startPosition.row ? node.endPosition.row - 1 : node.endPosition.row;
+}
+
+/** The first paragraph of the comment block that ends on the line directly above the declaration, or ''. */
+function leadingComment(node: TSNode, source: string): string {
+  let target = node;
+  while (target.parent && DECLARATION_WRAPPERS.has(target.parent.type)) target = target.parent;
+  let row = target.startPosition.row;
+  let prev = target.previousSibling;
+  while (prev && BETWEEN_DOC_AND_DECLARATION.has(prev.type)) {
+    row = prev.startPosition.row;
+    prev = prev.previousSibling;
+  }
+  const lines: string[] = [];
+  while (prev && COMMENT_TYPES.has(prev.type) && lastRow(prev) === row - 1) {
+    // A comment that trails another statement on its own line does not document what follows.
+    if (prev.previousSibling && lastRow(prev.previousSibling) === prev.startPosition.row) break;
+    lines.unshift(
+      ...source
+        .slice(prev.startIndex, prev.endIndex)
+        .split('\n')
+        .map((l) => l.replace(/^\s*(?:\/\*+|\/\/[/!]?|\*(?!\/)|#+)\s?/, '').replace(/\s*\*+\/\s*$/, '')),
+    );
+    row = prev.startPosition.row;
+    prev = prev.previousSibling;
+  }
+  return firstParagraph(lines);
+}
+
+/** First line of a Python class docstring, without quotes. */
+function pythonDocstring(body: TSNode, source: string): string {
+  for (let i = 0; i < body.childCount; i++) {
+    const child = body.child(i);
+    if (!child?.isNamed || COMMENT_TYPES.has(child.type)) continue;
+    if (!isDocstring(child)) return '';
+    const raw = source.slice(child.startIndex, child.endIndex).replace(/^[rRuUbBfF]*("""|'''|"|')/, '').replace(/("""|'''|"|')$/, '');
+    return firstParagraph(raw.split('\n'));
+  }
+  return '';
+}
+
+/**
+ * Compact stand-in for a class, struct, interface or impl: the doc comment above it (first paragraph), its signature
+ * and one line per member (`kind signature`, or the first line of a field), at most 60 members and 2000 characters,
+ * ending with `+N more members` when some were left out. Member bodies are not included: methods are indexed as
+ * chunks of their own. Null when there is nothing to list, so a member-less symbol keeps its text.
+ */
+function buildSkeleton(symbol: Symbol, lang: string, source: string, byRange: Map<string, Symbol>): string | null {
+  const container = memberContainer(symbol.node, symbol.name);
+  if (!container) return null;
+  const members = memberLines(container, source, byRange);
+  const doc = lang === 'python' ? pythonDocstring(container, source) : leadingComment(symbol.node, source);
+  if (members.length === 0 && doc === '') return null;
+
+  const lines: string[] = [];
+  if (doc !== '') lines.push(`${lang === 'python' ? '#' : '//'} ${doc}`);
+  lines.push(symbol.signature);
+  let used = lines.join('\n').length;
+  let shown = 0;
+  for (const member of members) {
+    const line = `  ${member}`;
+    if (shown >= MAX_SKELETON_MEMBERS || used + 1 + line.length > MAX_SKELETON_CHARS - MORE_LINE_RESERVE) break;
+    lines.push(line);
+    used += 1 + line.length;
+    shown++;
+  }
+  if (shown < members.length) lines.push(`  +${String(members.length - shown)} more members`);
+  return lines.join('\n');
 }
 
 function findParentSymbol(node: TSNode, source: string, _lang: string): string {
