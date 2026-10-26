@@ -1,3 +1,5 @@
+import { chmodSync, existsSync, mkdirSync } from 'node:fs';
+import path from 'node:path';
 import { buildSchema, buildMigrations, buildDocMetadataMigration, buildVecChunksDdl } from './schema.js';
 import { openSqliteDatabase, loadSqliteVec, type SqlParam, type SqliteDatabase } from './sqlite-db.js';
 import type {
@@ -123,7 +125,19 @@ export class VectorDB {
   }
 
   static open(dbPath: string, dimensions: number, options: VectorDBOpenOptions = {}): VectorDB {
+    // The index holds the text of the user's documents: directories created here are 0700 and a new file is
+    // 0600 (set before WAL mode, so SQLite's -wal/-shm files inherit it). Existing paths are left as they are.
+    const isFile = dbPath !== ':memory:' && dbPath !== '';
+    const isNewFile = isFile && !existsSync(dbPath);
+    if (isFile) mkdirSync(path.dirname(path.resolve(dbPath)), { recursive: true, mode: 0o700 });
     const db = openSqliteDatabase(dbPath, { allowExtension: true });
+    if (isNewFile) {
+      try {
+        chmodSync(dbPath, 0o600);
+      } catch {
+        /* the platform has no POSIX modes; the file keeps the default permissions */
+      }
+    }
     try {
       loadSqliteVec(db, options.nativeModulesDir);
     } catch (err) {
