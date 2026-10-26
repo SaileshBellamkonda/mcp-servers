@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import path from 'node:path';
 import { GitMcpError, ErrorCode } from './types.js';
 import type { RepositoryManager } from './repository-manager.js';
@@ -7,7 +8,7 @@ import type { RepositoryManager } from './repository-manager.js';
  */
 export class PathValidator {
   private static readonly DANGEROUS_PATTERNS = [
-    /\.\./,           // Parent directory traversal
+    /(?:^|[\\/])\.\.(?:[\\/]|$)/, // Parent directory traversal (a ".." path segment, not a substring)
     /^~/,             // Home directory expansion
     /^\/etc\//,       // System directories
     /^\/root\//,
@@ -53,7 +54,41 @@ export class PathValidator {
       );
     }
 
+    // Symlinks: the lexical check above cannot see them. Resolve the deepest ancestor that exists
+    // (the leaf may not exist yet) and require the real location to stay inside the real repository.
+    const realRepo = PathValidator.realpathOfDeepestAncestor(validatedRepo);
+    const realResolved = PathValidator.realpathOfDeepestAncestor(resolved);
+    const realRelative = path.relative(realRepo, realResolved);
+    const realInside =
+      realRelative === '' || (!realRelative.startsWith('..' + path.sep) && realRelative !== '..' && !path.isAbsolute(realRelative));
+    if (!realInside) {
+      throw new GitMcpError(
+        ErrorCode.SECURITY_ERROR,
+        `Path resolves outside repository through a symbolic link: ${filePath}`,
+        { path: filePath, repository: repoPath }
+      );
+    }
+
     return resolved;
+  }
+
+  /**
+   * `realpath` of the deepest existing ancestor of `target` joined with the not-yet-existing rest.
+   * Falls back to the lexical path when nothing on the way can be resolved.
+   */
+  private static realpathOfDeepestAncestor(target: string): string {
+    const rest: string[] = [];
+    let current = target;
+    for (;;) {
+      try {
+        return path.join(fs.realpathSync.native(current), ...rest);
+      } catch {
+        const parent = path.dirname(current);
+        if (parent === current) return target;
+        rest.unshift(path.basename(current));
+        current = parent;
+      }
+    }
   }
 
   /**

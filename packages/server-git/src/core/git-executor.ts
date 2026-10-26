@@ -3,6 +3,44 @@ import which from 'which';
 import { GitMcpError, ErrorCode } from './types.js';
 import type { GitCommandResult, ExecuteOptions, ServerLogger } from './types.js';
 
+const POSIX_ALLOWED = [
+  'PATH', 'HOME', 'USER', 'LOGNAME', 'LANG', 'LANGUAGE', 'TZ', 'TMPDIR', 'TEMP', 'TMP', 'SSH_AUTH_SOCK',
+  'XDG_CONFIG_HOME', 'SSL_CERT_FILE', 'SSL_CERT_DIR',
+  'http_proxy', 'https_proxy', 'no_proxy', 'all_proxy', 'HTTP_PROXY', 'HTTPS_PROXY', 'NO_PROXY', 'ALL_PROXY',
+];
+const WINDOWS_ONLY = [
+  'USERPROFILE', 'HOMEDRIVE', 'HOMEPATH', 'SystemRoot', 'SystemDrive', 'windir', 'COMSPEC', 'PATHEXT',
+  'APPDATA', 'LOCALAPPDATA', 'ProgramData', 'ProgramFiles', 'ProgramFiles(x86)', 'ProgramW6432',
+];
+
+/**
+ * Build the environment handed to git (and so to hooks, credential helpers and ssh): an allow-list
+ * of what git needs to work, never the parent's full environment, so server secrets such as
+ * `MCP_AUTH_TOKEN` or API keys cannot reach repository-controlled code. `GIT_TERMINAL_PROMPT=0`
+ * keeps git non-interactive and `GIT_ALLOW_PROTOCOL` blocks remote-helper transports like `ext::`.
+ */
+export function buildGitEnvironment(
+  source: NodeJS.ProcessEnv,
+  platform: NodeJS.Platform = process.platform,
+): Record<string, string> {
+  const windows = platform === 'win32';
+  const allowed = new Set((windows ? [...POSIX_ALLOWED, ...WINDOWS_ONLY] : POSIX_ALLOWED).map((k) => (windows ? k.toLowerCase() : k)));
+  const env: Record<string, string> = {};
+  for (const [key, value] of Object.entries(source)) {
+    if (value === undefined) continue;
+    const lookup = windows ? key.toLowerCase() : key;
+    if (windows && lookup === 'path') {
+      env['PATH'] = value;
+    } else if (allowed.has(lookup) || key.startsWith('LC_')) {
+      env[key] = value;
+    }
+  }
+  env['PATH'] ??= '';
+  env['GIT_TERMINAL_PROMPT'] = '0';
+  env['GIT_ALLOW_PROTOCOL'] = 'file:git:http:https:ssh';
+  return env;
+}
+
 /**
  * Executes Git commands safely with timeout protection
  */
@@ -58,11 +96,8 @@ export class GitExecutor {
     return new Promise((resolve, reject) => {
       let timedOut = false;
       
-      // Ensure PATH is set in environment for child process
-      const env = {
-        ...process.env,
-        PATH: process.env['PATH'] ?? process.env['Path'] ?? '',
-      };
+      // Allow-listed environment only (see buildGitEnvironment): no secrets reach git, hooks or helpers.
+      const env = buildGitEnvironment(process.env);
       
       // Use execFile which handles paths with spaces better than spawn
       const proc = execFile(gitPath, args, {

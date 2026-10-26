@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { GitExecutor } from '../../../src/core/git-executor.js';
 import { GitMcpError, ErrorCode } from '../../../src/core/types.js';
 //import { tmpdir } from 'os';
@@ -66,5 +66,68 @@ describe('GitExecutor', () => {
       expect(result.stdout).toBeTruthy();
       expect(result.stderr).toBeDefined();
     });
+  });
+});
+
+describe('GitExecutor environment', () => {
+  const secretNames = ['MCP_AUTH_TOKEN', 'OPENAI_API_KEY', 'AWS_SECRET_ACCESS_KEY', 'GITHUB_TOKEN', 'GIT_ASKPASS', 'GIT_SSH_COMMAND', 'GIT_EXTERNAL_DIFF'];
+  const saved: Record<string, string | undefined> = {};
+
+  beforeEach(() => {
+    for (const n of secretNames) saved[n] = process.env[n];
+    for (const n of secretNames) process.env[n] = `leak-${n}`;
+  });
+  afterEach(() => {
+    for (const n of secretNames) {
+      if (saved[n] === undefined) delete process.env[n];
+      else process.env[n] = saved[n];
+    }
+  });
+
+  it.skipIf(process.platform === 'win32')('does not forward the parent environment to git, hooks or helpers', async () => {
+    const executor = new GitExecutor();
+    const result = await executor.execute(process.cwd(), ['-c', 'alias.dumpenv=!env', 'dumpenv']);
+    expect(result.success).toBe(true);
+    for (const n of secretNames) {
+      expect(result.stdout, `${n} leaked into the git environment`).not.toContain(n);
+    }
+    expect(result.stdout).not.toContain('leak-');
+    expect(result.stdout).toMatch(/^PATH=/m);
+  });
+
+  it.skipIf(process.platform === 'win32')('forces non-interactive operation and a protocol allow-list that excludes ext::', async () => {
+    const executor = new GitExecutor();
+    const result = await executor.execute(process.cwd(), ['-c', 'alias.dumpenv=!env', 'dumpenv']);
+    expect(result.stdout).toMatch(/^GIT_TERMINAL_PROMPT=0$/m);
+    expect(result.stdout).toMatch(/^GIT_ALLOW_PROTOCOL=file:git:http:https:ssh$/m);
+  });
+});
+
+describe('buildGitEnvironment', () => {
+  it('keeps only allow-listed variables and overrides the security-critical ones', async () => {
+    const { buildGitEnvironment } = await import('../../../src/core/git-executor.js');
+    const env = buildGitEnvironment(
+      {
+        PATH: '/bin', HOME: '/home/u', LANG: 'C.UTF-8', LC_ALL: 'C', TMPDIR: '/tmp', SSH_AUTH_SOCK: '/s',
+        MCP_AUTH_TOKEN: 'x', ANTHROPIC_API_KEY: 'y', GIT_DIR: '/etc', GIT_SSH_COMMAND: 'z',
+        GIT_TERMINAL_PROMPT: '1', GIT_ALLOW_PROTOCOL: 'ext',
+      },
+      'linux',
+    );
+    expect(env).toMatchObject({
+      PATH: '/bin', HOME: '/home/u', LANG: 'C.UTF-8', LC_ALL: 'C', TMPDIR: '/tmp', SSH_AUTH_SOCK: '/s',
+      GIT_TERMINAL_PROMPT: '0', GIT_ALLOW_PROTOCOL: 'file:git:http:https:ssh',
+    });
+    for (const k of ['MCP_AUTH_TOKEN', 'ANTHROPIC_API_KEY', 'GIT_DIR', 'GIT_SSH_COMMAND']) expect(env).not.toHaveProperty(k);
+  });
+
+  it('forwards Windows essentials only on win32 and accepts the Path spelling', async () => {
+    const { buildGitEnvironment } = await import('../../../src/core/git-executor.js');
+    const win = buildGitEnvironment({ Path: 'C:\\bin', SystemRoot: 'C:\\Windows', USERPROFILE: 'C:\\Users\\u', windir: 'C:\\Windows' }, 'win32');
+    expect(win['PATH']).toBe('C:\\bin');
+    expect(win['SystemRoot']).toBe('C:\\Windows');
+    expect(win['USERPROFILE']).toBe('C:\\Users\\u');
+    const linux = buildGitEnvironment({ SystemRoot: 'x' }, 'linux');
+    expect(linux).not.toHaveProperty('SystemRoot');
   });
 });

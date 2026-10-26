@@ -112,3 +112,48 @@ describe('PathValidator', () => {
     });
   });
 });
+
+describe('PathValidator hardening', () => {
+  it('rejects a ".." path segment but accepts ".." inside a file name', () => {
+    const rm = new RepositoryManager([path.normalize('/repo')]);
+    const v = new PathValidator(rm);
+    const repo = rm.getAllowedRepositories()[0];
+    expect(v.isSafePath('a..b')).toBe(true);
+    expect(v.isSafePath('dir/file..bak')).toBe(true);
+    expect(v.isSafePath('..')).toBe(false);
+    expect(v.isSafePath('../x')).toBe(false);
+    expect(v.isSafePath('x/..')).toBe(false);
+    expect(v.isSafePath('x/../y')).toBe(false);
+    expect(v.isSafePath('x\\..\\y')).toBe(false);
+    expect(v.validatePath(repo, 'a..b')).toBe(path.resolve(repo, 'a..b'));
+  });
+});
+
+describe('PathValidator symlink resolution', () => {
+  it('rejects paths that escape the repository through a symlink, even for non-existent leaves', async () => {
+    const { mkdtemp, mkdir, symlink, writeFile, rm, realpath } = await import('node:fs/promises');
+    const { tmpdir } = await import('node:os');
+    const base = await realpath(await mkdtemp(path.join(tmpdir(), 'pv-sym-')));
+    try {
+      const repo = path.join(base, 'repo');
+      const outside = path.join(base, 'outside');
+      await mkdir(repo);
+      await mkdir(outside);
+      await writeFile(path.join(outside, 'secret.txt'), 's');
+      await mkdir(path.join(repo, 'real'));
+      await symlink(outside, path.join(repo, 'link'));
+      await symlink(path.join(repo, 'real'), path.join(repo, 'inner-link'));
+      const v = new PathValidator(new RepositoryManager([repo]));
+
+      expect(() => v.validatePath(repo, 'link/secret.txt')).toThrow(GitMcpError);
+      expect(() => v.validatePath(repo, 'link/not-yet/created.txt')).toThrow(GitMcpError);
+      expect(() => v.validatePath(repo, 'link')).toThrow(GitMcpError);
+      // Symlinks that stay inside the repository, and ordinary paths, keep working.
+      expect(v.validatePath(repo, 'inner-link/new.txt')).toBe(path.join(repo, 'inner-link', 'new.txt'));
+      expect(v.validatePath(repo, 'real/new.txt')).toBe(path.join(repo, 'real', 'new.txt'));
+      expect(v.validatePath(repo, 'missing/dir/file.txt')).toBe(path.join(repo, 'missing', 'dir', 'file.txt'));
+    } finally {
+      await rm(base, { recursive: true, force: true });
+    }
+  });
+});
