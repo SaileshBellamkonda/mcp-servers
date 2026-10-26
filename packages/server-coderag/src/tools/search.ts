@@ -2,12 +2,19 @@ import { type McpServer, fromJsonSchema } from '@modelcontextprotocol/server';
 import { z } from 'zod';
 import type { VectorDB } from '../vectordb/db.js';
 import type { Embedder } from '../embedder/embedder.js';
-import type { SearchFilter } from '../core/types.js';
+import type { SearchFilter, SearchResult } from '../core/types.js';
 import { PathGuard } from '../core/path-guard.js';
 import { dropContainersOfMatches, formatConcise } from './search-format.js';
 import { applyFreshness, type SearchFreshness } from './search-freshness.js';
 
 const DEFAULT_MAX_TOKENS = 1500;
+/** Upper bound of the candidates added to the second retrieval, on top of the ones that were dropped. */
+const MAX_EXTRA_FETCH = 10;
+
+/** Hits a page can show: concise output also leaves out a class whose method is a hit. */
+function visibleCount(results: readonly SearchResult[], concise: boolean): number {
+  return concise ? dropContainersOfMatches(results).length : results.length;
+}
 
 const SearchSchema = z.object({
   query: z.string().min(1).describe('Natural language search query'),
@@ -96,18 +103,22 @@ export function registerSearch(
       // Concise output drops a class when its method matched too, so fetch extra hits to still fill the page.
       const fetchCount = concise ? (skip + topK) * 2 : skip + topK;
 
-      let found;
-      if (searchMode === 'keyword') {
-        found = db.searchByKeyword(query, fetchCount, filter);
-      } else if (searchMode === 'hybrid') {
-        const queryVector = await embedder.embed(query);
-        found = db.searchHybrid(queryVector, query, fetchCount, filter);
-      } else {
-        const queryVector = await embedder.embed(query);
-        found = db.searchWithFilter(queryVector, fetchCount, filter);
-      }
+      const queryVector = searchMode === 'keyword' ? undefined : await embedder.embed(query);
+      const retrieve = (limit: number): SearchResult[] => {
+        if (queryVector === undefined) return db.searchByKeyword(query, limit, filter);
+        return searchMode === 'hybrid'
+          ? db.searchHybrid(queryVector, query, limit, filter)
+          : db.searchWithFilter(queryVector, limit, filter);
+      };
 
-      found = applyFreshness(found, freshness);
+      let retrieved = retrieve(fetchCount);
+      let found = applyFreshness(retrieved, freshness);
+      const dropped = retrieved.length - found.length;
+      // Hits of deleted files can leave the page short. One more retrieval with a larger limit (never a loop) makes up for them.
+      if (dropped > 0 && retrieved.length >= fetchCount && visibleCount(found, concise) < skip + topK) {
+        retrieved = retrieve(fetchCount + dropped + Math.min(topK, MAX_EXTRA_FETCH));
+        found = applyFreshness(retrieved, freshness);
+      }
 
       if (!concise) {
         const results = found.slice(skip, skip + topK);

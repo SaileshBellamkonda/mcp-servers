@@ -143,7 +143,8 @@ without a directory rescans the configured documents and source files; the index
 - **At search:** the files of the returned hits are checked with one `stat` each. Hits of files that no longer exist are
   left out; hits of files changed since they were indexed are kept and marked `(stale)` at the end of the header line
   (detailed format: `"stale": true`), because their line numbers may have moved. Such files are re-indexed (or removed) in
-  the background, so the response never waits for the embedder and the next search is current.
+  the background, so the response never waits for the embedder and the next search is current. When leaving out deleted
+  files makes a page short, one more retrieval with a larger limit fills it (a single extra pass, never a loop).
 
 ## Search output
 
