@@ -13,6 +13,8 @@ export interface BundleFixture {
   root: string;
   /** `<root>/dist/extension.js` */
   extensionJs: string;
+  /** `<root>/dist/mcp-headers.js`: the dependency-free headersHelper script. */
+  helperJs: string;
   /** `<root>/dist/servers-entry.cjs`: the same bundle options, exporting the embedded server entry points. */
   serversEntry: string;
   /** Every module the extension bundle leaves external, per esbuild's metafile (should be `vscode` and built-ins). */
@@ -77,6 +79,7 @@ export default async function setup(project: TestProject): Promise<() => void> {
     root,
     extensionJs: path.join(dist, 'extension.js'),
     serversEntry: path.join(dist, 'servers-entry.cjs'),
+    helperJs: path.join(dist, 'mcp-headers.js'),
     externalImports,
     nativeDir,
     nativeSkipReason,

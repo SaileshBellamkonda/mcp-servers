@@ -28,7 +28,9 @@ export function extensionBundleOptions(extensionDir, overrides = {}) {
   /** @type {import('esbuild').BuildOptions} */
   const options = {
     absWorkingDir: root,
-    entryPoints: { extension: 'src/extension.ts' },
+    // `mcp-headers` is the standalone headersHelper script (no dependencies) that Claude Code runs; the extension
+    // copies it to a stable path under its global storage at activation.
+    entryPoints: { extension: 'src/extension.ts', 'mcp-headers': 'src/helper/mcp-headers.ts' },
     outdir: path.join(root, 'dist'),
     bundle: true,
     format: 'cjs',

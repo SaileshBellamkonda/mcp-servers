@@ -60,8 +60,8 @@ describe(`vsce ls --no-dependencies on a bundled and staged extension${reason ? 
     expect(status, stderr).toBe(0);
   });
 
-  it.skipIf(reason !== undefined)('ships the manifest, README and the bundle', () => {
-    expect(listed).toEqual(expect.arrayContaining(['package.json', 'README.md', 'dist/extension.js']));
+  it.skipIf(reason !== undefined)('ships the manifest, README, the bundle and the headers helper script', () => {
+    expect(listed).toEqual(expect.arrayContaining(['package.json', 'README.md', 'dist/extension.js', 'dist/mcp-headers.js']));
   });
 
   it.skipIf(reason !== undefined)('ships the staged natives, including tree-sitter and sqlite-vec files', () => {

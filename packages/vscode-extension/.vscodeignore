@@ -1,6 +1,7 @@
 # Everything JavaScript is bundled into dist/extension.js; the native modules are staged under
 # dist/native/node_modules by scripts/stage-native.mjs (inside dist because vsce drops node_modules/** at the
-# package root). Only the manifest, README, dist/extension.js and dist/native ship.
+# package root). Only the manifest, README, dist/extension.js, dist/mcp-headers.js (the Claude Code headers
+# helper) and dist/native ship.
 .vscode/**
 .vscode-test/**
 .tmp-*/**
