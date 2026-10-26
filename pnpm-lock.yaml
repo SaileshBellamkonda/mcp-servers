@@ -13,13 +13,13 @@ catalogs:
       specifier: ^10.0.0
       version: 10.0.1
     '@hono/node-server':
-      specifier: ^2.0.6
-      version: 2.0.6
+      specifier: ^2.0.10
+      version: 2.1.5
     '@modelcontextprotocol/hono':
-      specifier: ^2.0.0-alpha.2
+      specifier: 2.0.0-alpha.2
       version: 2.0.0-alpha.2
     '@modelcontextprotocol/server':
-      specifier: ^2.0.0-alpha.2
+      specifier: 2.0.0-alpha.2
       version: 2.0.0-alpha.2
     '@tsconfig/node22':
       specifier: ^22.0.5
@@ -49,8 +49,8 @@ catalogs:
       specifier: ^4.0.3
       version: 4.0.3
     hono:
-      specifier: ^4.6.0
-      version: 4.12.27
+      specifier: ^4.13.11
+      version: 4.13.14
     micromatch:
       specifier: ^4.0.8
       version: 4.0.8
@@ -118,8 +118,11 @@ catalogs:
       specifier: ^7.0.0
       version: 7.0.0
     zod:
-      specifier: ^4.4.3
-      version: 4.4.3
+      specifier: ^4.6.6
+      version: 4.6.7
+
+overrides:
+  js-yaml@^3.13.1: ^3.15.2
 
 importers:
 
@@ -148,10 +151,10 @@ importers:
         version: 4.1.1
       '@hono/node-server':
         specifier: 'catalog:'
-        version: 2.0.6(hono@4.12.27)
+        version: 2.1.5(hono@4.13.14)
       '@modelcontextprotocol/hono':
         specifier: 'catalog:'
-        version: 2.0.0-alpha.2(@modelcontextprotocol/server@2.0.0-alpha.2(@cfworker/json-schema@4.1.1))(hono@4.12.27)
+        version: 2.0.0-alpha.2(@modelcontextprotocol/server@2.0.0-alpha.2(@cfworker/json-schema@4.1.1))(hono@4.13.14)
       '@modelcontextprotocol/server':
         specifier: 'catalog:'
         version: 2.0.0-alpha.2(@cfworker/json-schema@4.1.1)
@@ -163,7 +166,7 @@ importers:
         version: 4.0.3
       hono:
         specifier: 'catalog:'
-        version: 4.12.27
+        version: 4.13.14
       micromatch:
         specifier: 'catalog:'
         version: 4.0.8
@@ -211,7 +214,7 @@ importers:
         version: 0.23.2(tree-sitter@0.25.1)
       zod:
         specifier: 'catalog:'
-        version: 4.4.3
+        version: 4.6.7
     devDependencies:
       '@mcp-servers/common':
         specifier: workspace:*
@@ -251,10 +254,10 @@ importers:
     dependencies:
       '@hono/node-server':
         specifier: 'catalog:'
-        version: 2.0.6(hono@4.12.27)
+        version: 2.1.5(hono@4.13.14)
       '@modelcontextprotocol/hono':
         specifier: 'catalog:'
-        version: 2.0.0-alpha.2(@modelcontextprotocol/server@2.0.0-alpha.2(@cfworker/json-schema@4.1.1))(hono@4.12.27)
+        version: 2.0.0-alpha.2(@modelcontextprotocol/server@2.0.0-alpha.2(@cfworker/json-schema@4.1.1))(hono@4.13.14)
       '@modelcontextprotocol/server':
         specifier: 'catalog:'
         version: 2.0.0-alpha.2(@cfworker/json-schema@4.1.1)
@@ -263,13 +266,13 @@ importers:
         version: 1.118.0
       hono:
         specifier: 'catalog:'
-        version: 4.12.27
+        version: 4.13.14
       which:
         specifier: 'catalog:'
         version: 7.0.0
       zod:
         specifier: 'catalog:'
-        version: 4.4.3
+        version: 4.6.7
     devDependencies:
       '@mcp-servers/common':
         specifier: workspace:*
@@ -328,19 +331,19 @@ importers:
     dependencies:
       '@hono/node-server':
         specifier: 'catalog:'
-        version: 2.0.6(hono@4.12.27)
+        version: 2.1.5(hono@4.13.14)
       '@mcp-servers/common':
         specifier: workspace:*
         version: link:../common
       '@modelcontextprotocol/hono':
         specifier: 2.0.0-alpha.2
-        version: 2.0.0-alpha.2(@modelcontextprotocol/server@2.0.0-alpha.2(@cfworker/json-schema@4.1.1))(hono@4.12.27)
+        version: 2.0.0-alpha.2(@modelcontextprotocol/server@2.0.0-alpha.2(@cfworker/json-schema@4.1.1))(hono@4.13.14)
       '@modelcontextprotocol/server':
         specifier: 2.0.0-alpha.2
         version: 2.0.0-alpha.2(@cfworker/json-schema@4.1.1)
       hono:
         specifier: 'catalog:'
-        version: 4.12.27
+        version: 4.13.14
     devDependencies:
       '@tsconfig/node22':
         specifier: 'catalog:'
@@ -672,11 +675,11 @@ packages:
     resolution: {integrity: sha512-+CNAzxglkrpNf/kKywqQfk74QjtceuOE7Qm+AF8miRvPF/wmmK5+OJOgVh3AVTT3RP2mH3+FOaxlE5v72owk0A==}
     engines: {node: ^20.19.0 || ^22.13.0 || >=24}
 
-  '@hono/node-server@2.0.6':
-    resolution: {integrity: sha512-7DeRlKG57JDBNZ5Qj2jwVdgwQy4b0tLubRLl3zCf91/rCf9i7p1V5FtW/yWibm1uUHE493ts9ZXH/7g/LQWl+g==}
+  '@hono/node-server@2.1.5':
+    resolution: {integrity: sha512-MgP/I06GdvsilDspMk/qmRzpk8LOUStP6jFAbSRi40W09DhoyUn+Mj7eyKICPqeYKybOjVFLVIAQzvu1bfIa7Q==}
     engines: {node: '>=20'}
     peerDependencies:
-      hono: ^4
+      hono: ^4 || ^5.0.0-0
 
   '@humanfs/core@0.19.2':
     resolution: {integrity: sha512-UhXNm+CFMWcbChXywFwkmhqjs3PRCmcSa/hfBgLIb7oQ5HNb1wS0icWsGtSAUNgefHeI+eBrA8I1fxmbHsGdvA==}
@@ -1612,8 +1615,8 @@ packages:
     resolution: {integrity: sha512-ej4AhfhfL2Q2zpMmLo7U1Uv9+PyhIZpgQLGT1F9miIGmiCJIoCgSmczFdrc97mWT4kVY72KA+WnnhJ5pghSvSg==}
     engines: {node: '>= 0.4'}
 
-  hono@4.12.27:
-    resolution: {integrity: sha512-1yrb/+w6HWQJrUCLkJ2IF5jNIPvvFkblV5RNOYl6bV+OA6p9GLcMpHFFGTosSvHvcAUibuUukRqhlYI4z32C7Q==}
+  hono@4.13.14:
+    resolution: {integrity: sha512-yhRLQ21U6qa9Hsu2N7Qcbh8tE+WKEcoErjIo56LeSGiGXGp9sA7UpE86Ui9uexb61KakiGwuHMn2QdV7w6i6kQ==}
     engines: {node: '>=16.9.0'}
 
   hosted-git-info@4.1.0:
@@ -1734,8 +1737,8 @@ packages:
   js-tokens@4.0.0:
     resolution: {integrity: sha512-RdJUflcE3cUzKiMqQgsCu06FPu9UdIJO0beYbPhHN4k6apgJtifcoCtT9bcxOpYBtpD2kCM6Sbzg4CausW/PKQ==}
 
-  js-yaml@3.14.2:
-    resolution: {integrity: sha512-PMSmkqxr106Xa156c2M265Z+FTrPl+oxd/rgOQy2tijQeK5TxQ43psO1ZCwhVOSdnn+RzkzlRz/eY4BgJBYVpg==}
+  js-yaml@3.15.2:
+    resolution: {integrity: sha512-6EuL879VkRA+1Cz578mKMiKvjPNEuk6+r1JaFzoSWejZmtf7xWbIyw1e3KkxlkzTIt9Taw6JBhEppG7utc1P+w==}
     hasBin: true
 
   js-yaml@4.1.1:
@@ -2761,8 +2764,8 @@ packages:
     resolution: {integrity: sha512-rVksvsnNCdJ/ohGc6xgPwyN8eheCxsiLM8mxuE/t/mOVqJewPuO1miLpTHQiRgTKCLexL4MeAFVagts7HmNZ2Q==}
     engines: {node: '>=10'}
 
-  zod@4.4.3:
-    resolution: {integrity: sha512-ytENFjIJFl2UwYglde2jchW2Hwm4GJFLDiSXWdTrJQBIN9Fcyp7n4DhxJEiWNAJMV1/BqWfW/kkg71UDcHJyTQ==}
+  zod@4.6.7:
+    resolution: {integrity: sha512-g8W2D2kU6a8untc053fX1uVBKzM7yqAxW/3zwk83+6RyF2+SKOuV+c0wBDhUwzV1PaGapmZH+rmcUzPf+3CGwg==}
 
 snapshots:
 
@@ -3005,9 +3008,9 @@ snapshots:
       '@eslint/core': 1.2.1
       levn: 0.4.1
 
-  '@hono/node-server@2.0.6(hono@4.12.27)':
+  '@hono/node-server@2.1.5(hono@4.13.14)':
     dependencies:
-      hono: 4.12.27
+      hono: 4.13.14
 
   '@humanfs/core@0.19.2':
     dependencies:
@@ -3040,14 +3043,14 @@ snapshots:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.5.5
 
-  '@modelcontextprotocol/hono@2.0.0-alpha.2(@modelcontextprotocol/server@2.0.0-alpha.2(@cfworker/json-schema@4.1.1))(hono@4.12.27)':
+  '@modelcontextprotocol/hono@2.0.0-alpha.2(@modelcontextprotocol/server@2.0.0-alpha.2(@cfworker/json-schema@4.1.1))(hono@4.13.14)':
     dependencies:
       '@modelcontextprotocol/server': 2.0.0-alpha.2(@cfworker/json-schema@4.1.1)
-      hono: 4.12.27
+      hono: 4.13.14
 
   '@modelcontextprotocol/server@2.0.0-alpha.2(@cfworker/json-schema@4.1.1)':
     dependencies:
-      zod: 4.4.3
+      zod: 4.6.7
     optionalDependencies:
       '@cfworker/json-schema': 4.1.1
 
@@ -4026,7 +4029,7 @@ snapshots:
 
   gray-matter@4.0.3:
     dependencies:
-      js-yaml: 3.14.2
+      js-yaml: 3.15.2
       kind-of: 6.0.3
       section-matter: 1.0.0
       strip-bom-string: 1.0.0
@@ -4043,7 +4046,7 @@ snapshots:
     dependencies:
       function-bind: 1.1.2
 
-  hono@4.12.27: {}
+  hono@4.13.14: {}
 
   hosted-git-info@4.1.0:
     dependencies:
@@ -4150,7 +4153,7 @@ snapshots:
 
   js-tokens@4.0.0: {}
 
-  js-yaml@3.14.2:
+  js-yaml@3.15.2:
     dependencies:
       argparse: 1.0.10
       esprima: 4.0.1
@@ -5123,4 +5126,4 @@ snapshots:
 
   yocto-queue@0.1.0: {}
 
-  zod@4.4.3: {}
+  zod@4.6.7: {}
