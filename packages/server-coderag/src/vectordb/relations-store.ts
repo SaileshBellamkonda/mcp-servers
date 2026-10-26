@@ -133,11 +133,15 @@ interface QueryRow {
 export const IMPORTED_FILES_SQL = `SELECT DISTINCT cr.target_file, cr.names FROM chunks c CROSS JOIN code_relations cr ON cr.source_chunk_id = c.id
   WHERE c.document_id = ? AND cr.relation_type = 'imports' AND cr.target_file != ''`;
 
-/** Imports (`?` 1: highest relation id to consider, 2: LIKE pattern) of modules that no indexed file satisfied so far. */
-export const UNRESOLVED_IMPORTS_BY_STEM_SQL = `SELECT cr.id, cr.target_name, cr.names, cr.target_file, cr.confidence, d.filename AS src_file, cm.language
+/**
+ * Imports (`?` 1: highest relation id to consider, 2: LIKE pattern) whose module name contains the stem of a file that
+ * was just indexed: unresolved ones may now resolve, and resolved ones may now prefer the new file because it is closer
+ * (`use crate::util` in one crate must not stay with the util.rs of another crate that happened to be indexed first).
+ */
+export const IMPORTS_BY_STEM_SQL = `SELECT cr.id, cr.target_name, cr.names, cr.target_file, cr.confidence, d.filename AS src_file, cm.language
   FROM code_relations cr JOIN chunks c ON c.id = cr.source_chunk_id JOIN documents d ON d.id = c.document_id
   LEFT JOIN code_metadata cm ON cm.chunk_id = c.id
-  WHERE cr.relation_type = 'imports' AND cr.target_file = '' AND cr.id <= ? AND cr.target_name LIKE ? ESCAPE '!'`;
+  WHERE cr.relation_type = 'imports' AND cr.id <= ? AND cr.target_name LIKE ? ESCAPE '!'`;
 
 /**
  * Candidates that are one symbol to a reader: the overloads of a method in one class, a struct and its `impl` blocks,
@@ -192,25 +196,25 @@ function belongsTo(candidate: Candidate, name: string): boolean {
   return base.slice(0, base.length - path.posix.extname(base).length) === name || path.posix.basename(path.posix.dirname(file)) === name;
 }
 
-/**
- * True when `candidate` is nested in a function or method of its file (a closure, a helper of a test, a local class)
- * and the calling chunk is outside that function, in another file or elsewhere in the same one.
- */
-function isHiddenLocal(
-  candidate: Candidate,
-  sourceDocument: number,
-  source: { start: number; end: number } | null,
-  functionsOf: (document: number) => readonly FunctionRange[],
-): boolean {
-  if (candidate.start_line === null || candidate.end_line === null) return false;
-  let innermost: FunctionRange | undefined;
-  for (const f of functionsOf(candidate.document_id)) {
+/** The smallest function or method chunk of the candidate's file that contains the candidate, or null. */
+function enclosingFunction(candidate: Candidate, functions: readonly FunctionRange[]): FunctionRange | null {
+  if (candidate.start_line === null || candidate.end_line === null) return null;
+  let innermost: FunctionRange | null = null;
+  for (const f of functions) {
     if (f.chunk_id === candidate.chunk_id || f.start_line > candidate.start_line || f.end_line < candidate.end_line) continue;
     if (f.start_line === candidate.start_line && f.end_line === candidate.end_line) continue;
     if (!innermost || f.end_line - f.start_line < innermost.end_line - innermost.start_line) innermost = f;
   }
-  if (!innermost) return false;
-  return candidate.document_id !== sourceDocument || source === null || source.start < innermost.start_line || source.end > innermost.end_line;
+  return innermost;
+}
+
+/**
+ * True when `candidate` is nested in a function or method of its file (a closure, a helper of a test, a local class)
+ * and the calling chunk is outside that function, in another file or elsewhere in the same one.
+ */
+function isHiddenLocal(candidate: Candidate, enclosing: FunctionRange | null, sourceDocument: number, source: { start: number; end: number } | null): boolean {
+  if (!enclosing) return false;
+  return candidate.document_id !== sourceDocument || source === null || source.start < enclosing.start_line || source.end > enclosing.end_line;
 }
 
 function placeholders(n: number): string {
@@ -404,6 +408,15 @@ export class RelationStore {
       }
       return found;
     };
+    const enclosing = new Map<number, FunctionRange | null>();
+    const enclosingOf = (candidate: Candidate): FunctionRange | null => {
+      let found = enclosing.get(candidate.chunk_id);
+      if (found === undefined) {
+        found = enclosingFunction(candidate, functionsOf(candidate.document_id));
+        enclosing.set(candidate.chunk_id, found);
+      }
+      return found;
+    };
     const sources = new Map<number, { name: string; start: number; end: number } | null>();
     const sourceOf = (chunk: number): { name: string; start: number; end: number } | null => {
       let found = sources.get(chunk);
@@ -423,7 +436,7 @@ export class RelationStore {
       // `class Config(lib.Config)` names another class that happens to share the name.
       if (edge.relation_type === 'inherits') found = found.filter((c) => c.chunk_id !== edge.source_chunk_id && !(c.document_id === document && source !== null && c.symbol_name === source.name));
       // A function nested in another function is only visible inside it.
-      found = found.filter((c) => !isHiddenLocal(c, document, source, functionsOf));
+      found = found.filter((c) => !isHiddenLocal(c, enclosingOf(c), document, source));
       // A call to a very common name (`toString`, `clone`, `contains`) is almost always a library call: it only
       // resolves to a symbol of its own file or of a file it imports. Any other symbol of that name is shown as
       // "some symbol has this name" (ambiguous, no target) instead of a target that is nearly always wrong.
@@ -538,7 +551,7 @@ export class RelationStore {
     for (const change of changes) {
       const rows =
         change.kind === 'stem'
-          ? this.db.prepare<ImportRow>(UNRESOLVED_IMPORTS_BY_STEM_SQL).all(change.watermark, `%${likeEscape(change.value)}%`)
+          ? this.db.prepare<ImportRow>(IMPORTS_BY_STEM_SQL).all(change.watermark, `%${likeEscape(change.value)}%`)
           : this.db.prepare<ImportRow>(select('(cr.target_file = ? OR cr.target_file = ?)')).all(change.value, dirname(change.value));
       changed += this.resolveImportRows(rows.filter((r) => {
         if (seen.has(r.id)) return false;

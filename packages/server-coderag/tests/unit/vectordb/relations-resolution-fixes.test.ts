@@ -241,3 +241,30 @@ describe('an impl block does not inherit from the type it implements', () => {
     expect(hit?.target).toBeUndefined();
   });
 });
+
+describe('an import is resolved again when a closer file of the same name is indexed later', () => {
+  const rust = (name: string): CodeChunk => chunk(name, 0, { language: 'rust' });
+  const importedFile = (): string | undefined => db.queryRelations(query('/r/crates/printer/src/standard.rs', { direction: 'out', types: ['imports'] })).hits[0]?.targetFile;
+
+  it('moves `use crate::util` from another crate\'s util.rs to the one of its own crate', async () => {
+    put('/r/crates/matcher/tests/util.rs', [rust('helper')]);
+    put('/r/crates/printer/src/standard.rs', [rust('Standard')], relations(rel('imports', 0, 'crate::util', { names: ['Replacer'] })));
+    await db.resolvePendingRelations();
+    expect(importedFile()).toBe('/r/crates/matcher/tests/util.rs');
+
+    put('/r/crates/printer/src/util.rs', [rust('Replacer')]);
+    await db.resolvePendingRelations();
+    expect(importedFile()).toBe('/r/crates/printer/src/util.rs');
+  });
+
+  it('gives the import back to the farther file when the closer one is deleted', async () => {
+    put('/r/crates/matcher/tests/util.rs', [rust('helper')]);
+    put('/r/crates/printer/src/util.rs', [rust('Replacer')]);
+    put('/r/crates/printer/src/standard.rs', [rust('Standard')], relations(rel('imports', 0, 'crate::util', { names: ['Replacer'] })));
+    await db.resolvePendingRelations();
+    expect(importedFile()).toBe('/r/crates/printer/src/util.rs');
+    db.deleteDocument('/r/crates/printer/src/util.rs');
+    await db.resolvePendingRelations();
+    expect(importedFile()).toBe('/r/crates/matcher/tests/util.rs');
+  });
+});

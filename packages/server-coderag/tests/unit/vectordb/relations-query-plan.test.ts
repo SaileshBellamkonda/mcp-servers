@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { openSqliteDatabase } from '../../../src/vectordb/sqlite-db.js';
 import { RELATIONS_AUX_DDL, RELATIONS_TABLE_DDL } from '../../../src/vectordb/schema.js';
-import { IMPORTED_FILES_SQL, UNRESOLVED_IMPORTS_BY_STEM_SQL } from '../../../src/vectordb/relations-store.js';
+import { IMPORTED_FILES_SQL, IMPORTS_BY_STEM_SQL } from '../../../src/vectordb/relations-store.js';
 
 function planOf(sql: string, ...args: (string | number)[]): string[] {
   const db = openSqliteDatabase(':memory:');
@@ -29,11 +29,12 @@ describe('the lookup of the files a document imports', () => {
   });
 });
 
-describe('the lookup of unresolved imports that a new file may satisfy', () => {
-  it('reads the imports without a file, not every call, which also has an empty target file', () => {
+describe('the lookup of imports that a new file may change', () => {
+  it('reads the imports, not every call, which also has an empty target file', () => {
     // Calls and inheritance rows store '' as target_file too (70,000 of them against 8,000 unresolved imports in a
     // 1,500 file index), so an index on target_file alone made every new file scan all of them.
-    const plan = planOf(UNRESOLVED_IMPORTS_BY_STEM_SQL, 100, '%util%');
-    expect(plan.some((line) => /idx_rel_type_file \(relation_type=\? AND target_file=\?/.test(line))).toBe(true);
+    const plan = planOf(IMPORTS_BY_STEM_SQL, 100, '%util%');
+    expect(plan.some((line) => /idx_rel_type(?:_file)? \(relation_type=\?/.test(line))).toBe(true);
+    expect(plan.some((line) => line.includes('idx_rel_file '))).toBe(false);
   });
 });
