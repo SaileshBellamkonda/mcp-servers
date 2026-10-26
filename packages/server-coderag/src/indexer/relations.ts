@@ -424,6 +424,7 @@ const visitJava: Visitor = (node, position, emit, isChunk) => {
       return;
     case 'class_declaration':
     case 'interface_declaration':
+    case 'record_declaration':
     case 'enum_declaration': {
       if (!isChunk(node)) return;
       for (const clause of namedChildren(node)) {

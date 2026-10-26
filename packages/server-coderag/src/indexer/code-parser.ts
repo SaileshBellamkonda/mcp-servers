@@ -13,8 +13,10 @@ import { extractRelations, NO_RELATIONS, type ChunkNode, type ExtractedRelations
  * 4: a class, struct, interface or impl is stored as a skeleton (header and member list) instead of its whole body.
  * 5: the parent symbol of a method is its Go receiver type, the type of a Rust `impl` (not the trait), and the enum,
  *    record, interface, struct or trait that declares it; a C# type whose header holds a `#if` keeps its real name.
+ * 6: Java enums, records and annotation types, C# enums, structs and records, TypeScript abstract classes and enums and Rust
+ *    impl blocks of generic types are indexed (as classes, structs or interfaces, with a skeleton).
  */
-export const CODE_PARSER_VERSION = 5;
+export const CODE_PARSER_VERSION = 6;
 
 let defaultRequire: NodeJS.Require | undefined;
 
@@ -378,6 +380,11 @@ function memberLines(container: TSNode, source: string, byRange: Map<string, Sym
   for (let i = 0; i < container.childCount; i++) {
     const child = container.child(i);
     if (!child?.isNamed || COMMENT_TYPES.has(child.type) || NOT_MEMBERS.has(child.type) || isDocstring(child)) continue;
+    // Java: an enum lists its constants first and the members after `;` in a node of their own.
+    if (child.type === 'enum_body_declarations') {
+      lines.push(...memberLines(child, source, byRange));
+      continue;
+    }
     const line = memberLine(child, source, byRange);
     if (line !== null) lines.push(clipTo(line, MAX_MEMBER_LINE_CHARS));
   }

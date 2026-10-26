@@ -9,6 +9,8 @@ const TYPESCRIPT_QUERY = `
 (function_declaration name: (identifier) @name) @function
 (lexical_declaration (variable_declarator name: (identifier) @name value: (arrow_function))) @function
 (class_declaration name: (type_identifier) @name) @class
+(abstract_class_declaration name: (type_identifier) @name) @class
+(enum_declaration name: (identifier) @name) @class
 (interface_declaration name: (type_identifier) @name) @interface
 (method_definition name: (property_identifier) @name) @method
 `;
@@ -73,6 +75,7 @@ export const SUPPORTED_LANGUAGES: Record<string, LanguageConfig> = {
 (enum_item name: (type_identifier) @name) @struct
 (trait_item name: (type_identifier) @name) @interface
 (impl_item type: (type_identifier) @name) @struct
+(impl_item type: (generic_type type: (type_identifier) @name)) @struct
 `,
   },
 
@@ -95,8 +98,12 @@ export const SUPPORTED_LANGUAGES: Record<string, LanguageConfig> = {
     query: `
 (method_declaration name: (identifier) @name) @method
 (class_declaration name: (identifier) @name) @class
+(enum_declaration name: (identifier) @name) @class
+(record_declaration name: (identifier) @name) @class
 (interface_declaration name: (identifier) @name) @interface
+(annotation_type_declaration name: (identifier) @name) @interface
 (constructor_declaration name: (identifier) @name) @function
+(compact_constructor_declaration name: (identifier) @name) @function
 `,
   },
 
@@ -107,6 +114,9 @@ export const SUPPORTED_LANGUAGES: Record<string, LanguageConfig> = {
     query: `
 (method_declaration name: (identifier) @name) @method
 (class_declaration name: (identifier) @name) @class
+(struct_declaration name: (identifier) @name) @struct
+(enum_declaration name: (identifier) @name) @class
+(record_declaration name: (identifier) @name) @class
 (interface_declaration name: (identifier) @name) @interface
 (constructor_declaration name: (identifier) @name) @function
 `,
