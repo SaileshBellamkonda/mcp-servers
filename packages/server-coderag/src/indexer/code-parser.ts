@@ -15,8 +15,9 @@ import { extractRelations, NO_RELATIONS, type ChunkNode, type ExtractedRelations
  *    record, interface, struct or trait that declares it; a C# type whose header holds a `#if` keeps its real name.
  * 6: Java enums, records and annotation types, C# enums, structs and records, TypeScript abstract classes and enums and Rust
  *    impl blocks of generic types are indexed (as classes, structs or interfaces, with a skeleton).
+ * 7: the chunk of a Python function or class starts at its first decorator, and that of a Rust item at its first attribute.
  */
-export const CODE_PARSER_VERSION = 6;
+export const CODE_PARSER_VERSION = 7;
 
 let defaultRequire: NodeJS.Require | undefined;
 
@@ -243,13 +244,14 @@ export class CodeParser {
     const chunks = symbols.map((symbol, position): CodeChunk => {
       const node = symbol.node;
       const skeleton = skeletons && CONTAINER_TYPES.has(symbol.type) ? buildSkeleton(symbol, lang, source, byRange) : null;
+      const first = firstAnnotation(node, lang);
       return {
-        content: skeleton ?? source.slice(node.startIndex, node.endIndex),
+        content: skeleton ?? source.slice(first.startIndex, node.endIndex),
         position,
         symbolName: symbol.name,
         symbolType: symbol.type,
         language: lang,
-        startLine: node.startPosition.row + 1,
+        startLine: first.startPosition.row + 1,
         endLine: node.endPosition.row + 1,
         parentSymbol: findParentSymbol(node),
         signature: symbol.signature,
@@ -312,6 +314,21 @@ function extractSignature(node: TSNode, source: string): string {
     return tidySignature(source.slice(firstNonDecoratorStart(node), body.startIndex));
   }
   return tidySignature(source.slice(node.startIndex, node.endIndex).split('\n')[0] ?? '');
+}
+
+/**
+ * The node a symbol's chunk starts at: Python decorators (`@app.route`) and Rust attributes (`#[test]`) are siblings of
+ * the declaration in the syntax tree, but belong to it like Java annotations, C# attributes and TypeScript decorators
+ * (which are part of the declaration node).
+ */
+function firstAnnotation(node: TSNode, lang: string): TSNode {
+  if (lang === 'python') return node.parent?.type === 'decorated_definition' ? node.parent : node;
+  if (lang === 'rust') {
+    let first = node;
+    for (let previous = node.previousSibling; previous?.type === 'attribute_item'; previous = previous.previousSibling) first = previous;
+    return first;
+  }
+  return node;
 }
 
 // ─── Container skeletons ─────────────────────────────────────────────────────
