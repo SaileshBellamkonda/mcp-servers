@@ -1,6 +1,7 @@
 import { type McpServer, fromJsonSchema } from '@modelcontextprotocol/server';
 import { z } from 'zod';
 import type { Services } from '../../core/types.js';
+import { assertSafeRefLike } from '../../core/git-args.js';
 
 const GitWorktreeAddSchema = z.object({
   repository: z.string().describe('Repository path'),
@@ -29,10 +30,14 @@ export function registerGitWorktreeAdd(server: McpServer, services: Services): v
       const { repository, path: worktreePath, branch, commitish } = GitWorktreeAddSchema.parse(input);
 
       services.repoManager.validateRepository(repository);
-      services.pathValidator.validatePath(repository, worktreePath);
+      // Pass the validated absolute path: a relative value such as "-f" can no longer be parsed as an option.
+      const safePath = services.pathValidator.validatePath(repository, worktreePath);
+      if (branch) assertSafeRefLike(branch, 'branch');
+      if (commitish) assertSafeRefLike(commitish, 'commitish');
 
-      const args = ['worktree', 'add', worktreePath];
+      const args = ['worktree', 'add'];
       if (branch) args.push('-b', branch);
+      args.push('--end-of-options', safePath);
       if (commitish) args.push(commitish);
 
       const result = await services.gitExecutor.execute(repository, args);

@@ -27,8 +27,10 @@ export function registerGitWorktreeMove(server: McpServer, services: Services): 
       const { repository, source, destination } = GitWorktreeMoveSchema.parse(input);
 
       services.repoManager.validateRepository(repository);
+      const safeSource = services.pathValidator.validatePath(repository, source);
+      const safeDestination = services.pathValidator.validatePath(repository, destination);
 
-      const result = await services.gitExecutor.execute(repository, ['worktree', 'move', source, destination]);
+      const result = await services.gitExecutor.execute(repository, ['worktree', 'move', safeSource, safeDestination]);
 
       if (!result.success) {
         services.logger?.error({ tool: 'git_worktree_move', repository, source, error: result.stderr });

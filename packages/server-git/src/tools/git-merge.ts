@@ -1,6 +1,7 @@
 import { type McpServer, fromJsonSchema } from '@modelcontextprotocol/server';
 import { z } from 'zod';
 import type { Services } from '../core/types.js';
+import { assertSafeRefLike } from '../core/git-args.js';
 
 const GitMergeSchema = z.object({
   repository: z.string().describe('Repository path'),
@@ -29,6 +30,8 @@ export function registerGitMerge(server: McpServer, services: Services): void {
       const { repository, branch, no_ff, message } = GitMergeSchema.parse(input);
 
       services.repoManager.validateRepository(repository);
+
+      assertSafeRefLike(branch, 'branch');
 
       const args = ['merge'];
       if (no_ff) {

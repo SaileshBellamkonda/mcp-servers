@@ -2,6 +2,7 @@ import { type McpServer, fromJsonSchema } from '@modelcontextprotocol/server';
 import { z } from 'zod';
 import { GitMcpError, ErrorCode } from '../core/types.js';
 import type { Services } from '../core/types.js';
+import { assertPathspecs } from '../core/git-args.js';
 
 const GitAddSchema = z.object({
   repository: z.string().describe('Repository path'),
@@ -35,9 +36,12 @@ export function registerGitAdd(server: McpServer, services: Services): void {
         );
       }
 
+      // No options, no pathspec magic, no spelling of the repository root.
+      assertPathspecs(files, repository);
       services.pathValidator.validatePaths(repository, files);
 
-      const result = await services.gitExecutor.execute(repository, ['add', ...files]);
+      // --literal-pathspecs turns globs/magic into plain file names; `--` ends option parsing.
+      const result = await services.gitExecutor.execute(repository, ['--literal-pathspecs', 'add', '--', ...files]);
 
       if (!result.success) {
         services.logger?.error({ tool: 'git_add', repository, error: result.stderr });

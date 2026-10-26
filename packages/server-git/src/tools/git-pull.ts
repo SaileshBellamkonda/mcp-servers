@@ -1,6 +1,7 @@
 import { type McpServer, fromJsonSchema } from '@modelcontextprotocol/server';
 import { z } from 'zod';
 import type { Services } from '../core/types.js';
+import { assertSafeRefLike, resolveRemote } from '../core/git-args.js';
 
 const GitPullSchema = z.object({
   repository: z.string().describe('Repository path'),
@@ -30,11 +31,16 @@ export function registerGitPull(server: McpServer, services: Services): void {
 
       services.repoManager.validateRepository(repository);
 
+      if (branch !== undefined) {
+        assertSafeRefLike(branch, 'branch');
+      }
+      const safeRemote = await resolveRemote(services.gitExecutor, repository, remote);
+
       const args = ['pull'];
       if (rebase) {
         args.push('--rebase');
       }
-      args.push(remote);
+      args.push(safeRemote);
       if (branch !== undefined) {
         args.push(branch);
       }

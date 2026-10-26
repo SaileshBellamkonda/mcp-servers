@@ -1,6 +1,7 @@
 import { type McpServer, fromJsonSchema } from '@modelcontextprotocol/server';
 import { z } from 'zod';
 import type { Services } from '../core/types.js';
+import { assertRemoteName, assertRemoteUrl, assertSafeRefLike } from '../core/git-args.js';
 
 // ─── git_remote_list ──────────────────────────────────────────────────────────
 
@@ -35,7 +36,7 @@ export function registerGitRemoteList(server: McpServer, services: Services): vo
 
       // Lines: "origin\thttps://...\t(fetch)" — deduplicate by remote name
       const seen = new Set<string>();
-      const remotes: Array<{ name: string; url: string }> = [];
+      const remotes: { name: string; url: string }[] = [];
 
       for (const line of result.stdout.split('\n').filter(Boolean)) {
         const [name, urlWithType] = line.split('\t');
@@ -84,6 +85,8 @@ export function registerGitRemoteAdd(server: McpServer, services: Services): voi
       if (!url.trim()) {
         throw new Error('Remote URL must not be empty');
       }
+      assertRemoteName(name);
+      assertRemoteUrl(url);
 
       const result = await services.gitExecutor.execute(repository, ['remote', 'add', name, url]);
 
@@ -124,6 +127,8 @@ export function registerGitRemoteRemove(server: McpServer, services: Services): 
       const { repository, name } = GitRemoteRemoveSchema.parse(input);
 
       services.repoManager.validateRepository(repository);
+
+      assertSafeRefLike(name, 'remote name');
 
       const result = await services.gitExecutor.execute(repository, ['remote', 'remove', name]);
 

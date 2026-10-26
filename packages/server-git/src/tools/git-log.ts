@@ -1,6 +1,7 @@
 import { type McpServer, fromJsonSchema } from '@modelcontextprotocol/server';
 import { z } from 'zod';
 import type { Services } from '../core/types.js';
+import { assertSafeRefLike } from '../core/git-args.js';
 
 const GitLogSchema = z.object({
   repository: z.string().describe('Repository path'),
@@ -29,7 +30,7 @@ export function registerGitLog(server: McpServer, services: Services): void {
       services.repoManager.validateRepository(repository);
 
       const args = ['log', '--format=%H|%an|%ad|%s', '-n', limit.toString()];
-      if (branch) args.push(branch);
+      if (branch) args.push('--end-of-options', assertSafeRefLike(branch, 'branch'));
 
       const result = await services.gitExecutor.execute(repository, args);
 

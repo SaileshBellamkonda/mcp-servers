@@ -25,8 +25,9 @@ export function registerGitWorktreeUnlock(server: McpServer, services: Services)
       const { repository, path: worktreePath } = GitWorktreeUnlockSchema.parse(input);
 
       services.repoManager.validateRepository(repository);
+      const safePath = services.pathValidator.validatePath(repository, worktreePath);
 
-      const result = await services.gitExecutor.execute(repository, ['worktree', 'unlock', worktreePath]);
+      const result = await services.gitExecutor.execute(repository, ['worktree', 'unlock', safePath]);
 
       if (!result.success) {
         services.logger?.error({ tool: 'git_worktree_unlock', repository, path: worktreePath, error: result.stderr });

@@ -1,6 +1,7 @@
 import { type McpServer, fromJsonSchema } from '@modelcontextprotocol/server';
 import { z } from 'zod';
 import type { Services } from '../core/types.js';
+import { assertSafeRefLike } from '../core/git-args.js';
 
 const GitCherryPickSchema = z.object({
   repository: z.string().describe('Repository path'),
@@ -38,6 +39,8 @@ export function registerGitCherryPick(server: McpServer, services: Services): vo
       const { repository, commits, no_commit } = GitCherryPickSchema.parse(input);
 
       services.repoManager.validateRepository(repository);
+
+      for (const commit of commits) assertSafeRefLike(commit, 'commit');
 
       const args = ['cherry-pick'];
       if (no_commit) {

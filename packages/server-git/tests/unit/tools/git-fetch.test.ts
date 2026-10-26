@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { McpServer } from '@modelcontextprotocol/server';
 import { registerGitFetch } from '../../../src/tools/git-fetch.js';
 import { RepositoryManager } from '../../../src/core/repository-manager.js';
@@ -8,6 +8,15 @@ import { OutputParser } from '../../../src/core/output-parser.js';
 import type { Services } from '../../../src/core/types.js';
 
 describe('git_fetch tool', () => {
+  // The argument-shape tests below use mocked executors with no configured remotes, so they run in the
+  // documented opt-in mode (GIT_ALLOW_REMOTE_URLS=1); the default mode has its own tests at the end.
+  beforeEach(() => {
+    process.env['GIT_ALLOW_REMOTE_URLS'] = '1';
+  });
+  afterEach(() => {
+    delete process.env['GIT_ALLOW_REMOTE_URLS'];
+  });
+
   let server: McpServer;
   let services: Services;
 
@@ -113,5 +122,54 @@ describe('git_fetch tool', () => {
   it('throws for invalid repository', async () => {
     const tool = (server as any)._registeredTools['git_fetch'];
     await expect(tool.handler({ repository: '/invalid' })).rejects.toThrow();
+  });
+
+  describe('remote must be a configured remote name (default mode)', () => {
+    beforeEach(() => {
+      delete process.env['GIT_ALLOW_REMOTE_URLS'];
+    });
+
+    const mockGit = () =>
+      vi.spyOn(services.gitExecutor, 'execute').mockImplementation(async (_repo, args) => ({
+        stdout: args[0] === 'remote' ? 'origin\nupstream\n' : '',
+        stderr: '',
+        exitCode: 0,
+        success: true,
+      }));
+
+    it('runs fetch against a configured remote', async () => {
+      const executeSpy = mockGit();
+      const tool = (server as any)._registeredTools['git_fetch'];
+      await tool.handler({ repository: '/repo', remote: 'upstream' });
+      expect(executeSpy).toHaveBeenCalledWith('/repo', ['remote']);
+      expect(executeSpy.mock.calls.some((c) => c[1][0] === 'fetch' && c[1].includes('upstream'))).toBe(true);
+    });
+
+    it.each(['https://evil.example/r.git', '/srv/git/r.git', 'ext::sh -c id', 'not-configured'])(
+      'refuses %s without running fetch',
+      async (remote) => {
+        const executeSpy = mockGit();
+        const tool = (server as any)._registeredTools['git_fetch'];
+        await expect(tool.handler({ repository: '/repo', remote })).rejects.toThrow(/configured remote/);
+        expect(executeSpy.mock.calls.some((c) => c[1][0] === 'fetch')).toBe(false);
+      },
+    );
+
+    it('refuses option-like remote and branch values', async () => {
+      const executeSpy = mockGit();
+      const tool = (server as any)._registeredTools['git_fetch'];
+      await expect(tool.handler({ repository: '/repo', remote: '--upload-pack=touch /tmp/x', branch: 'main' })).rejects.toThrow(/must not start with/);
+      await expect(tool.handler({ repository: '/repo', remote: 'origin', branch: '--upload-pack=touch /tmp/x' })).rejects.toThrow(/Invalid branch/);
+      expect(executeSpy.mock.calls.some((c) => c[1][0] === 'fetch')).toBe(false);
+    });
+
+    it('allows URLs when GIT_ALLOW_REMOTE_URLS=1 but still refuses ext:: helpers', async () => {
+      process.env['GIT_ALLOW_REMOTE_URLS'] = '1';
+      const executeSpy = mockGit();
+      const tool = (server as any)._registeredTools['git_fetch'];
+      await tool.handler({ repository: '/repo', remote: 'https://example.com/r.git' });
+      expect(executeSpy.mock.calls.some((c) => c[1][0] === 'fetch' && c[1].includes('https://example.com/r.git'))).toBe(true);
+      await expect(tool.handler({ repository: '/repo', remote: 'ext::sh -c id' })).rejects.toThrow(/helper/);
+    });
   });
 });

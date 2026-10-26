@@ -1,6 +1,7 @@
 import { type McpServer, fromJsonSchema } from '@modelcontextprotocol/server';
 import { z } from 'zod';
 import type { Services } from '../core/types.js';
+import { assertSafeRefLike } from '../core/git-args.js';
 
 const GitDiffSchema = z.object({
   repository: z.string().describe('Repository path'),
@@ -30,7 +31,7 @@ export function registerGitDiff(server: McpServer, services: Services): void {
 
       const args = ['diff'];
       if (staged) args.push('--staged');
-      if (target) args.push(target);
+      if (target) args.push('--end-of-options', assertSafeRefLike(target, 'target'));
 
       const result = await services.gitExecutor.execute(repository, args);
 

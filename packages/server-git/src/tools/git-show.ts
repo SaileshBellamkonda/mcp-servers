@@ -1,6 +1,7 @@
 import { type McpServer, fromJsonSchema } from '@modelcontextprotocol/server';
 import { z } from 'zod';
 import type { Services } from '../core/types.js';
+import { assertSafeRefLike } from '../core/git-args.js';
 
 /** Only allow safe characters in commit refs — reject shell special chars */
 const SAFE_REF_PATTERN = /^[a-zA-Z0-9._/~^:-]+$/;
@@ -29,6 +30,7 @@ export function registerGitShow(server: McpServer, services: Services): void {
 
       services.repoManager.validateRepository(repository);
 
+      assertSafeRefLike(commit, 'commit');
       if (!SAFE_REF_PATTERN.test(commit)) {
         throw new Error(`Invalid commit ref: ${commit}`);
       }

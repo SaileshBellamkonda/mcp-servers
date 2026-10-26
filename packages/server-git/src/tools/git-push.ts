@@ -1,6 +1,7 @@
 import { type McpServer, fromJsonSchema } from '@modelcontextprotocol/server';
 import { z } from 'zod';
 import type { Services } from '../core/types.js';
+import { assertBranchName, resolveRemote } from '../core/git-args.js';
 
 const GitPushSchema = z.object({
   repository: z.string().describe('Repository path'),
@@ -33,6 +34,10 @@ export function registerGitPush(server: McpServer, services: Services): void {
 
       services.repoManager.validateRepository(repository);
 
+      if (branch !== undefined) {
+        assertBranchName(branch, 'branch');
+      }
+
       // Resolve the target branch name
       let targetBranch = branch;
       if (targetBranch === undefined) {
@@ -46,7 +51,7 @@ export function registerGitPush(server: McpServer, services: Services): void {
           services.logger?.error({ tool: 'git_push', repository, error: headResult.stderr });
           throw new Error(`Git push failed: unable to determine current branch: ${headResult.stderr}`);
         }
-        targetBranch = headResult.stdout.trim();
+        targetBranch = assertBranchName(headResult.stdout.trim(), 'current branch');
       }
 
       // Enforce branch allowlist if configured
@@ -61,11 +66,15 @@ export function registerGitPush(server: McpServer, services: Services): void {
         }
       }
 
+      // Only a configured remote name (or an explicitly opted-in URL) may be pushed to; this keeps the
+      // GIT_PUSH_ALLOWED_BRANCHES policy from being bypassed by pushing to an arbitrary URL.
+      const safeRemote = await resolveRemote(services.gitExecutor, repository, remote);
+
       const args = ['push'];
       if (force) {
         args.push('--force');
       }
-      args.push(remote, targetBranch);
+      args.push(safeRemote, targetBranch);
 
       const result = await services.gitExecutor.execute(repository, args);
 

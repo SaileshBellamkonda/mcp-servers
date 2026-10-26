@@ -1,6 +1,7 @@
 import { type McpServer, fromJsonSchema } from '@modelcontextprotocol/server';
 import { z } from 'zod';
 import type { Services } from '../core/types.js';
+import { assertSafeRefLike } from '../core/git-args.js';
 
 const GitRebaseSchema = z.object({
   repository: z.string().describe('Repository path'),
@@ -49,7 +50,7 @@ export function registerGitRebase(server: McpServer, services: Services): void {
       } else if (continue_) {
         args = ['rebase', '--continue'];
       } else {
-        args = ['rebase', onto];
+        args = ['rebase', assertSafeRefLike(onto, 'onto')];
       }
 
       const result = await services.gitExecutor.execute(repository, args);

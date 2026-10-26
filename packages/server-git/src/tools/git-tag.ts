@@ -1,6 +1,7 @@
 import { type McpServer, fromJsonSchema } from '@modelcontextprotocol/server';
 import { z } from 'zod';
 import type { Services } from '../core/types.js';
+import { assertSafeRefLike } from '../core/git-args.js';
 
 const GitTagSchema = z.object({
   repository: z.string().describe('Repository path'),
@@ -49,6 +50,9 @@ export function registerGitTag(server: McpServer, services: Services): void {
         throw new Error(`Git tag failed: "name" is required for action "${action}".`);
       }
 
+      const tagName = name === undefined ? '' : assertSafeRefLike(name, 'tag name');
+      if (ref !== undefined) assertSafeRefLike(ref, 'ref');
+
       let args: string[];
 
       switch (action) {
@@ -56,18 +60,18 @@ export function registerGitTag(server: McpServer, services: Services): void {
           args = ['tag', '--sort=-version:refname'];
           break;
         case 'create':
-          // name is guaranteed defined here by the validation above
+          // tagName is non-empty here: "name" is required for create, validated above
           if (message !== undefined) {
-            args = ['tag', '-a', name!, '-m', message];
+            args = ['tag', '-a', tagName, '-m', message];
           } else {
-            args = ['tag', name!];
+            args = ['tag', tagName];
           }
           if (ref !== undefined) {
             args.push(ref);
           }
           break;
         case 'delete':
-          args = ['tag', '-d', name!];
+          args = ['tag', '-d', tagName];
           break;
       }
 

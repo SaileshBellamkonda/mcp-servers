@@ -67,11 +67,18 @@ export async function activate(context: vscode.ExtensionContext) {
 
 ## Security
 
-- All file paths validated (no `..`, `~`, or absolute paths outside repos)
+- All file paths validated (no `..` segments, `~`, or paths outside repos, including via symlinks)
 - Command injection prevention (uses `spawn` with argument arrays)
 - Repository access control (only allowed repos accessible)
 - Input sanitization (commit messages, branch names)
-- Explicit file staging (no wildcards or patterns)
+- Explicit file staging (no wildcards or patterns; `git add --literal-pathspecs --`)
+- Option-injection prevention: refs, branches, remotes, tags and pathspecs may not start with `-`
+  or contain control characters
+- `git_fetch`/`git_pull`/`git_push` accept only the name of a configured remote (so
+  `GIT_PUSH_ALLOWED_BRANCHES` cannot be bypassed with a URL); set `GIT_ALLOW_REMOTE_URLS=1` to also
+  allow URLs/paths. `ext::`-style helper transports are always refused
+- Git runs with an allow-listed environment (server secrets such as `MCP_AUTH_TOKEN` never reach
+  git, hooks or credential helpers), `GIT_TERMINAL_PROMPT=0` and `GIT_ALLOW_PROTOCOL=file:git:http:https:ssh`
 
 ## Development
 

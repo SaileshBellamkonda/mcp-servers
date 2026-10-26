@@ -1,6 +1,7 @@
 import { type McpServer, fromJsonSchema } from '@modelcontextprotocol/server';
 import { z } from 'zod';
 import type { Services } from '../core/types.js';
+import { assertSafeRefLike } from '../core/git-args.js';
 
 const GitSearchSchema = z.object({
   repository: z.string().describe('Repository path'),
@@ -37,12 +38,13 @@ export function registerGitSearch(server: McpServer, services: Services): void {
       services.repoManager.validateRepository(repository);
 
       const args = ['log', '--format=%H|%an|%ad|%s', '-n', String(limit)];
-      if (branch) args.push(branch);
       if (search_type === 'diff') {
         args.push('-S', query);
       } else {
         args.push(`--grep=${query}`);
       }
+      // Options first, then the revision: nothing after --end-of-options can be parsed as an option.
+      if (branch) args.push('--end-of-options', assertSafeRefLike(branch, 'branch'));
 
       const result = await services.gitExecutor.execute(repository, args);
 

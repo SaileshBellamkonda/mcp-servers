@@ -1,6 +1,7 @@
 import { type McpServer, fromJsonSchema } from '@modelcontextprotocol/server';
 import { z } from 'zod';
 import type { Services } from '../core/types.js';
+import { assertSafeRefLike, resolveRemote } from '../core/git-args.js';
 
 const GitFetchSchema = z.object({
   repository: z.string().describe('Repository path'),
@@ -28,7 +29,12 @@ export function registerGitFetch(server: McpServer, services: Services): void {
 
       services.repoManager.validateRepository(repository);
 
-      const args = ['fetch', remote];
+      if (branch !== undefined) {
+        assertSafeRefLike(branch, 'branch');
+      }
+      const safeRemote = await resolveRemote(services.gitExecutor, repository, remote);
+
+      const args = ['fetch', safeRemote];
       if (branch !== undefined) {
         args.push(branch);
       }

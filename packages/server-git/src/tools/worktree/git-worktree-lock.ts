@@ -27,10 +27,11 @@ export function registerGitWorktreeLock(server: McpServer, services: Services): 
       const { repository, path: worktreePath, reason } = GitWorktreeLockSchema.parse(input);
 
       services.repoManager.validateRepository(repository);
+      const safePath = services.pathValidator.validatePath(repository, worktreePath);
 
       const args = ['worktree', 'lock'];
       if (reason) args.push('--reason', reason);
-      args.push(worktreePath);
+      args.push(safePath);
 
       const result = await services.gitExecutor.execute(repository, args);
 
