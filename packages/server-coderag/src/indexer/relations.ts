@@ -39,6 +39,13 @@ export interface ExtractedRelations {
   truncated: RelationTruncation[];
 }
 
+/**
+ * Version of the relation extraction. Bump it when the relations of an unchanged file would differ: the next startup
+ * parses the indexed code files again and rewrites their relations only (chunks and vectors are not touched, nothing is
+ * embedded again).
+ */
+export const RELATIONS_VERSION = 1;
+
 export const NO_RELATIONS: ExtractedRelations = { relations: [], truncated: [] };
 
 /** Records kept per source chunk and type; imports are all in one chunk, hence the larger number. */

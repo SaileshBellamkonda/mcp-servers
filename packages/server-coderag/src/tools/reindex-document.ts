@@ -44,6 +44,7 @@ export function registerReindexDocument(server: McpServer, db: VectorDB, indexer
 
       if (isCode) {
         await indexer.indexCodeFile(filename);
+        await db.resolvePendingRelations();
       } else {
         await indexer.indexFile(filename);
       }

@@ -29,7 +29,7 @@ describe('CodeRagWatcher', () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
-    mockDb = { deleteDocument: vi.fn() } as unknown as VectorDB;
+    mockDb = { deleteDocument: vi.fn(), resolvePendingRelations: vi.fn().mockResolvedValue(0) } as unknown as VectorDB;
     mockIndexer = {
       indexFile: vi.fn().mockResolvedValue(undefined),
       indexCodeFile: vi.fn().mockResolvedValue(undefined),

@@ -5,6 +5,7 @@ import type { Indexer } from './indexer.js';
 import type { CodeRagLogger } from '../core/logger.js';
 import type { GlobMatcher } from '../core/glob-utils.js';
 import { isSupportedExtension } from './languages.js';
+import { yieldToEventLoop } from './indexer.js';
 
 /**
  * Brings the index entry of one file up to date: removes it when the file is gone, re-indexes it (documents or
@@ -35,6 +36,7 @@ export class FileRefresher {
       } catch {
         // File was not indexed — nothing to remove
       }
+      await this.resolveRelations();
       return true;
     }
 
@@ -56,7 +58,17 @@ export class FileRefresher {
         this.logger.warning(`Failed to re-index code ${filePath}: ${String(err)}`);
         return false;
       }
+      await this.resolveRelations();
     }
     return true;
+  }
+
+  /** Edges of other files that pointed at symbols of the changed file are resolved again. */
+  private async resolveRelations(): Promise<void> {
+    try {
+      await this.db.resolvePendingRelations({ yieldToEventLoop });
+    } catch (err) {
+      this.logger.warning(`Failed to update code relations: ${String(err)}`);
+    }
   }
 }

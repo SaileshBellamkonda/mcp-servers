@@ -1,4 +1,4 @@
-import { readFileSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import type { VectorDB } from '../vectordb/db.js';
 import type { Embedder } from '../embedder/embedder.js';
@@ -38,7 +38,7 @@ export function isUnchangedSince(mtime: Date, indexedModifiedAt: Date): boolean 
   return mtime.getTime() === indexedModifiedAt.getTime();
 }
 
-function yieldToEventLoop(): Promise<void> {
+export function yieldToEventLoop(): Promise<void> {
   return new Promise((resolve) => {
     setImmediate(resolve);
   });
@@ -149,7 +149,7 @@ export class Indexer {
     this.log('info', `Indexing code: ${filePath}`);
     const stat = statSync(readPath);
     const parser = this.getCodeParser();
-    const chunks = parser.parseFile(filePath, readPath);
+    const { chunks, relations } = parser.parseFileWithRelations(filePath, readPath);
 
     if (chunks.length === 0) {
       // Recorded with no chunks, so a file without symbols is not parsed again by every scan.
@@ -160,8 +160,36 @@ export class Indexer {
 
     const texts = chunks.map((c) => CodeParser.getEmbeddingText(c));
     const embeddings = await this.embedder.embedBatch(texts);
-    this.db.insertCodeDocument(filePath, stat.mtime, chunks, embeddings);
+    this.db.insertCodeDocument(filePath, stat.mtime, chunks, embeddings, relations);
     this.log('info', `Indexed ${filePath} (${String(chunks.length)} symbols)`);
+  }
+
+  /**
+   * Fills the relations (imports, inheritance, calls) of code files that are already indexed, for an index written
+   * before relations were recorded. The files are parsed again but not embedded, and their chunks and vectors are left
+   * as they are. A file that changed since it was indexed is skipped: the normal scan re-indexes it with its relations.
+   */
+  async backfillRelations(): Promise<{ filled: number; skipped: number; failed: number }> {
+    const result = { filled: 0, skipped: 0, failed: 0 };
+    for (const [index, [filePath]] of [...this.db.listDocumentsByType('code')].entries()) {
+      if (index > 0 && index % FILES_PER_TICK === 0) await yieldToEventLoop();
+      try {
+        if (!existsSync(filePath) || (this.pathGuard && !this.pathGuard.isAllowed(filePath))) {
+          result.skipped++;
+          continue;
+        }
+        const readPath = this.pathGuard?.assertAllowedReal(filePath) ?? filePath;
+        const { chunks, relations } = this.getCodeParser().parseFileWithRelations(filePath, readPath);
+        if (this.db.replaceRelations(filePath, chunks, relations)) result.filled++;
+        else result.skipped++;
+      } catch (err) {
+        this.log('warning', `Failed to read the relations of ${filePath}: ${String(err)}`);
+        result.failed++;
+      }
+    }
+    await this.db.resolvePendingRelations({ yieldToEventLoop });
+    this.log('info', `Relations filled for ${String(result.filled)} code files (${String(result.skipped)} skipped, ${String(result.failed)} failed)`);
+    return result;
   }
 
   async scanDocs(force = false): Promise<CodeSyncResult> {
@@ -218,6 +246,9 @@ export class Indexer {
         result.failed++;
       }
     }
+
+    // Files indexed or removed during this scan can change what other files' calls and imports point to.
+    if (type === 'code') await this.db.resolvePendingRelations({ yieldToEventLoop });
 
     const label = type === 'doc' ? 'Markdown' : 'Code';
     this.log('info', `${label} indexing done: ${String(result.indexed)} indexed, ${String(result.skipped)} skipped, ${String(result.failed)} failed`);

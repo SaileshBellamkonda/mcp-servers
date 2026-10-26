@@ -25,9 +25,11 @@ export function registerDeleteDocument(server: McpServer, db: VectorDB, syncMana
     (input: unknown) => {
       if (syncManager.inProgress) return Promise.resolve(syncLockedResponse(syncManager.status));
       const { filename: requested } = DeleteDocumentSchema.parse(input);
-      return Promise.resolve().then(() => {
+      return Promise.resolve().then(async () => {
         const filename = pathGuard.assertAllowed(requested);
         db.deleteDocument(filename);
+        // Relations of other files that pointed at the deleted file's symbols are resolved again.
+        await db.resolvePendingRelations();
         return { content: [{ type: 'text', text: JSON.stringify({ success: true, filename }) }] };
       });
     }
