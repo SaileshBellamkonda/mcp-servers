@@ -1,6 +1,15 @@
 import { chmodSync, existsSync, mkdirSync } from 'node:fs';
 import path from 'node:path';
-import { buildSchema, buildMigrations, buildDocMetadataMigration, buildVecChunksDdl } from './schema.js';
+import {
+  buildSchema,
+  buildMigrations,
+  buildDocMetadataMigration,
+  buildVecChunksDdl,
+  buildFtsDdl,
+  FTS_BM25_WEIGHTS,
+  FTS_DELETE_TRIGGER_DDL,
+} from './schema.js';
+import { FTS_VERSION, buildFtsQueries, buildFtsRow, symbolNameCandidates, type FtsRow } from './fts-text.js';
 import { openSqliteDatabase, loadSqliteVec, type SqlParam, type SqliteDatabase } from './sqlite-db.js';
 import type {
   MarkdownChunk,
@@ -36,11 +45,6 @@ function tableExists(db: SqliteDatabase, table: string): boolean {
   return (row?.cnt ?? 0) > 0;
 }
 
-function virtualTableExists(db: SqliteDatabase, table: string): boolean {
-  const row = db.prepare<{ cnt: number }>(`SELECT COUNT(*) as cnt FROM sqlite_master WHERE type='table' AND name=?`).get(table);
-  return (row?.cnt ?? 0) > 0;
-}
-
 function runMigrations(db: SqliteDatabase): void {
   const migrations = buildMigrations();
   // Migration 1: add doc_type column
@@ -52,13 +56,7 @@ function runMigrations(db: SqliteDatabase): void {
   if (!tableExists(db, 'index_rules')) {
     if (migrations[2]) db.exec(migrations[2]);
   }
-  // Migration 3: create FTS5 table, trigger, and backfill
-  if (!virtualTableExists(db, 'fts_chunks')) {
-    if (migrations[3]) db.exec(migrations[3]);
-    if (migrations[4]) db.exec(migrations[4]);
-    if (migrations[5]) db.exec(migrations[5]);
-  }
-  // Migration 4: document metadata tables + chunk location columns. Existing docs were embedded
+  // Migration 3: document metadata tables + chunk location columns. Existing docs were embedded
   // without heading/metadata context, so flag them for a forced re-index on the next startup sync.
   if (!tableExists(db, 'doc_metadata')) {
     const docMetadata = buildDocMetadataMigration();
@@ -68,6 +66,63 @@ function runMigrations(db: SqliteDatabase): void {
     }
     db.prepare('INSERT OR REPLACE INTO db_meta (key, value) VALUES (?, ?)').run('docs_reindex_required', '1');
   }
+}
+
+const FTS_INSERT_SQL = 'INSERT INTO fts_chunks(rowid, symbol_name, signature, context, content) VALUES (?, ?, ?, ?, ?)';
+const FTS_REBUILD_BATCH = 500;
+/** Candidates fetched per keyword search before the page is cut, see searchByKeyword. */
+const KEYWORD_POOL = 50;
+
+function ftsParams(chunkId: number, row: FtsRow): [number, string, string, string, string] {
+  return [chunkId, row.symbolName, row.signature, row.context, row.content];
+}
+
+/**
+ * Creates the keyword index when it is missing and rebuilds it when it was written by an older FTS_VERSION (stored in
+ * db_meta). A rebuild only re-reads `chunks`, `code_metadata` and `doc_metadata`: vectors are untouched and nothing is
+ * re-embedded. It runs in one transaction, so a crash leaves the old index and the old version in place.
+ */
+function ensureFtsIndex(db: SqliteDatabase): void {
+  const stored = db.prepare<{ value: string }>("SELECT value FROM db_meta WHERE key = 'fts_version'").get()?.value;
+  if (stored === String(FTS_VERSION) && tableExists(db, 'fts_chunks')) return;
+
+  const select = db.prepare<{
+    id: number; content: string; heading_path: string | null; filename: string;
+    symbol_name: string | null; parent_symbol: string | null; signature: string | null; title: string | null;
+  }>(`
+    SELECT c.id, c.content, c.heading_path, d.filename, cm.symbol_name, cm.parent_symbol, cm.signature, dm.title
+    FROM chunks c
+    JOIN documents d ON d.id = c.document_id
+    LEFT JOIN code_metadata cm ON cm.chunk_id = c.id
+    LEFT JOIN doc_metadata dm ON dm.document_id = d.id
+    WHERE c.id > ? ORDER BY c.id LIMIT ${String(FTS_REBUILD_BATCH)}
+  `);
+  db.transaction(() => {
+    db.exec('DROP TABLE IF EXISTS fts_chunks');
+    db.exec(buildFtsDdl());
+    db.exec(FTS_DELETE_TRIGGER_DDL);
+    const insert = db.prepare(FTS_INSERT_SQL);
+    let after = 0;
+    for (;;) {
+      const rows = select.all(after);
+      for (const row of rows) {
+        const fields = buildFtsRow({
+          filename: row.filename,
+          content: row.content,
+          symbolName: row.symbol_name ?? undefined,
+          parentSymbol: row.parent_symbol ?? undefined,
+          signature: row.signature ?? undefined,
+          title: row.title ?? undefined,
+          headingPath: parseHeadingPath(row.heading_path),
+        });
+        insert.run(...ftsParams(row.id, fields));
+      }
+      const last = rows.at(-1);
+      if (!last || rows.length < FTS_REBUILD_BATCH) break;
+      after = last.id;
+    }
+    db.prepare('INSERT OR REPLACE INTO db_meta (key, value) VALUES (?, ?)').run('fts_version', String(FTS_VERSION));
+  })();
 }
 
 // Columns shared by the semantic and keyword search queries (aliases: c=chunks, d=documents,
@@ -166,6 +221,7 @@ export class VectorDB {
     }
 
     runMigrations(db);
+    ensureFtsIndex(db);
     return new VectorDB(db);
   }
 
@@ -272,7 +328,7 @@ export class VectorDB {
       'INSERT INTO chunks (document_id, position, content, heading_path, start_line, end_line) VALUES (?, ?, ?, ?, ?, ?)'
     );
     const insertVec = this.db.prepare('INSERT INTO vec_chunks (rowid, embedding) VALUES (?, ?)');
-    const insertFts = this.db.prepare('INSERT INTO fts_chunks(rowid, content, symbol_name) VALUES (?, ?, ?)');
+    const insertFts = this.db.prepare(FTS_INSERT_SQL);
     const deleteChunks = this.db.prepare('DELETE FROM chunks WHERE document_id = ?');
     const insertMeta = this.db.prepare(
       'INSERT INTO doc_metadata (document_id, title, doc_type, domain, project, language, extra_json) VALUES (?, ?, ?, ?, ?, ?, ?)'
@@ -305,8 +361,12 @@ export class VectorDB {
         );
         const chunkId = chunkResult.lastInsertRowid;
         insertVec.run(chunkId, serializeVector(embedding));
-        const ftsHeading = [metadata?.title ?? '', ...(headingPath ?? [])].filter((part) => part !== '').join(' ');
-        insertFts.run(chunkId, chunk.content, ftsHeading);
+        insertFts.run(...ftsParams(chunkId, buildFtsRow({
+          filename,
+          content: chunk.content,
+          title: metadata?.title,
+          headingPath: headingPath ?? undefined,
+        })));
       }
 
       if (metadata) {
@@ -335,7 +395,7 @@ export class VectorDB {
     );
     const insertChunk = this.db.prepare('INSERT INTO chunks (document_id, position, content) VALUES (?, ?, ?)');
     const insertVec = this.db.prepare('INSERT INTO vec_chunks (rowid, embedding) VALUES (?, ?)');
-    const insertFts = this.db.prepare('INSERT INTO fts_chunks(rowid, content, symbol_name) VALUES (?, ?, ?)');
+    const insertFts = this.db.prepare(FTS_INSERT_SQL);
     const insertMeta = this.db.prepare(
       'INSERT INTO code_metadata (chunk_id, symbol_name, symbol_type, language, start_line, end_line, parent_symbol, signature) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
     );
@@ -352,7 +412,13 @@ export class VectorDB {
         const chunkResult = insertChunk.run(docId, chunk.position, chunk.content);
         const chunkId = chunkResult.lastInsertRowid;
         insertVec.run(chunkId, serializeVector(embedding));
-        insertFts.run(chunkId, chunk.content, chunk.symbolName);
+        insertFts.run(...ftsParams(chunkId, buildFtsRow({
+          filename,
+          content: chunk.content,
+          symbolName: chunk.symbolName,
+          parentSymbol: chunk.parentSymbol,
+          signature: chunk.signature,
+        })));
         insertMeta.run(chunkId, chunk.symbolName, chunk.symbolType, chunk.language, chunk.startLine, chunk.endLine, chunk.parentSymbol, chunk.signature);
       }
     });
@@ -523,30 +589,58 @@ export class VectorDB {
 
   // ─── FTS5 keyword search ───────────────────────────────────────────────────
 
+  /**
+   * Keyword search over the FTS5 index, ranked by BM25 with column weights (symbol name > signature > path and
+   * headings > body, see FTS_BM25_WEIGHTS). Words are split like identifiers, stop words dropped and prefixes matched
+   * (fts-text.ts). Hits containing every word come first; if fewer than `topK` there are, hits containing any of the
+   * words follow, so a query with one unknown word still returns the best partial matches instead of nothing.
+   * A hit whose symbol name is exactly a query word is moved to the front. `similarity` is the BM25 score relative to
+   * the best returned hit (in (0, 1]); an exact symbol-name match counts as 1.
+   */
   searchByKeyword(query: string, topK: number, filter: SearchFilter | null): SearchResult[] {
-    const ftsQuery = buildFtsQuery(query);
-    if (!ftsQuery) return [];
+    const queries = buildFtsQueries(query);
+    if (!queries || topK <= 0) return [];
 
+    // A wider pool than the page, so a definition named exactly like the query is found even when many smaller
+    // documents (headings, README sections) outscore its large chunk.
+    const pool = Math.max(topK, KEYWORD_POOL);
+    let rows = this.keywordRows(queries.strict, filter, pool);
+    if (rows.length < pool && queries.loose !== queries.strict) {
+      const seen = new Set(rows.map((r) => r.chunk_id));
+      const partial = this.keywordRows(queries.loose, filter, pool + rows.length).filter((r) => !seen.has(r.chunk_id));
+      rows = [...rows, ...partial].slice(0, pool);
+    }
+
+    // Stable: hits whose symbol name is exactly a query word (or all the words joined) come first.
+    const named = symbolNameCandidates(query);
+    const isNamed = (r: SearchRow): boolean => r.symbol_name !== null && named.has(r.symbol_name.toLowerCase().replaceAll('_', ''));
+    rows = [...rows.filter(isNamed), ...rows.filter((r) => !isNamed(r))].slice(0, topK);
+
+    // bm25() is negative (lower = better); express every hit relative to the best one.
+    const best = Math.max(0, ...rows.map((r) => -r.bm25_score));
+    return this.toResults(rows, (r) => {
+      if (best <= 0 || isNamed(r)) return 1;
+      return Math.min(1, Math.max(-r.bm25_score, Number.MIN_VALUE) / best);
+    });
+  }
+
+  private keywordRows(match: string, filter: SearchFilter | null, limit: number): (SearchRow & { bm25_score: number })[] {
     const { conditions, args } = buildFilterConditions(filter);
     const whereClause = ['fts_chunks MATCH ?', ...conditions].join(' AND ');
-
+    const rank = `bm25(fts_chunks, ${FTS_BM25_WEIGHTS.join(', ')})`;
     const sql = `
       SELECT ${SEARCH_COLUMNS},
-             bm25(fts_chunks) as bm25_score
+             ${rank} as bm25_score
       FROM fts_chunks
       JOIN chunks c ON fts_chunks.rowid = c.id
       JOIN documents d ON c.document_id = d.id
       LEFT JOIN code_metadata cm ON c.id = cm.chunk_id
       LEFT JOIN doc_metadata dm ON dm.document_id = d.id
       WHERE ${whereClause}
-      ORDER BY bm25(fts_chunks)
+      ORDER BY ${rank}
       LIMIT ?
     `;
-
-    const rows = this.db.prepare<SearchRow & { bm25_score: number }>(sql).all(ftsQuery, ...args, topK);
-
-    // bm25() returns negative values; normalize to (0,1] — lower bm25 = more relevant
-    return this.toResults(rows, (r) => 1.0 / (1.0 + Math.abs(r.bm25_score)));
+    return this.db.prepare<SearchRow & { bm25_score: number }>(sql).all(match, ...args, limit);
   }
 
   searchHybrid(queryVector: number[], query: string, topK: number, filter: SearchFilter | null): SearchResult[] {
@@ -554,8 +648,10 @@ export class VectorDB {
     const semantic = this.searchWithFilter(queryVector, fetch, filter);
     const keyword = this.searchByKeyword(query, fetch, filter);
 
-    // Reciprocal Rank Fusion (k=60)
+    // Reciprocal Rank Fusion (k=60). The displayed score is the fused score divided by the best possible one, a hit
+    // ranked first by both searches (2 / (k + 1)): 1 = first in both, 0.5 = first in one search only.
     const RRF_K = 60;
+    const maxScore = 2 / (RRF_K + 1);
     const scores = new Map<number, number>(); // chunk_id → rrf score
     const chunkMeta = new Map<number, SearchResult>();
 
@@ -595,7 +691,7 @@ export class VectorDB {
       .map(([slot, score]) => {
         const r = chunkMeta.get(slot);
         if (!r) return null;
-        return { ...r, similarity: score };
+        return { ...r, similarity: Math.min(1, score / maxScore) };
       })
       .filter((r): r is SearchResult => r !== null);
   }
@@ -641,13 +737,6 @@ export class VectorDB {
 
 function globToLike(pattern: string): string {
   return pattern.replace(/%/g, '\\%').replace(/_/g, '\\_').replace(/\*/g, '%').replace(/\?/g, '_');
-}
-
-function buildFtsQuery(query: string): string {
-  // Split into terms and quote each to handle FTS5 special characters
-  const terms = query.trim().split(/\s+/).filter(Boolean);
-  if (terms.length === 0) return '';
-  return terms.map((t) => `"${t.replace(/"/g, '""')}"`).join(' ');
 }
 
 function parseHeadingPath(raw: string | null): string[] | undefined {

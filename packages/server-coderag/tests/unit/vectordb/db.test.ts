@@ -466,3 +466,151 @@ describe('dimension mismatch auto-repair', () => {
     db2.close();
   });
 });
+
+describe('keyword search recall', () => {
+  function code(symbolName: string, content: string, extra: Partial<CodeChunk> = {}): CodeChunk {
+    return makeCodeChunk({ symbolName, content, signature: `function ${symbolName}()`, ...extra });
+  }
+  const V = [0.1, 0.2, 0.3, 0.4];
+
+  it('finds a camelCase identifier by its words', () => {
+    db.insertCodeDocument('/src/chunk.ts', new Date(), [code('chunkMarkdown', 'function chunkMarkdown() { return 1; }')], [V]);
+    expect(db.searchByKeyword('chunk markdown', 5, null).map((r) => r.document)).toEqual(['/src/chunk.ts']);
+    expect(db.searchByKeyword('markdown', 5, null)).toHaveLength(1);
+    expect(db.searchByKeyword('chunkMarkdown', 5, null)).toHaveLength(1);
+  });
+
+  it('finds words inside camelCase identifiers in the body text', () => {
+    db.insertCodeDocument('/src/a.ts', new Date(), [code('run', 'function run() { return sanitizeErrorBody(text); }')], [V]);
+    expect(db.searchByKeyword('error body', 5, null)).toHaveLength(1);
+  });
+
+  it('finds snake_case identifiers whole and by their words', () => {
+    db.insertDocument('/docs/a.md', new Date(), [{ content: 'The last_docs_sync_at key records the sync time', position: 0 }], [V]);
+    expect(db.searchByKeyword('last_docs_sync_at', 5, null)).toHaveLength(1);
+    expect(db.searchByKeyword('docs sync', 5, null)).toHaveLength(1);
+  });
+
+  it('matches word prefixes and stems', () => {
+    db.insertDocument('/docs/a.md', new Date(), [{ content: 'Authentication and embeddings explained', position: 0 }], [V]);
+    expect(db.searchByKeyword('authent', 5, null)).toHaveLength(1);
+    expect(db.searchByKeyword('embedding', 5, null)).toHaveLength(1);
+  });
+
+  it('indexes the file path and heading path', () => {
+    db.insertDocument('/docs/deployment-guide.md', new Date(), [{ content: 'Run the installer.', position: 0, headingPath: ['Guide', 'Rollback plan'] }], [V]);
+    expect(db.searchByKeyword('rollback', 5, null)).toHaveLength(1);
+    expect(db.searchByKeyword('deployment guide', 5, null)).toHaveLength(1);
+  });
+
+  it('returns documents that match only some of the words, those matching all first', () => {
+    db.insertDocument('/docs/both.md', new Date(), [{ content: 'alpha beta', position: 0 }], [V]);
+    db.insertDocument('/docs/one.md', new Date(), [{ content: 'alpha only', position: 0 }], [V]);
+    db.insertDocument('/docs/none.md', new Date(), [{ content: 'unrelated text', position: 0 }], [V]);
+    expect(db.searchByKeyword('alpha beta gamma', 5, null).map((r) => r.document)).toEqual(['/docs/both.md', '/docs/one.md']);
+    expect(db.searchByKeyword('alpha beta', 5, null)[0]?.document).toBe('/docs/both.md');
+    expect(db.searchByKeyword('beta gamma', 5, null).map((r) => r.document)).toEqual(['/docs/both.md']);
+  });
+
+  it('puts every all-words match before any partial match even when a partial match scores higher', () => {
+    db.insertDocument('/docs/partial.md', new Date(), [{ content: 'rareword rareword rareword rareword', position: 0 }], [V]);
+    db.insertDocument('/docs/full.md', new Date(), [{ content: 'rareword ' + 'common '.repeat(30) + 'filler', position: 0 }], [V]);
+    db.insertDocument('/docs/common.md', new Date(), [{ content: 'common filler words', position: 0 }], [V]);
+    const hits = db.searchByKeyword('rareword filler', 5, null).map((r) => r.document);
+    expect(hits[0]).toBe('/docs/full.md');
+    expect(hits).toContain('/docs/partial.md');
+  });
+
+  it('ranks a symbol-name hit above a mention in the body', () => {
+    db.insertCodeDocument('/src/mention.ts', new Date(), [code('other', 'function other() { return validate(input); }')], [V]);
+    db.insertCodeDocument('/src/def.ts', new Date(), [code('validate', 'function validate(x) { return x; }')], [V]);
+    expect(db.searchByKeyword('validate', 5, null)[0]?.document).toBe('/src/def.ts');
+  });
+
+  it('ranks the definition of an exactly named symbol first, even below many small documentation hits', () => {
+    for (let i = 0; i < 6; i++) {
+      db.insertDocument(`/docs/readme-${String(i)}.md`, new Date(), [
+        { content: 'startThing startThing startThing', position: 0, headingPath: ['startThing(options)'] },
+      ], [V]);
+    }
+    const body = `function startThing() {\n${'  doStuff();\n'.repeat(80)}}`;
+    db.insertCodeDocument('/src/start.ts', new Date(), [code('startThing', body)], [V]);
+    const hits = db.searchByKeyword('startThing', 3, null);
+    expect(hits[0]?.document).toBe('/src/start.ts');
+    expect(hits).toHaveLength(3);
+    expect(hits[0]?.similarity).toBe(1);
+  });
+
+  it('drops stop words so a natural-language question still matches', () => {
+    db.insertDocument('/docs/a.md', new Date(), [{ content: 'Embeddings are requested from the API with fetch', position: 0 }], [V]);
+    expect(db.searchByKeyword('how are the embeddings requested from the API', 5, null)).toHaveLength(1);
+  });
+
+  it('scores keyword hits relative to the best hit, in (0, 1]', () => {
+    db.insertDocument('/docs/a.md', new Date(), [{ content: 'alpha alpha alpha', position: 0 }], [V]);
+    db.insertDocument('/docs/b.md', new Date(), [{ content: 'alpha beta gamma delta epsilon zeta eta theta', position: 0 }], [V]);
+    const hits = db.searchByKeyword('alpha', 5, null);
+    expect(hits[0]?.similarity).toBe(1);
+    for (const hit of hits) {
+      expect(hit.similarity).toBeGreaterThan(0);
+      expect(hit.similarity).toBeLessThanOrEqual(1);
+    }
+    expect(hits[1]?.similarity).toBeLessThan(1);
+  });
+
+  it.each([
+    '"', '""', '"unbalanced', '(', ')', 'a AND', 'OR', 'NOT x', 'NEAR(a b)', 'NEAR/2', 'x*', '*', '^x', '-x', 'a:b', 'content:secret',
+    '{x y}', "it's", 'PathGuard assertAllowed x', 'snake_case other camelCase', 'NEAR(fooBar baz) AND (x OR y)', 'a OR b OR', '\\', '"; DROP TABLE chunks; --', 'AND OR NOT NEAR',
+  ])('treats %j as plain text and never throws', (input) => {
+    db.insertDocument('/docs/a.md', new Date(), [{ content: 'plain text about near and content secret', position: 0 }], [V]);
+    expect(() => db.searchByKeyword(input, 5, null)).not.toThrow();
+    expect(db.getDocumentCount()).toBe(1);
+  });
+
+  it('does not let a column filter or NEAR reach the FTS5 parser', () => {
+    db.insertDocument('/docs/a.md', new Date(), [{ content: 'alpha', position: 0, headingPath: ['secret'] }], [V]);
+    db.insertDocument('/docs/b.md', new Date(), [{ content: 'beta secret', position: 0 }], [V]);
+    // as a column filter `symbol_name:beta` would match nothing; as text it finds the document containing "beta"
+    expect(db.searchByKeyword('symbol_name:beta', 5, null).map((r) => r.document)).toEqual(['/docs/b.md']);
+    expect(db.searchByKeyword('NEAR(alpha beta)', 5, null).length).toBeGreaterThan(0);
+  });
+
+  it('keeps metadata filters applied to the loose fallback', () => {
+    db.insertDocument('/docs/a.md', new Date(), [{ content: 'alpha beta', position: 0 }], [V]);
+    db.insertDocument('/other/b.md', new Date(), [{ content: 'alpha gamma', position: 0 }], [V]);
+    expect(db.searchByKeyword('alpha zzz', 5, { directory: '/other', filePattern: '' }).map((r) => r.document)).toEqual(['/other/b.md']);
+  });
+
+  it('replaces the index entries of a re-inserted document', () => {
+    db.insertDocument('/docs/a.md', new Date(), [{ content: 'oldterm here', position: 0 }], [V]);
+    db.insertDocument('/docs/a.md', new Date(), [{ content: 'newterm here', position: 0 }], [V]);
+    expect(db.searchByKeyword('oldterm', 5, null)).toEqual([]);
+    expect(db.searchByKeyword('newterm', 5, null)).toHaveLength(1);
+  });
+});
+
+describe('searchHybrid scores', () => {
+  const V = [0.9, 0.1, 0.1, 0.1];
+
+  it('reports a score in (0, 1] where 1 means first in both rankings', () => {
+    db.insertDocument('/docs/auth.md', new Date(), makeMarkdownChunks(['Authentication guide']), [V]);
+    db.insertDocument('/docs/guide.md', new Date(), makeMarkdownChunks(['Getting started guide']), [[0.1, 0.9, 0.1, 0.1]]);
+    const hits = db.searchHybrid(V, 'Authentication', 5, null);
+    expect(hits[0]?.document).toBe('/docs/auth.md');
+    expect(hits[0]?.similarity).toBeCloseTo(1, 10);
+    for (const hit of hits) {
+      expect(hit.similarity).toBeGreaterThan(0);
+      expect(hit.similarity).toBeLessThanOrEqual(1);
+    }
+    expect(hits[1]?.similarity).toBeLessThan(hits[0]?.similarity ?? 0);
+  });
+
+  it('scores at most 0.5 when only the semantic ranking has hits', () => {
+    db.insertDocument('/docs/a.md', new Date(), makeMarkdownChunks(['alpha']), [V]);
+    db.insertDocument('/docs/b.md', new Date(), makeMarkdownChunks(['beta']), [[0.1, 0.9, 0.1, 0.1]]);
+    const hits = db.searchHybrid(V, 'zzzunmatched', 5, null);
+    expect(hits[0]?.document).toBe('/docs/a.md');
+    expect(hits[0]?.similarity).toBeCloseTo(0.5, 10);
+    expect(hits[1]?.similarity).toBeLessThan(0.5);
+  });
+});

@@ -68,12 +68,11 @@ describe('a database written by the pre-node:sqlite code path', () => {
     db.close();
   });
 
-  it('returns the same FTS5 keyword ordering and scores', () => {
+  it('returns the same FTS5 keyword hits (scores are now relative to the best hit)', () => {
     const db = VectorDB.open(dbPath, DIM);
     const hits = db.searchByKeyword('pnpm', 10, null);
     expect(hits).toHaveLength(1);
-    expect(hits[0]).toMatchObject({ document: '/docs/install.md', position: 0 });
-    expect(hits[0]?.similarity).toBeCloseTo(0.4852310943070578, 12);
+    expect(hits[0]).toMatchObject({ document: '/docs/install.md', position: 0, similarity: 1 });
     // title and heading words are indexed too
     expect(db.searchByKeyword('Deployment', 5, null).map((h) => h.document)).toEqual(['/docs/install.md', '/docs/install.md']);
     expect(db.searchSymbolsByKeywords(['add'], 5)[0]?.metadata?.symbolName).toBe('add');
@@ -113,7 +112,88 @@ describe('a database written by the pre-node:sqlite code path', () => {
   });
 });
 
+function dbMeta(file: string, key: string): string | undefined {
+  const raw = openSqliteDatabase(file, { readonly: true });
+  try {
+    return raw.prepare<{ value: string }>('SELECT value FROM db_meta WHERE key = ?').get(key)?.value;
+  } finally {
+    raw.close();
+  }
+}
+
+function rowCount(file: string, table: string): number {
+  const raw = openSqliteDatabase(file, { readonly: true });
+  try {
+    return raw.prepare<{ n: number }>(`SELECT COUNT(*) AS n FROM ${table}`).get()?.n ?? 0;
+  } finally {
+    raw.close();
+  }
+}
+
+describe('keyword index upgrade of an existing database', () => {
+  it('is on the old layout before the first open', () => {
+    expect(dbMeta(dbPath, 'fts_version')).toBeUndefined();
+  });
+
+  it('rebuilds the FTS index once on open, from the stored chunks, without touching vectors', () => {
+    const vectorsBefore = rowCount(dbPath, 'vec_chunks_rowids');
+    const chunksBefore = rowCount(dbPath, 'chunks');
+    const db = VectorDB.open(dbPath, DIM);
+    expect(dbMeta(dbPath, 'fts_version')).toBe('2');
+    expect(rowCount(dbPath, 'fts_chunks')).toBe(chunksBefore);
+    expect(rowCount(dbPath, 'vec_chunks_rowids')).toBe(vectorsBefore);
+    // new capabilities work on the old data: heading words, stems and the file name are searchable
+    expect(db.searchByKeyword('installation', 5, null).length).toBeGreaterThan(0);
+    expect(db.searchByKeyword('math', 5, null).map((h) => h.document)).toContain('/src/math.ts');
+    // the vectors are still the old ones
+    expect(db.searchWithFilter([1, 0, 0, 0], 1, null)[0]).toMatchObject({ document: '/docs/install.md', position: 0, similarity: 1 });
+    db.close();
+  });
+
+  it('indexes the identifier words of old code chunks', () => {
+    const db = VectorDB.open(dbPath, DIM);
+    const symbols = db.searchSymbolsByKeywords(['add'], 5);
+    expect(symbols).toHaveLength(1);
+    expect(db.searchByKeyword('add', 5, null).map((h) => h.metadata?.symbolName)).toContain('add');
+    db.close();
+  });
+
+  it('does not rebuild again when the version is current', () => {
+    VectorDB.open(dbPath, DIM).close();
+    const raw = openSqliteDatabase(dbPath);
+    raw.exec("INSERT INTO fts_chunks(rowid, symbol_name, signature, context, content) VALUES (987654, '', '', '', 'sentinelterm')");
+    raw.close();
+    const db = VectorDB.open(dbPath, DIM);
+    expect(rowCount(dbPath, 'fts_chunks')).toBeGreaterThan(rowCount(dbPath, 'chunks'));
+    db.close();
+  });
+
+  it('rebuilds again when the stored version is older than the current one', () => {
+    VectorDB.open(dbPath, DIM).close();
+    const raw = openSqliteDatabase(dbPath);
+    raw.exec("INSERT INTO fts_chunks(rowid, symbol_name, signature, context, content) VALUES (987654, '', '', '', 'sentinelterm')");
+    raw.exec("UPDATE db_meta SET value = '1' WHERE key = 'fts_version'");
+    raw.close();
+    VectorDB.open(dbPath, DIM).close();
+    expect(rowCount(dbPath, 'fts_chunks')).toBe(rowCount(dbPath, 'chunks'));
+    expect(dbMeta(dbPath, 'fts_version')).toBe('2');
+  });
+
+  it('keeps the index in step with deletes after the upgrade', () => {
+    const db = VectorDB.open(dbPath, DIM);
+    db.deleteDocument('/docs/other.md');
+    db.close();
+    expect(rowCount(dbPath, 'fts_chunks')).toBe(rowCount(dbPath, 'chunks'));
+  });
+});
+
 describe('new databases', () => {
+  it('start on the current keyword index version', () => {
+    const file = path.join(dir, 'versioned.db');
+    VectorDB.open(file, DIM).close();
+    expect(dbMeta(file, 'fts_version')).toBe('2');
+  });
+
   it('create vec_chunks with chunk_size=256', () => {
     const file = path.join(dir, 'fresh.db');
     VectorDB.open(file, DIM).close();

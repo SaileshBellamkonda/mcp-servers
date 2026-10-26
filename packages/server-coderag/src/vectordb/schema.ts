@@ -30,6 +30,31 @@ export function buildVecChunksDdl(dimensions: number, ifNotExists = false): stri
 )`;
 }
 
+/** Column order of `fts_chunks`; `FTS_BM25_WEIGHTS` is positional and must follow it. */
+export const FTS_COLUMNS = ['symbol_name', 'signature', 'context', 'content'] as const;
+
+/**
+ * BM25 column weights, one per `FTS_COLUMNS` entry: a hit in the symbol name counts most, then the signature, then
+ * the file path / heading context, and the body text least.
+ */
+export const FTS_BM25_WEIGHTS = [10, 5, 3, 1] as const;
+
+/**
+ * DDL for the keyword index. `porter unicode61` lowercases, folds diacritics and stems (`embeddings` finds
+ * `embedding`); `tokenchars '_'` keeps `snake_case` identifiers as one token (their words are indexed too, see
+ * fts-text.ts). The delete trigger keeps the index in step with `chunks`; inserts are done by VectorDB.
+ */
+export function buildFtsDdl(): string {
+  return `CREATE VIRTUAL TABLE fts_chunks USING fts5(
+  ${FTS_COLUMNS.join(',\n  ')},
+  tokenize='porter unicode61 remove_diacritics 2 tokenchars _'
+)`;
+}
+
+export const FTS_DELETE_TRIGGER_DDL = `CREATE TRIGGER IF NOT EXISTS fts_chunks_delete AFTER DELETE ON chunks BEGIN
+  DELETE FROM fts_chunks WHERE rowid = old.id;
+END`;
+
 export function buildSchema(dimensions: number): string {
   return `
 CREATE TABLE IF NOT EXISTS db_meta (
@@ -99,15 +124,6 @@ CREATE TABLE IF NOT EXISTS index_rules (
   pattern   TEXT NOT NULL
 );
 
-CREATE VIRTUAL TABLE IF NOT EXISTS fts_chunks USING fts5(
-  content,
-  symbol_name,
-  tokenize='unicode61 remove_diacritics 2'
-);
-
-CREATE TRIGGER IF NOT EXISTS fts_chunks_delete AFTER DELETE ON chunks BEGIN
-  DELETE FROM fts_chunks WHERE rowid = old.id;
-END;
 ${DOC_METADATA_DDL}
 `;
 }
@@ -129,10 +145,7 @@ export function buildMigrations(): string[] {
        rule_type TEXT NOT NULL,
        pattern   TEXT NOT NULL
      )`,
-    // Migration 4: create FTS5 full-text search table + delete trigger + backfill from existing chunks
-    `CREATE VIRTUAL TABLE IF NOT EXISTS fts_chunks USING fts5(content, symbol_name, tokenize='unicode61 remove_diacritics 2')`,
-    `CREATE TRIGGER IF NOT EXISTS fts_chunks_delete AFTER DELETE ON chunks BEGIN DELETE FROM fts_chunks WHERE rowid = old.id; END`,
-    `INSERT INTO fts_chunks(rowid, content, symbol_name) SELECT c.id, c.content, COALESCE(cm.symbol_name, '') FROM chunks c LEFT JOIN code_metadata cm ON cm.chunk_id = c.id`,
+    // The FTS5 table is not created here: VectorDB builds it (and rebuilds it when FTS_VERSION changes), see buildFtsDdl.
   ];
 }
 
