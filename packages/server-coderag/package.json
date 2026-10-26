@@ -68,7 +68,8 @@
     "@vitest/coverage-v8": "catalog:",
     "tsx": "catalog:",
     "typescript": "catalog:",
-    "vitest": "catalog:"
+    "vitest": "catalog:",
+    "node-gyp": "catalog:"
   },
   "peerDependencies": {
     "@types/vscode": "*"

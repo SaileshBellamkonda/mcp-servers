@@ -60,47 +60,50 @@ catalogs:
     micromatch:
       specifier: ^4.0.8
       version: 4.0.8
+    node-gyp:
+      specifier: ^13.1.0
+      version: 13.1.0
     sqlite-vec:
       specifier: ^0.1.6
       version: 0.1.9
     tree-sitter:
-      specifier: ^0.25.0
-      version: 0.25.0
+      specifier: ^0.25.1
+      version: 0.25.1
     tree-sitter-bash:
       specifier: ^0.25.1
       version: 0.25.1
     tree-sitter-c:
-      specifier: ^0.24.0
+      specifier: ^0.24.1
       version: 0.24.1
     tree-sitter-c-sharp:
-      specifier: ^0.23.0
+      specifier: ^0.23.5
       version: 0.23.5
     tree-sitter-cpp:
-      specifier: ^0.23.0
+      specifier: ^0.23.4
       version: 0.23.4
     tree-sitter-go:
       specifier: ^0.25.0
       version: 0.25.0
     tree-sitter-java:
-      specifier: ^0.23.0
+      specifier: ^0.23.5
       version: 0.23.5
     tree-sitter-javascript:
       specifier: ^0.25.0
       version: 0.25.0
     tree-sitter-php:
-      specifier: ^0.24.0
+      specifier: ^0.24.2
       version: 0.24.2
     tree-sitter-python:
       specifier: ^0.25.0
       version: 0.25.0
     tree-sitter-ruby:
-      specifier: ^0.23.0
+      specifier: ^0.23.1
       version: 0.23.1
     tree-sitter-rust:
       specifier: ^0.24.0
       version: 0.24.0
     tree-sitter-typescript:
-      specifier: ^0.23.0
+      specifier: ^0.23.2
       version: 0.23.2
     tsx:
       specifier: ^4.7.0
@@ -124,18 +127,9 @@ catalogs:
       specifier: ^4.4.3
       version: 4.4.3
 
-patchedDependencies:
-  tree-sitter@0.25.0:
-    hash: 8966da2ca0cf24b2c96f45d359b958638ba9e2074e35fe26fd93741540779d90
-    path: patches/tree-sitter@0.25.0.patch
-
 importers:
 
   .:
-    dependencies:
-      micromatch:
-        specifier: ^4.0.8
-        version: 4.0.8
     devDependencies:
       '@eslint/js':
         specifier: 'catalog:'
@@ -143,9 +137,6 @@ importers:
       '@tsconfig/node22':
         specifier: 'catalog:'
         version: 22.0.5
-      '@types/micromatch':
-        specifier: ^4.0.10
-        version: 4.0.10
       eslint:
         specifier: 'catalog:'
         version: 10.5.0
@@ -190,43 +181,43 @@ importers:
         version: 0.1.9
       tree-sitter:
         specifier: 'catalog:'
-        version: 0.25.0(patch_hash=8966da2ca0cf24b2c96f45d359b958638ba9e2074e35fe26fd93741540779d90)
+        version: 0.25.1
       tree-sitter-bash:
         specifier: 'catalog:'
-        version: 0.25.1(tree-sitter@0.25.0(patch_hash=8966da2ca0cf24b2c96f45d359b958638ba9e2074e35fe26fd93741540779d90))
+        version: 0.25.1(tree-sitter@0.25.1)
       tree-sitter-c:
         specifier: 'catalog:'
-        version: 0.24.1(tree-sitter@0.25.0(patch_hash=8966da2ca0cf24b2c96f45d359b958638ba9e2074e35fe26fd93741540779d90))
+        version: 0.24.1(tree-sitter@0.25.1)
       tree-sitter-c-sharp:
         specifier: 'catalog:'
-        version: 0.23.5(tree-sitter@0.25.0(patch_hash=8966da2ca0cf24b2c96f45d359b958638ba9e2074e35fe26fd93741540779d90))
+        version: 0.23.5(tree-sitter@0.25.1)
       tree-sitter-cpp:
         specifier: 'catalog:'
-        version: 0.23.4(tree-sitter@0.25.0(patch_hash=8966da2ca0cf24b2c96f45d359b958638ba9e2074e35fe26fd93741540779d90))
+        version: 0.23.4(tree-sitter@0.25.1)
       tree-sitter-go:
         specifier: 'catalog:'
-        version: 0.25.0(tree-sitter@0.25.0(patch_hash=8966da2ca0cf24b2c96f45d359b958638ba9e2074e35fe26fd93741540779d90))
+        version: 0.25.0(tree-sitter@0.25.1)
       tree-sitter-java:
         specifier: 'catalog:'
-        version: 0.23.5(tree-sitter@0.25.0(patch_hash=8966da2ca0cf24b2c96f45d359b958638ba9e2074e35fe26fd93741540779d90))
+        version: 0.23.5(tree-sitter@0.25.1)
       tree-sitter-javascript:
         specifier: 'catalog:'
-        version: 0.25.0(tree-sitter@0.25.0(patch_hash=8966da2ca0cf24b2c96f45d359b958638ba9e2074e35fe26fd93741540779d90))
+        version: 0.25.0(tree-sitter@0.25.1)
       tree-sitter-php:
         specifier: 'catalog:'
-        version: 0.24.2(tree-sitter@0.25.0(patch_hash=8966da2ca0cf24b2c96f45d359b958638ba9e2074e35fe26fd93741540779d90))
+        version: 0.24.2(tree-sitter@0.25.1)
       tree-sitter-python:
         specifier: 'catalog:'
-        version: 0.25.0(tree-sitter@0.25.0(patch_hash=8966da2ca0cf24b2c96f45d359b958638ba9e2074e35fe26fd93741540779d90))
+        version: 0.25.0(tree-sitter@0.25.1)
       tree-sitter-ruby:
         specifier: 'catalog:'
-        version: 0.23.1(tree-sitter@0.25.0(patch_hash=8966da2ca0cf24b2c96f45d359b958638ba9e2074e35fe26fd93741540779d90))
+        version: 0.23.1(tree-sitter@0.25.1)
       tree-sitter-rust:
         specifier: 'catalog:'
-        version: 0.24.0(tree-sitter@0.25.0(patch_hash=8966da2ca0cf24b2c96f45d359b958638ba9e2074e35fe26fd93741540779d90))
+        version: 0.24.0(tree-sitter@0.25.1)
       tree-sitter-typescript:
         specifier: 'catalog:'
-        version: 0.23.2(tree-sitter@0.25.0(patch_hash=8966da2ca0cf24b2c96f45d359b958638ba9e2074e35fe26fd93741540779d90))
+        version: 0.23.2(tree-sitter@0.25.1)
       zod:
         specifier: 'catalog:'
         version: 4.4.3
@@ -246,6 +237,9 @@ importers:
       '@vitest/coverage-v8':
         specifier: 'catalog:'
         version: 4.1.5(vitest@4.1.5)
+      node-gyp:
+        specifier: 'catalog:'
+        version: 13.1.0
       tsx:
         specifier: 'catalog:'
         version: 4.21.0
@@ -640,6 +634,10 @@ packages:
   '@isaacs/cliui@9.0.0':
     resolution: {integrity: sha512-AokJm4tuBHillT+FpMtxQ60n8ObyXBatq7jD2/JA9dxbDDokKQm8KMht5ibGzLVU9IJDIKK4TPKgMHEYMn3lMg==}
     engines: {node: '>=18'}
+
+  '@isaacs/fs-minipass@4.0.1':
+    resolution: {integrity: sha512-wgm9Ehl2jpeqP3zw/7mo3kRHFp5MEDhqAdwy1fTGkHAwnkGOVsgpvQhL8B5n1qlb01jV3n/bI0ZfZp5lWA1k4w==}
+    engines: {node: '>=18.0.0'}
 
   '@jridgewell/resolve-uri@3.1.2':
     resolution: {integrity: sha512-bRISgCIjP20/tbWSPWMEi54QVPRZExkuD9lJL+UIxUKtwVJA8wW1Trb1jMs1RFXo1CBTNZ/5hpC9QvmKWdopKw==}
@@ -1052,6 +1050,10 @@ packages:
     engines: {node: '>= 20'}
     hasBin: true
 
+  abbrev@5.0.0:
+    resolution: {integrity: sha512-/XrFJgzQQQHpti1raDJC6m4ws6aNktmjBlhk8Fdlk7LwCEuDoieEJJY9OFHjfiFJFFRM2tK+Ky/IsfbbmlMu1w==}
+    engines: {node: ^22.22.2 || ^24.15.0 || >=26.0.0}
+
   acorn-jsx@5.3.2:
     resolution: {integrity: sha512-rq9s+JNhf0IChjtDXxllJ7g41oZk5SlXtp0LHwyA5cejwn7vKmKp4pPri6YEePv2PU65sAsegbXtIinmDFDXgQ==}
     peerDependencies:
@@ -1195,6 +1197,10 @@ packages:
   chownr@1.1.4:
     resolution: {integrity: sha512-jJ0bqzaylmJtVnNgzTeSOs8DPavpbYgEr/b0YL8/2GO3xJEhInFmhKMUnEJQjZumK7KXGFhUy89PrsJWlakBVg==}
 
+  chownr@3.0.0:
+    resolution: {integrity: sha512-+IxzY9BZOQd/XuYPRmrvEVjF/nqj5kgT4kEq7VofrDoM1MxoRjEWkrCC3EtLi59TVawxTAn+orJwFQcrqEN1+g==}
+    engines: {node: '>=18'}
+
   cockatiel@3.2.1:
     resolution: {integrity: sha512-gfrHV6ZPkquExvMh9IOkKsBzNDk6sDuZ6DdBGUBkvFnTCqCxzpuq48RySgP0AnaqQkw2zynOFj9yly6T1Q2G5Q==}
     engines: {node: '>=16'}
@@ -1316,6 +1322,10 @@ packages:
     resolution: {integrity: sha512-TWrgLOFUQTH994YUyl1yT4uyavY5nNB5muff+RtWaqNVCAK408b5ZnnbNAUEWLTCpum9w6arT70i1XdQ4UeOPA==}
     engines: {node: '>=0.12'}
 
+  env-paths@2.2.1:
+    resolution: {integrity: sha512-+h1lkLKhZMTYjog1VEpJNG7NZJWcuc2DDk/qsqSTRRCOXiLjeQ1d1/udrUGhqMxUgAlwKNZ0cf2uqan5GLuS2A==}
+    engines: {node: '>=6'}
+
   environment@1.1.0:
     resolution: {integrity: sha512-xUtoPkMggbz0MPyPiIWr1Kp4aeWJjDZ6SMvURhimjdZgsRuDplF5/s9hcgGhyXMhs+6vpnuoiZ2kFiu3FMnS8Q==}
     engines: {node: '>=18'}
@@ -1405,6 +1415,9 @@ packages:
   expect-type@1.3.0:
     resolution: {integrity: sha512-knvyeauYhqjOYvQ66MznSMs83wmHrCycNEN6Ao+2AeYEfxUIkuiVxdEa1qlGEPK+We3n0THiDciYSsCcgW/DoA==}
     engines: {node: '>=12.0.0'}
+
+  exponential-backoff@3.1.3:
+    resolution: {integrity: sha512-ZgEeZXj30q+I0EN+CbSSpIyPaJ5HVQD18Z1m+u1FXbAeT94mr1zw50q4q6jiiC447Nl/YTcIYSAftiGqetwXCA==}
 
   extend-shallow@2.0.1:
     resolution: {integrity: sha512-zCnTtlxNoAiDc3gqY2aYAWFx7XWWiasuF2K8Me5WbN8otHKTUKBwjPtNpRs/rbUZm7KxWAaNj7P1a/p52GbVug==}
@@ -1902,6 +1915,10 @@ packages:
     resolution: {integrity: sha512-tEBHqDnIoM/1rXME1zgka9g6Q2lcoCkxHLuc7ODJ5BxbP5d4c2Z5cGgtXAku59200Cx7diuHTOYfSBD8n6mm8A==}
     engines: {node: '>=16 || 14 >=14.17'}
 
+  minizlib@3.1.0:
+    resolution: {integrity: sha512-KZxYo1BUkWD2TVFLr0MQoM8vUUigWD3LlD83a/75BqC+4qE0Hb1Vo5v1FgcfaNXvfXzr+5EhQ6ing/CaBijTlw==}
+    engines: {node: '>= 18'}
+
   mkdirp-classic@0.5.3:
     resolution: {integrity: sha512-gKLcREMhtuZRwRAfqP3RFW+TK4JqApVBtOIftVgjuABpAtpxhPGaDcfvbhNvD0B8iD1oUr/txX35NjcaY6Ns/A==}
 
@@ -1937,9 +1954,19 @@ packages:
     resolution: {integrity: sha512-LA4ZjwlnUblHVgq0oBF3Jl/6h/Nvs5fzBLwdEF4nuxnFdsfajde4WfxtJr3CaiH+F6ewcIB/q4jQ4UzPyid+CQ==}
     hasBin: true
 
+  node-gyp@13.1.0:
+    resolution: {integrity: sha512-FpNzOLFACKG0oRBYbZ5WOeWD1EqRTIWX90MaRIWTO18lVYPx8fqIjrdS3pihjnCkSmgop6zVGkSqg1vXZLksuw==}
+    engines: {node: ^22.22.2 || ^24.15.0 || >=26.0.0}
+    hasBin: true
+
   node-sarif-builder@3.4.0:
     resolution: {integrity: sha512-tGnJW6OKRii9u/b2WiUViTJS+h7Apxx17qsMUjsUeNDiMMX5ZFf8F8Fcz7PAQ6omvOxHZtvDTmOYKJQwmfpjeg==}
     engines: {node: '>=20'}
+
+  nopt@10.0.1:
+    resolution: {integrity: sha512-df3sBr/6ax9hSGuC3CspvLlbnX8cP5L5nZwXF8cGN8l0zSWR6BvzmQ6jPUKjvo6+/xdpkNvEcucBNUdBeeV13g==}
+    engines: {node: ^22.22.2 || ^24.15.0 || >=26.0.0}
+    hasBin: true
 
   normalize-package-data@6.0.2:
     resolution: {integrity: sha512-V6gygoYb/5EmNI+MEGrWkC+e6+Rr7mTmfHrxDbLzxQogBkgzo76rkok0Am6thgSF7Mv2nLOajAJj5vDJZEFn7g==}
@@ -2050,6 +2077,10 @@ packages:
   prelude-ls@1.2.1:
     resolution: {integrity: sha512-vkcDPrRZo1QZLbn5RLGPpg/WmIQ65qoWWhcGKf/b5eplkkarX0m9z8ppCat4mlOqUsWpyNuYgO3VRyrYHSzX5g==}
     engines: {node: '>= 0.8.0'}
+
+  proc-log@7.0.0:
+    resolution: {integrity: sha512-FYgfaA69XZ93zaXLoMNQ+ViDXGGBgR8aLh03txzcFhV+9xOXx7+8DLCULrKKpR9+GsH9ZfHm82aSUPpozX0Ztg==}
+    engines: {node: ^22.22.2 || ^24.15.0 || >=26.0.0}
 
   pump@3.0.4:
     resolution: {integrity: sha512-VS7sjc6KR7e1ukRFhQSY5LM2uBWAUPiOPa/A3mkKmiMwSmRFUITt0xuj+/lesgnCv+dPIEYlkzrcyXgquIHMcA==}
@@ -2282,6 +2313,10 @@ packages:
     resolution: {integrity: sha512-ujeqbceABgwMZxEJnk2HDY2DlnUZ+9oEcb1KzTVfYHio0UE6dG71n60d8D2I4qNvleWrrXpmjpt7vZeF1LnMZQ==}
     engines: {node: '>=6'}
 
+  tar@7.5.22:
+    resolution: {integrity: sha512-MFO/QzvtAOmJbkhOaCTvbGcFN9L9b+JunIsDwaKljSOdcLMea3NJ1k9Usz/rjdfSXTq4dfzfeS7W4p4YOAAHeA==}
+    engines: {node: '>=18'}
+
   terminal-link@4.0.0:
     resolution: {integrity: sha512-lk+vH+MccxNqgVqSnkMVKx4VLJfnLjDBGzH16JVZjKE2DoxP57s6/vt6JmXV5I3jBcfGrxNrYtC+mPtU7WJztA==}
     engines: {node: '>=18'}
@@ -2432,8 +2467,8 @@ packages:
       tree-sitter:
         optional: true
 
-  tree-sitter@0.25.0:
-    resolution: {integrity: sha512-PGZZzFW63eElZJDe/b/R/LbsjDDYJa5UEjLZJB59RQsMX+fo0j54fqBPn1MGKav/QNa0JR0zBiVaikYDWCj5KQ==}
+  tree-sitter@0.25.1:
+    resolution: {integrity: sha512-mrcEdkYtHfrK1A6fs3O6FxkBo0Qig5XUXqHhxUOQu0bmPo00QF4XaSx4edpazdHwxnSCjlGKGgIqWdaN4dvTLA==}
 
   ts-api-utils@2.5.0:
     resolution: {integrity: sha512-OJ/ibxhPlqrMM0UiNHJ/0CKQkoKF243/AEmplt3qpRgkW8VG7IfOS41h7V8TjITqdByHzrjcS/2si+y4lIh8NA==}
@@ -2491,6 +2526,10 @@ packages:
   undici@7.25.0:
     resolution: {integrity: sha512-xXnp4kTyor2Zq+J1FfPI6Eq3ew5h6Vl0F/8d9XU5zZQf1tX9s2Su1/3PiMmUANFULpmksxkClamIZcaUqryHsQ==}
     engines: {node: '>=20.18.1'}
+
+  undici@8.12.3:
+    resolution: {integrity: sha512-+fdndUTwBP86cVjihTp21hZHo7d6oj1c/47XPA3lL8mM0XHs+C4EkcjmgRsFnFk2f/UONGDy9ItBItmXsLOQHw==}
+    engines: {node: '>=22.19.0'}
 
   unicorn-magic@0.1.0:
     resolution: {integrity: sha512-lRfVq8fE8gz6QMBuDM6a+LO3IAzTi05H6gCVaUpir2E1Rwpo4ZUog45KpNXKC/Mn3Yb9UDuHumeFTo9iV/D9FQ==}
@@ -2649,6 +2688,10 @@ packages:
 
   yallist@4.0.0:
     resolution: {integrity: sha512-3wdGidZyq5PB084XLES5TpOSRA3wjXAlIWMhum2kRcv/41Sn2emQ0dycQW4uZXLejwKvg6EsvbdlVL+FYEct7A==}
+
+  yallist@5.0.0:
+    resolution: {integrity: sha512-YgvUTfwqyc7UXVMrB+SImsVYSmTS8X/tSrtdNZMImM+n7+QTriRXyXim0mBrTXNeqzVF0KWGgHPeiyViFFrNDw==}
+    engines: {node: '>=18'}
 
   yauzl@3.3.0:
     resolution: {integrity: sha512-PtGEvEP30p7sbIBJKUBjUnqgTVOyMURc4dLo9iNyAJnNIEz9pm88cCXF21w94Kg3k6RXkeZh5DHOGS0qEONvNQ==}
@@ -2926,6 +2969,10 @@ snapshots:
   '@humanwhocodes/retry@0.4.3': {}
 
   '@isaacs/cliui@9.0.0': {}
+
+  '@isaacs/fs-minipass@4.0.1':
+    dependencies:
+      minipass: 7.1.3
 
   '@jridgewell/resolve-uri@3.1.2': {}
 
@@ -3397,6 +3444,8 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
+  abbrev@5.0.0: {}
+
   acorn-jsx@5.3.2(acorn@8.16.0):
     dependencies:
       acorn: 8.16.0
@@ -3553,6 +3602,8 @@ snapshots:
 
   chownr@1.1.4: {}
 
+  chownr@3.0.0: {}
+
   cockatiel@3.2.1: {}
 
   color-convert@2.0.1:
@@ -3660,6 +3711,8 @@ snapshots:
   entities@6.0.1: {}
 
   entities@7.0.1: {}
+
+  env-paths@2.2.1: {}
 
   environment@1.1.0: {}
 
@@ -3784,6 +3837,8 @@ snapshots:
   expand-template@2.0.3: {}
 
   expect-type@1.3.0: {}
+
+  exponential-backoff@3.1.3: {}
 
   extend-shallow@2.0.1:
     dependencies:
@@ -4247,6 +4302,10 @@ snapshots:
 
   minipass@7.1.3: {}
 
+  minizlib@3.1.0:
+    dependencies:
+      minipass: 7.1.3
+
   mkdirp-classic@0.5.3: {}
 
   ms@2.1.3: {}
@@ -4270,10 +4329,27 @@ snapshots:
 
   node-gyp-build@4.8.4: {}
 
+  node-gyp@13.1.0:
+    dependencies:
+      env-paths: 2.2.1
+      exponential-backoff: 3.1.3
+      graceful-fs: 4.2.11
+      nopt: 10.0.1
+      proc-log: 7.0.0
+      semver: 7.7.4
+      tar: 7.5.22
+      tinyglobby: 0.2.17
+      undici: 8.12.3
+      which: 7.0.0
+
   node-sarif-builder@3.4.0:
     dependencies:
       '@types/sarif': 2.1.7
       fs-extra: 11.3.4
+
+  nopt@10.0.1:
+    dependencies:
+      abbrev: 5.0.0
 
   normalize-package-data@6.0.2:
     dependencies:
@@ -4391,6 +4467,8 @@ snapshots:
       tunnel-agent: 0.6.0
 
   prelude-ls@1.2.1: {}
+
+  proc-log@7.0.0: {}
 
   pump@3.0.4:
     dependencies:
@@ -4658,6 +4736,14 @@ snapshots:
       inherits: 2.0.4
       readable-stream: 3.6.2
 
+  tar@7.5.22:
+    dependencies:
+      '@isaacs/fs-minipass': 4.0.1
+      chownr: 3.0.0
+      minipass: 7.1.3
+      minizlib: 3.1.0
+      yallist: 5.0.0
+
   terminal-link@4.0.0:
     dependencies:
       ansi-escapes: 7.3.0
@@ -4691,107 +4777,107 @@ snapshots:
     dependencies:
       is-number: 7.0.0
 
-  tree-sitter-bash@0.25.1(tree-sitter@0.25.0(patch_hash=8966da2ca0cf24b2c96f45d359b958638ba9e2074e35fe26fd93741540779d90)):
+  tree-sitter-bash@0.25.1(tree-sitter@0.25.1):
     dependencies:
       node-addon-api: 8.8.0
       node-gyp-build: 4.8.4
     optionalDependencies:
-      tree-sitter: 0.25.0(patch_hash=8966da2ca0cf24b2c96f45d359b958638ba9e2074e35fe26fd93741540779d90)
+      tree-sitter: 0.25.1
 
-  tree-sitter-c-sharp@0.23.5(tree-sitter@0.25.0(patch_hash=8966da2ca0cf24b2c96f45d359b958638ba9e2074e35fe26fd93741540779d90)):
+  tree-sitter-c-sharp@0.23.5(tree-sitter@0.25.1):
     dependencies:
       node-addon-api: 8.8.0
       node-gyp-build: 4.8.4
     optionalDependencies:
-      tree-sitter: 0.25.0(patch_hash=8966da2ca0cf24b2c96f45d359b958638ba9e2074e35fe26fd93741540779d90)
+      tree-sitter: 0.25.1
 
-  tree-sitter-c@0.23.6(tree-sitter@0.25.0(patch_hash=8966da2ca0cf24b2c96f45d359b958638ba9e2074e35fe26fd93741540779d90)):
+  tree-sitter-c@0.23.6(tree-sitter@0.25.1):
     dependencies:
       node-addon-api: 8.8.0
       node-gyp-build: 4.8.4
     optionalDependencies:
-      tree-sitter: 0.25.0(patch_hash=8966da2ca0cf24b2c96f45d359b958638ba9e2074e35fe26fd93741540779d90)
+      tree-sitter: 0.25.1
 
-  tree-sitter-c@0.24.1(tree-sitter@0.25.0(patch_hash=8966da2ca0cf24b2c96f45d359b958638ba9e2074e35fe26fd93741540779d90)):
+  tree-sitter-c@0.24.1(tree-sitter@0.25.1):
     dependencies:
       node-addon-api: 8.8.0
       node-gyp-build: 4.8.4
     optionalDependencies:
-      tree-sitter: 0.25.0(patch_hash=8966da2ca0cf24b2c96f45d359b958638ba9e2074e35fe26fd93741540779d90)
+      tree-sitter: 0.25.1
 
-  tree-sitter-cpp@0.23.4(tree-sitter@0.25.0(patch_hash=8966da2ca0cf24b2c96f45d359b958638ba9e2074e35fe26fd93741540779d90)):
+  tree-sitter-cpp@0.23.4(tree-sitter@0.25.1):
     dependencies:
       node-addon-api: 8.8.0
       node-gyp-build: 4.8.4
-      tree-sitter-c: 0.23.6(tree-sitter@0.25.0(patch_hash=8966da2ca0cf24b2c96f45d359b958638ba9e2074e35fe26fd93741540779d90))
+      tree-sitter-c: 0.23.6(tree-sitter@0.25.1)
     optionalDependencies:
-      tree-sitter: 0.25.0(patch_hash=8966da2ca0cf24b2c96f45d359b958638ba9e2074e35fe26fd93741540779d90)
+      tree-sitter: 0.25.1
 
-  tree-sitter-go@0.25.0(tree-sitter@0.25.0(patch_hash=8966da2ca0cf24b2c96f45d359b958638ba9e2074e35fe26fd93741540779d90)):
-    dependencies:
-      node-addon-api: 8.8.0
-      node-gyp-build: 4.8.4
-    optionalDependencies:
-      tree-sitter: 0.25.0(patch_hash=8966da2ca0cf24b2c96f45d359b958638ba9e2074e35fe26fd93741540779d90)
-
-  tree-sitter-java@0.23.5(tree-sitter@0.25.0(patch_hash=8966da2ca0cf24b2c96f45d359b958638ba9e2074e35fe26fd93741540779d90)):
+  tree-sitter-go@0.25.0(tree-sitter@0.25.1):
     dependencies:
       node-addon-api: 8.8.0
       node-gyp-build: 4.8.4
     optionalDependencies:
-      tree-sitter: 0.25.0(patch_hash=8966da2ca0cf24b2c96f45d359b958638ba9e2074e35fe26fd93741540779d90)
+      tree-sitter: 0.25.1
 
-  tree-sitter-javascript@0.23.1(tree-sitter@0.25.0(patch_hash=8966da2ca0cf24b2c96f45d359b958638ba9e2074e35fe26fd93741540779d90)):
+  tree-sitter-java@0.23.5(tree-sitter@0.25.1):
     dependencies:
       node-addon-api: 8.8.0
       node-gyp-build: 4.8.4
     optionalDependencies:
-      tree-sitter: 0.25.0(patch_hash=8966da2ca0cf24b2c96f45d359b958638ba9e2074e35fe26fd93741540779d90)
+      tree-sitter: 0.25.1
 
-  tree-sitter-javascript@0.25.0(tree-sitter@0.25.0(patch_hash=8966da2ca0cf24b2c96f45d359b958638ba9e2074e35fe26fd93741540779d90)):
+  tree-sitter-javascript@0.23.1(tree-sitter@0.25.1):
     dependencies:
       node-addon-api: 8.8.0
       node-gyp-build: 4.8.4
     optionalDependencies:
-      tree-sitter: 0.25.0(patch_hash=8966da2ca0cf24b2c96f45d359b958638ba9e2074e35fe26fd93741540779d90)
+      tree-sitter: 0.25.1
 
-  tree-sitter-php@0.24.2(tree-sitter@0.25.0(patch_hash=8966da2ca0cf24b2c96f45d359b958638ba9e2074e35fe26fd93741540779d90)):
+  tree-sitter-javascript@0.25.0(tree-sitter@0.25.1):
     dependencies:
       node-addon-api: 8.8.0
       node-gyp-build: 4.8.4
     optionalDependencies:
-      tree-sitter: 0.25.0(patch_hash=8966da2ca0cf24b2c96f45d359b958638ba9e2074e35fe26fd93741540779d90)
+      tree-sitter: 0.25.1
 
-  tree-sitter-python@0.25.0(tree-sitter@0.25.0(patch_hash=8966da2ca0cf24b2c96f45d359b958638ba9e2074e35fe26fd93741540779d90)):
+  tree-sitter-php@0.24.2(tree-sitter@0.25.1):
     dependencies:
       node-addon-api: 8.8.0
       node-gyp-build: 4.8.4
     optionalDependencies:
-      tree-sitter: 0.25.0(patch_hash=8966da2ca0cf24b2c96f45d359b958638ba9e2074e35fe26fd93741540779d90)
+      tree-sitter: 0.25.1
 
-  tree-sitter-ruby@0.23.1(tree-sitter@0.25.0(patch_hash=8966da2ca0cf24b2c96f45d359b958638ba9e2074e35fe26fd93741540779d90)):
+  tree-sitter-python@0.25.0(tree-sitter@0.25.1):
     dependencies:
       node-addon-api: 8.8.0
       node-gyp-build: 4.8.4
     optionalDependencies:
-      tree-sitter: 0.25.0(patch_hash=8966da2ca0cf24b2c96f45d359b958638ba9e2074e35fe26fd93741540779d90)
+      tree-sitter: 0.25.1
 
-  tree-sitter-rust@0.24.0(tree-sitter@0.25.0(patch_hash=8966da2ca0cf24b2c96f45d359b958638ba9e2074e35fe26fd93741540779d90)):
+  tree-sitter-ruby@0.23.1(tree-sitter@0.25.1):
     dependencies:
       node-addon-api: 8.8.0
       node-gyp-build: 4.8.4
     optionalDependencies:
-      tree-sitter: 0.25.0(patch_hash=8966da2ca0cf24b2c96f45d359b958638ba9e2074e35fe26fd93741540779d90)
+      tree-sitter: 0.25.1
 
-  tree-sitter-typescript@0.23.2(tree-sitter@0.25.0(patch_hash=8966da2ca0cf24b2c96f45d359b958638ba9e2074e35fe26fd93741540779d90)):
+  tree-sitter-rust@0.24.0(tree-sitter@0.25.1):
     dependencies:
       node-addon-api: 8.8.0
       node-gyp-build: 4.8.4
-      tree-sitter-javascript: 0.23.1(tree-sitter@0.25.0(patch_hash=8966da2ca0cf24b2c96f45d359b958638ba9e2074e35fe26fd93741540779d90))
     optionalDependencies:
-      tree-sitter: 0.25.0(patch_hash=8966da2ca0cf24b2c96f45d359b958638ba9e2074e35fe26fd93741540779d90)
+      tree-sitter: 0.25.1
 
-  tree-sitter@0.25.0(patch_hash=8966da2ca0cf24b2c96f45d359b958638ba9e2074e35fe26fd93741540779d90):
+  tree-sitter-typescript@0.23.2(tree-sitter@0.25.1):
+    dependencies:
+      node-addon-api: 8.8.0
+      node-gyp-build: 4.8.4
+      tree-sitter-javascript: 0.23.1(tree-sitter@0.25.1)
+    optionalDependencies:
+      tree-sitter: 0.25.1
+
+  tree-sitter@0.25.1:
     dependencies:
       node-addon-api: 8.8.0
       node-gyp-build: 4.8.4
@@ -4847,6 +4933,8 @@ snapshots:
   undici-types@7.18.2: {}
 
   undici@7.25.0: {}
+
+  undici@8.12.3: {}
 
   unicorn-magic@0.1.0: {}
 
@@ -4945,6 +5033,8 @@ snapshots:
   xmlbuilder@11.0.1: {}
 
   yallist@4.0.0: {}
+
+  yallist@5.0.0: {}
 
   yauzl@3.3.0:
     dependencies:
