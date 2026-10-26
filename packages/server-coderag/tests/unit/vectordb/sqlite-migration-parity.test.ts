@@ -7,8 +7,8 @@ import { VectorDB } from '../../../src/vectordb/db.js';
 import { openSqliteDatabase } from '../../../src/vectordb/sqlite-db.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-// Created by the pre-node:sqlite (better-sqlite3) code path: dim 4, default vec0 chunk size, WAL, 2 docs + 1 code file.
-const LEGACY_FIXTURE = path.join(here, '../../fixtures/legacy-better-sqlite3.db');
+// Created by the pre-node:sqlite (native-addon driver) code path: dim 4, default vec0 chunk size, WAL, 2 docs + 1 code file.
+const LEGACY_FIXTURE = path.join(here, '../../fixtures/legacy-pre-node-sqlite.db');
 const DIM = 4;
 
 let dir: string;
@@ -32,7 +32,7 @@ function vecTableSql(file: string): string {
   }
 }
 
-describe('a database written by the better-sqlite3 code path', () => {
+describe('a database written by the pre-node:sqlite code path', () => {
   it('reads back documents, rules, sync times and the stored dimension', () => {
     const db = VectorDB.open(dbPath, DIM);
     expect(db.getStoredDimensions()).toBe(DIM);

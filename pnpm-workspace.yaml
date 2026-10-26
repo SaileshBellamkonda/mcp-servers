@@ -9,14 +9,12 @@ catalog:
   '@modelcontextprotocol/hono': ^2.0.0-alpha.2
   '@modelcontextprotocol/server': ^2.0.0-alpha.2
   '@tsconfig/node22': ^22.0.5
-  '@types/better-sqlite3': ^7.6.0
   '@types/micromatch': ^4.0.10
   '@types/node': ^24.13.2
   '@types/vscode': ^1.106.0
   '@types/which': ^3.0.4
   '@vitest/coverage-v8': ^4.0.0
   '@vscode/vsce': ^3.2.2
-  better-sqlite3: ^12.11.1
   esbuild: ^0.27.7
   eslint: ^10.0.0
   gray-matter: ^4.0.3
@@ -47,7 +45,6 @@ catalog:
 
 onlyBuiltDependencies:
   - '@vscode/vsce-sign'
-  - better-sqlite3
   - esbuild
   - keytar
   - sqlite-vec

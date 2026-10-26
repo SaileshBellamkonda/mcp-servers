@@ -3,8 +3,8 @@ import path from 'node:path';
 import type * as NodeSqlite from 'node:sqlite';
 
 /**
- * Thin adapter over Node's built-in `node:sqlite` (`DatabaseSync`) giving the VectorDB the small
- * better-sqlite3-shaped surface it needs: `prepare().run/get/all`, `exec`, `transaction`, `pragma`, `close`.
+ * Thin adapter over Node's built-in `node:sqlite` (`DatabaseSync`) giving the VectorDB the
+ * small synchronous prepare/transaction/pragma surface it needs: `prepare().run/get/all`, `exec`, `transaction`, `pragma`, `close`.
  *
  * `node:sqlite` is loaded lazily (on the first open) so that merely importing this module never triggers
  * Node's "SQLite is an experimental feature" warning.

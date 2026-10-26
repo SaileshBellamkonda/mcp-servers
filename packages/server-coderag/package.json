@@ -41,7 +41,6 @@
     "@modelcontextprotocol/hono": "catalog:",
     "@hono/node-server": "catalog:",
     "hono": "catalog:",
-    "better-sqlite3": "catalog:",
     "sqlite-vec": "catalog:",
     "tree-sitter": "catalog:",
     "tree-sitter-typescript": "catalog:",
@@ -65,7 +64,6 @@
     "@mcp-servers/http-host": "workspace:*",
     "esbuild": "catalog:",
     "@tsconfig/node22": "catalog:",
-    "@types/better-sqlite3": "catalog:",
     "@types/micromatch": "catalog:",
     "@types/node": "catalog:",
     "@vitest/coverage-v8": "catalog:",
@@ -83,6 +81,6 @@
     }
   },
   "engines": {
-    "node": ">=22.0.0"
+    "node": ">=22.16"
   }
 }
