@@ -6,7 +6,7 @@ import { randomUUID } from 'node:crypto';
 import type { Server } from 'node:http';
 import { createGitServer } from './server/git-server.js';
 import { RepositoryManager } from './core/repository-manager.js';
-import { McpLogger } from './core/logger.js';
+import { McpLogger, parseList, parsePort } from '@mcp-servers/common';
 
 async function main() {
   const allowedReposEnv = process.env['GIT_ALLOWED_REPOS'];
@@ -17,7 +17,7 @@ async function main() {
     process.exit(1);
   }
 
-  const allowedRepos = allowedReposEnv.split(';').filter(p => p.trim());
+  const allowedRepos = parseList(allowedReposEnv);
 
   if (allowedRepos.length === 0) {
     console.error('Error: No repositories configured in GIT_ALLOWED_REPOS');
@@ -35,7 +35,7 @@ async function main() {
   createGitServer(server, repoManager, logger);
 
   if (process.env['MCP_TRANSPORT']?.toLowerCase() === 'http') {
-    const port = parseInt(process.env['MCP_HTTP_PORT'] ?? '3000', 10);
+    const port = parsePort(process.env['MCP_HTTP_PORT'], 3000);
     const transports = new Map<string, WebStandardStreamableHTTPServerTransport>();
     const app = createMcpHonoApp({ host: '127.0.0.1' });
 

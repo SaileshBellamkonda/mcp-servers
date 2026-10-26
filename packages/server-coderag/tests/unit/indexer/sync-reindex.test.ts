@@ -9,7 +9,7 @@ import { Embedder } from '../../../src/embedder/embedder.js';
 import { GlobMatcher } from '../../../src/core/glob-utils.js';
 import { SyncManager } from '../../../src/indexer/sync-manager.js';
 import type { EmbeddingConfig } from '../../../src/core/types.js';
-import type { McpLogger } from '../../../src/core/logger.js';
+import type { McpLogger } from '@mcp-servers/common';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const tmpDir = path.join(__dirname, '../../../.tmp-sync-reindex-test');

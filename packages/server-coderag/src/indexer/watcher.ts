@@ -2,7 +2,7 @@ import { watch, existsSync, type FSWatcher } from 'node:fs';
 import path from 'node:path';
 import type { VectorDB } from '../vectordb/db.js';
 import type { Indexer } from './indexer.js';
-import type { McpLogger } from '../core/logger.js';
+import type { McpLogger } from '@mcp-servers/common';
 import type { SyncManager } from './sync-manager.js';
 import type { GlobMatcher } from '../core/glob-utils.js';
 import { isSupportedExtension } from './languages.js';

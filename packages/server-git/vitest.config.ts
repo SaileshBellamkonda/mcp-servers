@@ -1,6 +1,12 @@
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
+  // Resolve @mcp-servers/* workspace packages to their TypeScript source (no build needed).
+  ssr: {
+    resolve: {
+      conditions: ['@mcp-servers/source'],
+    },
+  },
   test: {
     globals: false,
     environment: 'node',

@@ -24,35 +24,10 @@ export default defineConfig(
   js.configs.recommended,
   tseslint.configs.recommended,
 
-  // ── server-git (ESM, nodenext) ──────────────────────────────────────────
+  // ── All packages: servers, shared packages and the extension ──────────
+  // Each package's own tsconfig.json (nearest to the file) drives type info.
   {
-    files: ['packages/server-git/src/**/*.ts'],
-    extends: [tseslint.configs.strictTypeChecked, tseslint.configs.stylisticTypeChecked],
-    languageOptions: {
-      parserOptions: {
-        projectService: true,
-        tsconfigRootDir: import.meta.dirname,
-      },
-    },
-    rules: SOURCE_RULES,
-  },
-
-  // ── server-coderag (ESM, nodenext) ─────────────────────────────────────
-  {
-    files: ['packages/server-coderag/src/**/*.ts'],
-    extends: [tseslint.configs.strictTypeChecked, tseslint.configs.stylisticTypeChecked],
-    languageOptions: {
-      parserOptions: {
-        projectService: true,
-        tsconfigRootDir: import.meta.dirname,
-      },
-    },
-    rules: SOURCE_RULES,
-  },
-
-  // ── vscode-extension (CJS, commonjs) ───────────────────────────────────
-  {
-    files: ['packages/vscode-extension/src/**/*.ts'],
+    files: ['packages/**/src/**/*.ts'],
     extends: [tseslint.configs.strictTypeChecked, tseslint.configs.stylisticTypeChecked],
     languageOptions: {
       parserOptions: {

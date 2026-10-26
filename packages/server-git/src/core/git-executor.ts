@@ -2,7 +2,7 @@ import { execFile } from 'node:child_process';
 import which from 'which';
 import { GitMcpError, ErrorCode } from './types.js';
 import type { GitCommandResult, ExecuteOptions } from './types.js';
-import type { McpLogger } from './logger.js';
+import type { McpLogger } from '@mcp-servers/common';
 
 /**
  * Executes Git commands safely with timeout protection

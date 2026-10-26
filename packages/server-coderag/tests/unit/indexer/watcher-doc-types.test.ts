@@ -3,7 +3,7 @@ import type { VectorDB } from '../../../src/vectordb/db.js';
 import type { Indexer } from '../../../src/indexer/indexer.js';
 import type { SyncManager } from '../../../src/indexer/sync-manager.js';
 import type { GlobMatcher } from '../../../src/core/glob-utils.js';
-import type { McpLogger } from '../../../src/core/logger.js';
+import type { McpLogger } from '@mcp-servers/common';
 
 vi.mock('node:fs', () => ({
   watch: vi.fn(),

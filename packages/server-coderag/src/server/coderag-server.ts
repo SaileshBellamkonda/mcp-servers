@@ -2,7 +2,7 @@ import type { McpServer } from '@modelcontextprotocol/server';
 import type { VectorDB } from '../vectordb/db.js';
 import type { Embedder } from '../embedder/embedder.js';
 import type { Indexer } from '../indexer/indexer.js';
-import type { McpLogger } from '../core/logger.js';
+import type { McpLogger } from '@mcp-servers/common';
 import type { SyncManager } from '../indexer/sync-manager.js';
 import { PathGuard } from '../core/path-guard.js';
 import { registerSearch } from '../tools/search.js';

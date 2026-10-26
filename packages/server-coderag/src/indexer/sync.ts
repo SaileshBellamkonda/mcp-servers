@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 import type { VectorDB } from '../vectordb/db.js';
 import type { Indexer } from './indexer.js';
-import type { McpLogger } from '../core/logger.js';
+import type { McpLogger } from '@mcp-servers/common';
 import type { GlobConfig } from '../core/types.js';
 import { GlobMatcher } from '../core/glob-utils.js';
 import { SyncManager } from './sync-manager.js';

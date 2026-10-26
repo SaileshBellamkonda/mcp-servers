@@ -5,11 +5,20 @@
     "module": "nodenext",
     "moduleResolution": "nodenext",
     "erasableSyntaxOnly": true,
-    "outDir": "dist",
-    "rootDir": "src",
-    "composite": true,
-    "types": ["node"]
+    "customConditions": [
+      "@mcp-servers/source"
+    ],
+    "noEmit": true,
+    "types": [
+      "node"
+    ]
   },
-  "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist", "tests"]
+  "include": [
+    "src/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "tests"
+  ]
 }

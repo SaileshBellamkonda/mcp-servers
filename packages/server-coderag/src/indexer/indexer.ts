@@ -7,7 +7,7 @@ import { CodeParser } from './code-parser.js';
 import { isSupportedExtension } from './languages.js';
 import { createDefaultLoaderRegistry, type LoaderRegistry } from './loaders/index.js';
 import type { CodeSyncResult, DocumentMetadata, MarkdownChunk } from '../core/types.js';
-import type { McpLogger } from '../core/logger.js';
+import type { McpLogger } from '@mcp-servers/common';
 import { GlobMatcher } from '../core/glob-utils.js';
 import type { PathGuard } from '../core/path-guard.js';
 

@@ -3,7 +3,7 @@ import { z } from 'zod';
 import type { VectorDB } from '../vectordb/db.js';
 import type { Indexer } from '../indexer/indexer.js';
 import { syncDocuments, type SyncResult } from '../indexer/sync.js';
-import type { McpLogger } from '../core/logger.js';
+import type { McpLogger } from '@mcp-servers/common';
 import type { SyncManager } from '../indexer/sync-manager.js';
 import { syncLockedResponse, SyncInProgressError } from '../indexer/sync-manager.js';
 import type { PathGuard } from '../core/path-guard.js';

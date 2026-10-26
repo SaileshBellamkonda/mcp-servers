@@ -9,7 +9,7 @@ import { VectorDB } from './vectordb/db.js';
 import { Indexer } from './indexer/indexer.js';
 import { GlobMatcher } from './core/glob-utils.js';
 import { PathGuard, computeAllowedRoots } from './core/path-guard.js';
-import { McpLogger } from './core/logger.js';
+import { McpLogger } from '@mcp-servers/common';
 import { SyncManager } from './indexer/sync-manager.js';
 import { runStartupSync } from './indexer/sync.js';
 import { createCodeRagServer } from './server/coderag-server.js';

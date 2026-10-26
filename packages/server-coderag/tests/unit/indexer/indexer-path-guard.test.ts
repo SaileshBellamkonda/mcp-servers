@@ -7,7 +7,7 @@ import { VectorDB } from '../../../src/vectordb/db.js';
 import { Embedder } from '../../../src/embedder/embedder.js';
 import { GlobMatcher } from '../../../src/core/glob-utils.js';
 import { PathGuard, PathNotAllowedError } from '../../../src/core/path-guard.js';
-import type { McpLogger } from '../../../src/core/logger.js';
+import type { McpLogger } from '@mcp-servers/common';
 
 const DIM = 4;
 

@@ -4,7 +4,7 @@ import { PathValidator } from '../core/path-validator.js';
 import { GitExecutor } from '../core/git-executor.js';
 import { OutputParser } from '../core/output-parser.js';
 import type { Services } from '../core/types.js';
-import type { McpLogger } from '../core/logger.js';
+import type { McpLogger } from '@mcp-servers/common';
 
 // Import all tool registration functions
 import { registerGitWorkspaces } from '../tools/git-workspaces.js';

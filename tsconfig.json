@@ -2,8 +2,20 @@
   "$schema": "https://json.schemastore.org/tsconfig",
   "files": [],
   "references": [
-    { "path": "packages/server-git" },
-    { "path": "packages/server-coderag" },
-    { "path": "packages/vscode-extension" }
+    {
+      "path": "packages/shared/common/tsconfig.build.json"
+    },
+    {
+      "path": "packages/shared/http-host/tsconfig.build.json"
+    },
+    {
+      "path": "packages/server-git/tsconfig.build.json"
+    },
+    {
+      "path": "packages/server-coderag/tsconfig.build.json"
+    },
+    {
+      "path": "packages/vscode-extension"
+    }
   ]
 }

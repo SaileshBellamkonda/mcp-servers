@@ -24,8 +24,8 @@
     "coderag-mcp-server": "./dist/standalone.js"
   },
   "scripts": {
-    "build": "tsc",
-    "dev": "tsx src/standalone.ts",
+    "build": "tsc -b tsconfig.build.json",
+    "dev": "tsx --conditions=@mcp-servers/source src/standalone.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
@@ -36,6 +36,7 @@
   "author": "Development Team",
   "license": "MIT",
   "dependencies": {
+    "@mcp-servers/common": "workspace:*",
     "@cfworker/json-schema": "catalog:",
     "@modelcontextprotocol/server": "catalog:",
     "@modelcontextprotocol/hono": "catalog:",

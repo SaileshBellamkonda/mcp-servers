@@ -11,7 +11,7 @@ import { VectorDB } from './vectordb/db.js';
 import { Indexer } from './indexer/indexer.js';
 import { GlobMatcher } from './core/glob-utils.js';
 import { PathGuard, computeAllowedRoots } from './core/path-guard.js';
-import { McpLogger } from './core/logger.js';
+import { McpLogger, parseBool, parsePort } from '@mcp-servers/common';
 import { SyncManager } from './indexer/sync-manager.js';
 import { runStartupSync } from './indexer/sync.js';
 import { createCodeRagServer } from './server/coderag-server.js';
@@ -71,7 +71,7 @@ async function main(): Promise<void> {
 
   // Optional real-time file watcher (CODERAG_WATCH=true)
   let watcher: CodeRagWatcher | undefined;
-  if (process.env['CODERAG_WATCH']?.toLowerCase() === 'true') {
+  if (parseBool(process.env['CODERAG_WATCH'], false)) {
     const codeWatchDirs = config.globs.codeInclude.map((p) => {
       const abs = p.startsWith('/') ? p : `${cwd}/${p}`;
       return abs.replace(/[*?{[!].*$/, '').replace(/\/+$/, '') || cwd;
@@ -82,7 +82,7 @@ async function main(): Promise<void> {
   }
 
   if (process.env['MCP_TRANSPORT']?.toLowerCase() === 'http') {
-    const port = parseInt(process.env['MCP_HTTP_PORT'] ?? '3100', 10);
+    const port = parsePort(process.env['MCP_HTTP_PORT'], 3100);
     const transports = new Map<string, WebStandardStreamableHTTPServerTransport>();
     const app = createMcpHonoApp({ host: '127.0.0.1' });
 

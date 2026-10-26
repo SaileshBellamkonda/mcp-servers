@@ -3,7 +3,7 @@ import { createMcpHonoApp } from '@modelcontextprotocol/hono';
 import { serve } from '@hono/node-server';
 import { createGitServer } from './server/git-server.js';
 import { RepositoryManager } from './core/repository-manager.js';
-import { McpLogger } from './core/logger.js';
+import { McpLogger } from '@mcp-servers/common';
 import { randomUUID } from 'node:crypto';
 import type { Server } from 'node:http';
 
