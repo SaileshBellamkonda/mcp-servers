@@ -62,7 +62,7 @@ describe('search results for a class skeleton', () => {
     const members = lines.slice(1).filter((l) => l.startsWith('  '));
     expect(members.length).toBeLessThanOrEqual(5);
     expect(members.join('\n')).toContain('readonly db: SqliteDatabase');
-    expect(members.join('\n')).toContain('method private constructor(db: SqliteDatabase)');
+    expect(members.join('\n')).toContain('method private constructor(db: SqliteDatabase');
     expect(out).not.toContain('this.db.prepare');
   });
 

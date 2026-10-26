@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { VectorDB } from '../../../src/vectordb/db.js';
-import { openSqliteDatabase } from '../../../src/vectordb/sqlite-db.js';
+import { loadSqliteVec, openSqliteDatabase } from '../../../src/vectordb/sqlite-db.js';
 import type { CodeChunk } from '../../../src/core/types.js';
 
 const DIM = 4;
@@ -71,7 +71,8 @@ describe('doc comments in the keyword index', () => {
 
   it('adds the doc column to code_metadata of an existing database and leaves old rows without a doc', () => {
     VectorDB.open(dbPath, DIM).close();
-    const raw = openSqliteDatabase(dbPath);
+    const raw = openSqliteDatabase(dbPath, { allowExtension: true });
+    loadSqliteVec(raw, undefined); // the delete trigger on chunks names the vec0 table
     raw.exec('ALTER TABLE code_metadata DROP COLUMN doc');
     raw.close();
     const db = VectorDB.open(dbPath, DIM);

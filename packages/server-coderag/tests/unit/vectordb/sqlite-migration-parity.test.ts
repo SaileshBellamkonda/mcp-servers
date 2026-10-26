@@ -23,10 +23,10 @@ afterEach(() => {
   rmSync(dir, { recursive: true, force: true });
 });
 
-function vecTableSql(file: string): string {
+function vecTableSql(file: string, table = 'vec_chunks_cos'): string {
   const raw = openSqliteDatabase(file, { readonly: true });
   try {
-    return raw.prepare<{ sql: string }>("SELECT sql FROM sqlite_master WHERE name = 'vec_chunks'").get()?.sql ?? '';
+    return raw.prepare<{ sql: string }>("SELECT sql FROM sqlite_master WHERE name = ?").get(table)?.sql ?? '';
   } finally {
     raw.close();
   }
@@ -104,11 +104,12 @@ describe('a database written by the pre-node:sqlite code path', () => {
     again.close();
   });
 
-  it('keeps its existing vec0 chunk size (no migration) when reopened', () => {
-    const before = vecTableSql(dbPath);
+  it('keeps its existing vec0 table (and chunk size) when reopened; the vectors are only moved by migrateVectorIndex', () => {
+    const before = vecTableSql(dbPath, 'vec_chunks');
     expect(before).not.toMatch(/chunk_size/i);
     VectorDB.open(dbPath, DIM).close();
-    expect(vecTableSql(dbPath)).toBe(before);
+    expect(vecTableSql(dbPath, 'vec_chunks')).toBe(before);
+    expect(vecTableSql(dbPath)).toBe('');
   });
 });
 
@@ -194,7 +195,7 @@ describe('new databases', () => {
     expect(dbMeta(file, 'fts_version')).toBe('2');
   });
 
-  it('create vec_chunks with chunk_size=256', () => {
+  it('create the vector table with chunk_size=256', () => {
     const file = path.join(dir, 'fresh.db');
     VectorDB.open(file, DIM).close();
     expect(vecTableSql(file)).toMatch(/chunk_size\s*=\s*256/);

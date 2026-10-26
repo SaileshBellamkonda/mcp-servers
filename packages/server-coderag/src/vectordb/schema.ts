@@ -19,15 +19,37 @@ CREATE TABLE IF NOT EXISTS doc_tags (
 CREATE INDEX IF NOT EXISTS idx_doc_tags_tag ON doc_tags(tag);
 `;
 
+/** The vec0 table of databases written before the cosine metric: a plain L2 table, searched by a `vec_distance_cosine` scan. */
+export const LEGACY_VEC_TABLE = 'vec_chunks';
+
 /**
- * DDL for the vec0 vector table. New tables use chunk_size=256: the default (1024) allocates ~3 MB blobs at 768
- * dimensions, which blocks the event loop for seconds during bulk inserts. Existing tables are never altered.
+ * The vec0 table that holds the vectors from `VEC_METRIC_VERSION` 2 on. It uses `distance_metric=cosine`, so its KNN
+ * match (`embedding MATCH ? AND k = ?`) ranks exactly like `vec_distance_cosine` without normalising any stored vector.
+ */
+export const VEC_TABLE = 'vec_chunks_cos';
+
+/** `db_meta.vec_metric_version`: 2 once the vectors live in `VEC_TABLE`; absent for a database written before. */
+export const VEC_METRIC_VERSION = 2;
+
+/**
+ * DDL for the vector table. New tables use chunk_size=256: the default (1024) allocates ~3 MB blobs at 768 dimensions,
+ * which blocks the event loop for seconds during bulk inserts. A table is never altered in place: migrating from the
+ * legacy table copies the vectors into a new one (see vec-index.ts).
  */
 export function buildVecChunksDdl(dimensions: number, ifNotExists = false): string {
-  return `CREATE VIRTUAL TABLE ${ifNotExists ? 'IF NOT EXISTS ' : ''}vec_chunks USING vec0(
-  embedding FLOAT[${String(dimensions)}],
+  return `CREATE VIRTUAL TABLE ${ifNotExists ? 'IF NOT EXISTS ' : ''}${VEC_TABLE} USING vec0(
+  embedding FLOAT[${String(dimensions)}] distance_metric=cosine,
   chunk_size=256
 )`;
+}
+
+export const VEC_DELETE_TRIGGER_NAME = 'vec_chunks_delete';
+
+/** Trigger that removes the vector of a deleted chunk from each of `tables` (both while a migration is half done). */
+export function buildVecDeleteTriggerDdl(tables: readonly string[]): string {
+  return `CREATE TRIGGER ${VEC_DELETE_TRIGGER_NAME} AFTER DELETE ON chunks BEGIN
+  ${tables.map((table) => `DELETE FROM ${table} WHERE rowid = old.id;`).join('\n  ')}
+END`;
 }
 
 /** Column order of `fts_chunks`; `FTS_BM25_WEIGHTS` is positional and must follow it. */

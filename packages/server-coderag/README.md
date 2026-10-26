@@ -271,11 +271,24 @@ calls  src/indexer/sync.ts:138 pruneExcluded -> VectorDB.deleteDocument [same] (
 One SQLite file at `CODERAG_DB_PATH`, opened with Node's built-in `node:sqlite` (there is no `better-sqlite3`
 dependency). Vectors live in a `vec0` virtual table from the `sqlite-vec` extension, keyword search in an FTS5 table.
 
-- The vec0 `chunk_size` is 256 for databases created by this version (the default of 1024 blocks the event loop for
-  seconds during bulk inserts); an existing database keeps the chunk size it was created with.
+- The vectors are in the table `vec_chunks_cos`, a vec0 table with `distance_metric=cosine` and `chunk_size=256` (the
+  default of 1024 blocks the event loop for seconds during bulk inserts). Semantic search is a KNN match
+  (`embedding MATCH ? AND k = ?`), about 4-5 times faster than scoring every vector (20,000 vectors of 768 dimensions:
+  about 45 ms against 230 ms) and ranked exactly like the cosine distance it replaces; the score shown is still
+  `1 - cosine_distance / 2`. A KNN returns the nearest vectors before filters apply, so a search with a directory, file,
+  document type, domain, project or tag filter fetches more neighbours than needed and filters them; a filter that keeps
+  at most a fifth of the chunks is answered by an exact scan of just those chunks instead.
+- **Upgrade of an existing database:** a database written by an earlier version (table `vec_chunks`, marker
+  `db_meta.vec_metric_version` absent) keeps working with the old scan. The next startup sync copies its stored vectors
+  into the new table in batches of 200 (about 3-4 s for 20,000 vectors of 768 dimensions), yielding to the event loop
+  between batches; nothing is re-embedded and no vector changes. The copy is resumable (a cursor is kept in `db_meta`), the
+  final switch (copy of what arrived meanwhile, drop of the old table, marker `vec_metric_version=2`) is one transaction.
+  The database file does not shrink afterwards; run `VACUUM` to reclaim the space of the old table. A vector row now
+  follows its chunk when the chunk is deleted (a trigger on `chunks`), so a program that edits `chunks` must load
+  `sqlite-vec` first.
 - An existing database keeps its stored embedding dimensions. A different `CODERAG_EMBEDDING_DIM` only logs a warning
   and the stored value stays in use; to change the dimensions, use a new database file.
-- Brute-force vector search time grows linearly with the number of chunks.
+- Vector search is still exhaustive (no approximate index): its time grows linearly with the number of chunks.
 - Keyword search is identifier-aware: camelCase, PascalCase and snake_case names are indexed whole and as words, queries
   are split the same way (stop words dropped, the last word matches as a prefix), all-words matches rank first and
   partial matches follow, so a query is not empty just because one word is missing. A database written by an older

@@ -91,6 +91,23 @@ export async function syncCode(db: VectorDB, indexer: Indexer, logger?: CodeRagL
   return { indexed: scan.indexed, skipped: scan.skipped, failed: scan.failed, removed };
 }
 
+/**
+ * Moves an index written with the old vector table to the cosine table (stored vectors are copied, nothing is
+ * re-embedded). A failure is logged and does not stop the sync: searches keep using the old table, and the copy resumes
+ * at the next start.
+ */
+async function upgradeVectorIndex(db: VectorDB, logger: CodeRagLogger): Promise<void> {
+  if (db.isVectorIndexMigrated()) return;
+  const started = Date.now();
+  logger.info('Upgrading the vector index to the faster cosine layout (stored vectors are copied, nothing is re-embedded)...');
+  try {
+    const copied = await db.migrateVectorIndex({ yieldToEventLoop });
+    logger.info(`Vector index upgraded: ${String(copied)} vectors in ${String(Date.now() - started)} ms`);
+  } catch (err) {
+    logger.warning(`Vector index upgrade failed (${String(err)}); searches keep using the slower scan and the upgrade continues at the next start`);
+  }
+}
+
 export async function runStartupSync(
   db: VectorDB,
   indexer: Indexer,
@@ -114,6 +131,8 @@ export async function runStartupSync(
     const relationsStale = !noCodeIndexed && !codeParserStale && (db.getRelationsVersion() ?? 0) < RELATIONS_VERSION;
 
     logger.info(`Startup sync: rules_changed=${String(rulesChanged)}, no_docs=${String(noDocsIndexed)}, no_code=${String(noCodeIndexed)}, docs_reindex=${String(docsReindexRequired)}, code_parser_stale=${String(codeParserStale)}, relations_stale=${String(relationsStale)}`);
+
+    await upgradeVectorIndex(db, logger);
 
     const docsMatcher = new GlobMatcher(currentGlobs.docsInclude, currentGlobs.docsExclude, cwd, config.useGitignore);
     const codeMatcher = new GlobMatcher(currentGlobs.codeInclude, currentGlobs.codeExclude, cwd, config.useGitignore);

@@ -4,12 +4,13 @@ import {
   buildSchema,
   buildMigrations,
   buildDocMetadataMigration,
-  buildVecChunksDdl,
   buildFtsDdl,
   CODE_DOC_COLUMN_DDL,
   FTS_BM25_WEIGHTS,
   FTS_DELETE_TRIGGER_DDL,
 } from './schema.js';
+import { LEGACY_VEC_TABLE } from './schema.js';
+import { migrateVecIndex, openVecIndex, resetVecTables, type VecMigrationOptions } from './vec-index.js';
 import { FTS_VERSION, buildFtsQueries, buildFtsRow, symbolNameCandidates, type FtsRow } from './fts-text.js';
 import { openSqliteDatabase, loadSqliteVec, type SqlParam, type SqliteDatabase } from './sqlite-db.js';
 import { RelationStore, ensureRelationsSchema, type RelationPage, type RelationQuery, type ResolveOptions } from './relations-store.js';
@@ -79,6 +80,23 @@ function runMigrations(db: SqliteDatabase): void {
 
 const FTS_INSERT_SQL = 'INSERT INTO fts_chunks(rowid, symbol_name, signature, context, content) VALUES (?, ?, ?, ?, ?)';
 const FTS_REBUILD_BATCH = 500;
+/** The most neighbours a vec0 KNN query may ask for. */
+const MAX_KNN_K = 4096;
+const KNN_MIN_WIDTH = 50;
+const KNN_MAX_WIDTH = 500;
+
+/** A filter that keeps at most this share of the chunks is answered by the exact scan over those chunks, not by a KNN. */
+const SCAN_FILTER_FRACTION = 0.2;
+
+/**
+ * How many nearest vectors to fetch for `topK` results: 4x (at least 50, at most 500), and enough that a filter keeping
+ * `matching` of `total` chunks is expected to leave twice `topK` of them.
+ */
+function knnWidth(topK: number, total: number, matching: number): number {
+  const expected = Math.ceil((2 * topK * total) / Math.max(1, matching));
+  return Math.min(MAX_KNN_K, Math.max(topK, Math.min(KNN_MAX_WIDTH, Math.max(KNN_MIN_WIDTH, 4 * topK, expected))));
+}
+
 /** Candidates fetched per keyword search before the page is cut, see searchByKeyword. */
 const KEYWORD_POOL = 50;
 
@@ -171,9 +189,32 @@ export class VectorDB {
   private readonly db: SqliteDatabase;
   private readonly relations: RelationStore;
 
-  private constructor(db: SqliteDatabase) {
+  private constructor(db: SqliteDatabase, dimensions: number, vecTable: string) {
     this.db = db;
     this.relations = new RelationStore(db);
+    this.dimensions = dimensions;
+    this.vecTable = vecTable;
+  }
+
+  /** Table the vectors are written to and searched in: `vec_chunks_cos`, or the old `vec_chunks` until it is migrated. */
+  private vecTable: string;
+  private readonly dimensions: number;
+
+  /** True once the vectors are in the cosine table, searched by KNN; false for a database not migrated yet. */
+  isVectorIndexMigrated(): boolean {
+    return this.vecTable !== LEGACY_VEC_TABLE;
+  }
+
+  /**
+   * Moves a database written with the old vector table to the cosine table, without re-embedding: the stored vectors are
+   * copied as they are, in batches (each its own transaction, resumable after a crash), yielding between batches. Until it
+   * is done searches use the old table. Returns the number of vectors copied; 0 when the database was already migrated.
+   */
+  async migrateVectorIndex(options: VecMigrationOptions = {}): Promise<number> {
+    if (this.isVectorIndexMigrated()) return 0;
+    const copied = await migrateVecIndex(this.db, this.dimensions, options);
+    this.vecTable = openVecIndex(this.db, this.dimensions);
+    return copied;
   }
 
   static readStoredDimensions(dbPath: string): number | null {
@@ -220,9 +261,8 @@ export class VectorDB {
     if (stored !== undefined) {
       const storedDim = parseInt(stored, 10);
       if (storedDim !== dimensions) {
-        // Dimension mismatch: drop and recreate vec_chunks, update stored dim
-        db.exec('DROP TABLE IF EXISTS vec_chunks');
-        db.exec(buildVecChunksDdl(dimensions));
+        // Dimension mismatch: drop every vector table and start an empty cosine one, update stored dim
+        resetVecTables(db, dimensions);
         db.prepare('INSERT OR REPLACE INTO db_meta (key, value) VALUES (?, ?)').run('dimensions', String(dimensions));
         db.prepare('DELETE FROM db_meta WHERE key = ?').run('last_docs_sync_at');
         db.prepare('DELETE FROM db_meta WHERE key = ?').run('last_code_sync_at');
@@ -233,8 +273,9 @@ export class VectorDB {
     }
 
     runMigrations(db);
+    const vecTable = openVecIndex(db, dimensions);
     ensureFtsIndex(db);
-    return new VectorDB(db);
+    return new VectorDB(db, dimensions, vecTable);
   }
 
   close(): void {
@@ -354,7 +395,7 @@ export class VectorDB {
     const insertChunk = this.db.prepare(
       'INSERT INTO chunks (document_id, position, content, heading_path, start_line, end_line) VALUES (?, ?, ?, ?, ?, ?)'
     );
-    const insertVec = this.db.prepare('INSERT INTO vec_chunks (rowid, embedding) VALUES (?, ?)');
+    const insertVec = this.db.prepare(`INSERT INTO ${this.vecTable} (rowid, embedding) VALUES (?, ?)`);
     const insertFts = this.db.prepare(FTS_INSERT_SQL);
     const deleteChunks = this.db.prepare('DELETE FROM chunks WHERE document_id = ?');
     const insertMeta = this.db.prepare(
@@ -425,7 +466,7 @@ export class VectorDB {
       'INSERT OR REPLACE INTO documents (filename, doc_type, modified_at, indexed_at) VALUES (?, \'code\', ?, CURRENT_TIMESTAMP)'
     );
     const insertChunk = this.db.prepare('INSERT INTO chunks (document_id, position, content) VALUES (?, ?, ?)');
-    const insertVec = this.db.prepare('INSERT INTO vec_chunks (rowid, embedding) VALUES (?, ?)');
+    const insertVec = this.db.prepare(`INSERT INTO ${this.vecTable} (rowid, embedding) VALUES (?, ?)`);
     const insertFts = this.db.prepare(FTS_INSERT_SQL);
     const insertMeta = this.db.prepare(
       'INSERT INTO code_metadata (chunk_id, symbol_name, symbol_type, language, start_line, end_line, parent_symbol, signature, doc) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
@@ -528,15 +569,73 @@ export class VectorDB {
 
   // ─── Search ────────────────────────────────────────────────────────────────
 
+  /**
+   * Semantic search: the `topK` chunks nearest to `queryVector` by cosine similarity that pass `filter`. Scores are
+   * `1 - cosine_distance / 2`, so 1 is the same direction, 0.5 orthogonal and 0 opposite.
+   *
+   * On the cosine table this is a KNN match (`embedding MATCH ? AND k = ?`), about 4 times faster than scoring every
+   * vector. A KNN returns the nearest vectors *before* the filter, so with a filter:
+   *  - a filter that keeps at most a fifth of the chunks is answered by the exact scan, restricted to those chunks
+   *    (cheaper than a KNN over everything, and exact);
+   *  - otherwise the KNN asks for more than `topK` neighbours (`knnWidth`) and the filter is applied to them; if too
+   *    few remain it asks once more for the most vec0 allows, and as a last resort scores every matching vector.
+   */
   searchWithFilter(queryVector: number[], topK: number, filter: SearchFilter | null): SearchResult[] {
+    if (topK <= 0) return [];
     const blob = serializeVector(queryVector);
+    const similarity = (r: { distance: number | null }): number => 1.0 - ((r.distance ?? 0) / 2.0);
+    if (this.vecTable === LEGACY_VEC_TABLE || topK > MAX_KNN_K) return this.toResults(this.scanRows(blob, topK, filter), similarity);
+
+    const total = this.countChunks(null);
+    const matching = filter === null ? total : this.countChunks(filter);
+    if (matching === 0) return [];
+    if (filter !== null && matching <= total * SCAN_FILTER_FRACTION) return this.toResults(this.scanRows(blob, topK, filter), similarity);
+
+    let k = knnWidth(topK, total, matching);
+    let rows = this.knnRows(blob, k, topK, filter);
+    if (rows.length < Math.min(topK, matching) && k < Math.min(MAX_KNN_K, total)) {
+      k = Math.min(MAX_KNN_K, total);
+      rows = this.knnRows(blob, k, topK, filter);
+      if (rows.length < Math.min(topK, matching) && k < total) rows = this.scanRows(blob, topK, filter);
+    }
+    return this.toResults(rows, similarity);
+  }
+
+  /** Number of chunks that pass `filter` (all of them for null). */
+  private countChunks(filter: SearchFilter | null): number {
+    const { conditions, args } = buildFilterConditions(filter);
+    const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+    const sql = `SELECT COUNT(*) AS cnt FROM chunks c JOIN documents d ON c.document_id = d.id LEFT JOIN doc_metadata dm ON dm.document_id = d.id ${where}`;
+    return this.db.prepare<{ cnt: number }>(sql).get(...args)?.cnt ?? 0;
+  }
+
+  /** The `topK` nearest chunks among the `k` nearest vectors that pass the filter, nearest first. */
+  private knnRows(blob: Buffer, k: number, topK: number, filter: SearchFilter | null): (SearchRow & { distance: number | null })[] {
+    const { conditions, args } = buildFilterConditions(filter);
+    const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+    const sql = `
+      WITH knn(vec_rowid, distance) AS (SELECT rowid, distance FROM ${this.vecTable} WHERE embedding MATCH ? AND k = ?)
+      SELECT ${SEARCH_COLUMNS}, knn.distance AS distance
+      FROM knn
+      JOIN chunks c ON knn.vec_rowid = c.id
+      JOIN documents d ON c.document_id = d.id
+      LEFT JOIN code_metadata cm ON c.id = cm.chunk_id
+      LEFT JOIN doc_metadata dm ON dm.document_id = d.id
+      ${where}
+      ORDER BY knn.distance IS NULL, knn.distance ASC LIMIT ?
+    `;
+    // A stored zero vector has no direction: its distance is NULL and it sorts last.
+    return this.db.prepare<SearchRow & { distance: number | null }>(sql).all(blob, k, ...args, topK).filter((r) => r.distance !== null);
+  }
+
+  /** Exact search: the cosine distance of every vector that passes the filter is computed. */
+  private scanRows(blob: Buffer, topK: number, filter: SearchFilter | null): (SearchRow & { distance: number | null })[] {
     const { conditions, args } = buildFilterConditions(filter);
     const whereClause = conditions.length > 0 ? 'WHERE ' + conditions.join(' AND ') : '';
-
     const sql = `
       SELECT ${SEARCH_COLUMNS},
              vec_distance_cosine(v.embedding, ?) as distance
-      FROM vec_chunks v
+      FROM ${this.vecTable} v
       JOIN chunks c ON v.rowid = c.id
       JOIN documents d ON c.document_id = d.id
       LEFT JOIN code_metadata cm ON c.id = cm.chunk_id
@@ -544,13 +643,7 @@ export class VectorDB {
       ${whereClause}
       ORDER BY distance ASC LIMIT ?
     `;
-
-    const rows = this.db.prepare<SearchRow & { distance: number | null }>(sql).all(blob, ...args, topK);
-
-    return this.toResults(
-      rows.filter((r) => r.distance !== null),
-      (r) => 1.0 - ((r.distance ?? 0) / 2.0),
-    );
+    return this.db.prepare<SearchRow & { distance: number | null }>(sql).all(blob, ...args, topK).filter((r) => r.distance !== null);
   }
 
   searchSymbolsByKeywords(keywords: string[], limit: number): SearchResult[] {
