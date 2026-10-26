@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto';
-import { copyFile, mkdir, rename, rm } from 'node:fs/promises';
+import { copyFile, rename, rm } from 'node:fs/promises';
 import path from 'node:path';
+import { ensurePrivateDirectory } from './private-dir';
 
 export const HELPER_FILE_NAME = 'mcp-headers.js';
 
@@ -11,7 +12,7 @@ export const HELPER_FILE_NAME = 'mcp-headers.js';
  */
 export async function installHeadersHelper(source: string, globalStorageDir: string): Promise<string> {
   const binDir = path.join(globalStorageDir, 'bin');
-  await mkdir(binDir, { recursive: true });
+  await ensurePrivateDirectory(binDir);
   const target = path.join(binDir, HELPER_FILE_NAME);
   const temporary = path.join(binDir, `.${HELPER_FILE_NAME}.${randomBytes(6).toString('hex')}.tmp`);
   try {

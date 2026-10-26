@@ -1,5 +1,5 @@
-import { mkdirSync } from 'node:fs';
 import path from 'node:path';
+import { ensurePrivateDirectory } from '../core/private-dir';
 import type { ConfigReader, ServerDescriptor, ServerLogger } from '../core/server-descriptor';
 
 /** What the CodeRAG descriptor takes from the extension host; `vscode`-free so it is unit-tested with fakes. */
@@ -111,7 +111,7 @@ export function createCodeRagDescriptor(environment: CodeRagEnvironment): Server
     async activate(context) {
       const storageDir = environment.storageDir();
       if (storageDir === undefined) throw new Error('Open a folder to use CodeRAG');
-      mkdirSync(storageDir, { recursive: true });
+      await ensurePrivateDirectory(storageDir);
       const apiKey = await environment.readApiKey();
       const { activateCodeRagServer } = await context.loadModule('@mcp-servers/server-coderag/embedded');
       const instance = await activateCodeRagServer({

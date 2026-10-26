@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -179,6 +179,24 @@ describe('coderag descriptor', () => {
       expect(instance.updateWorkspaceFolders).toBeUndefined();
       await instance.close();
       expect(t.instance.close).toHaveBeenCalledOnce();
+    });
+
+    it.runIf(process.platform !== 'win32')('creates the workspace storage directory with mode 0700 (umask 022) and leaves an existing one alone', async () => {
+      const previous = process.umask(0o022);
+      try {
+        const t = setup({ storage });
+        await t.descriptor.activate(t.activation());
+        expect(statSync(storage).mode & 0o777).toBe(0o700);
+
+        const existing = path.join(path.dirname(storage), 'existing');
+        mkdirSync(existing, { mode: 0o755 });
+        chmodSync(existing, 0o755);
+        const again = setup({ storage: existing });
+        await again.descriptor.activate(again.activation());
+        expect(statSync(existing).mode & 0o777).toBe(0o755);
+      } finally {
+        process.umask(previous);
+      }
     });
 
     it('passes the API key only through the apiKey option', async () => {
