@@ -74,10 +74,11 @@ describe('Indexer with a PathGuard', () => {
 
     expect(result.indexed).toBe(1);
     expect(result.failed).toBe(0);
-    expect(result.skipped).toBeGreaterThanOrEqual(2);
+    // The directory walk itself refuses to follow links that leave the root and says so.
     const indexed = [...db.listDocuments().keys()];
     expect(indexed).toEqual([path.join(root, 'ok.md')]);
     expect(logger.warnings.some((w) => w.includes('link.md'))).toBe(true);
+    expect(logger.warnings.some((w) => w.includes('linkdir'))).toBe(true);
   });
 
   it('skips files reached through symlinks that escape the root (scanDocs)', async (ctx) => {

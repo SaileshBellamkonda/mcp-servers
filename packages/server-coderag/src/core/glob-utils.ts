@@ -1,6 +1,8 @@
 import micromatch from 'micromatch';
 import path from 'node:path';
-import { statSync, readdirSync, readFileSync, existsSync } from 'node:fs';
+import { statSync, readdirSync, readFileSync, existsSync, realpathSync, type Dirent } from 'node:fs';
+import type { PathGuard } from './path-guard.js';
+import { createStderrLogger } from './logger.js';
 
 export const WELL_KNOWN_EXCLUDES = [
   '**/.git/**',
@@ -94,18 +96,57 @@ function isDirExcluded(dirPath: string, absExcludes: string[]): boolean {
   return false;
 }
 
+/** Deepest directory nesting the walk descends into. */
+export const DEFAULT_MAX_WALK_DEPTH = 100;
+/** Most directory entries one findFiles() call inspects before it stops and warns. */
+export const DEFAULT_MAX_WALK_ENTRIES = 500_000;
+
+export interface GlobMatcherOptions {
+  /** Also allows symlinked directories and files that resolve inside the guard's roots (not only inside the walked roots). */
+  pathGuard?: PathGuard;
+  maxDepth?: number;
+  maxEntries?: number;
+  /** Receives safety-cap warnings; defaults to a WARNING line on stderr. */
+  warn?: (message: string) => void;
+}
+
+function realOrNull(p: string): string | null {
+  try {
+    return realpathSync.native(p);
+  } catch {
+    return null;
+  }
+}
+
+function isUnder(root: string, target: string): boolean {
+  const rel = path.relative(root, target);
+  return rel === '' || (rel !== '..' && !rel.startsWith(`..${path.sep}`) && !path.isAbsolute(rel));
+}
+
+interface WalkState {
+  result: Set<string>;
+  gitignoreCache: Map<string, string[]>;
+  realRoots: string[];
+  visited: Set<string>;
+  entries: number;
+  warned: boolean;
+}
+
 export class GlobMatcher {
   private readonly absIncludes: string[];
   private readonly absExcludes: string[];
   private readonly cwd: string;
   private readonly useGitignore: boolean;
+  private readonly options: GlobMatcherOptions;
 
   constructor(
     includePatterns: string[],
     excludePatterns: string[],
     cwd: string,
     useGitignore = false,
+    options: GlobMatcherOptions = {},
   ) {
+    this.options = options;
     this.cwd = cwd.replace(/\\/g, '/');
     this.useGitignore = useGitignore;
     this.absIncludes = includePatterns.map((p) => resolveToAbsolute(p, cwd));
@@ -130,54 +171,105 @@ export class GlobMatcher {
 
   findFiles(): string[] {
     const roots = new Set(this.absIncludes.map(extractGlobBase));
-    const result = new Set<string>();
-    const gitignoreCache = new Map<string, string[]>();
+    const state: WalkState = {
+      result: new Set<string>(),
+      gitignoreCache: new Map<string, string[]>(),
+      realRoots: [],
+      visited: new Set<string>(),
+      entries: 0,
+      warned: false,
+    };
     for (const root of roots) {
-      this.walkDir(root, result, gitignoreCache);
+      const real = realOrNull(root);
+      if (real !== null) state.realRoots.push(real);
     }
-    return [...result].sort();
+    for (const root of roots) {
+      this.walkDir(root, state, 0);
+    }
+    return [...state.result].sort();
   }
 
-  private walkDir(
-    dir: string,
-    result: Set<string>,
-    gitignoreCache: Map<string, string[]>,
-  ): void {
+  private warn(message: string): void {
+    (this.options.warn ?? ((m: string) => { createStderrLogger().warning(m); }))(message);
+  }
+
+  private warnOnce(state: WalkState, message: string): void {
+    if (state.warned) return;
+    state.warned = true;
+    this.warn(message);
+  }
+
+  /** A symlink target is only followed when it stays inside the walked roots or the guard's roots. */
+  private isWithinBounds(state: WalkState, real: string): boolean {
+    if (state.realRoots.some((root) => isUnder(root, real))) return true;
+    return this.options.pathGuard?.isAllowed(real) ?? false;
+  }
+
+  private walkDir(dir: string, state: WalkState, depth: number): void {
     if (!existsSync(dir)) return;
     if (isDirExcluded(dir, this.absExcludes)) return;
+    const maxDepth = this.options.maxDepth ?? DEFAULT_MAX_WALK_DEPTH;
+    if (depth > maxDepth) {
+      this.warnOnce(state, `Directory walk stopped below "${dir}": maximum depth of ${String(maxDepth)} exceeded. Deeper files are not indexed.`);
+      return;
+    }
+    const realDir = realOrNull(dir);
+    if (realDir === null || state.visited.has(realDir)) return;
+    state.visited.add(realDir);
 
     const extraExcludes: string[] = [];
     if (this.useGitignore) {
-      if (!gitignoreCache.has(dir)) {
-        gitignoreCache.set(dir, loadGitignorePatterns(dir).map((p) => resolveToAbsolute(p, dir)));
+      if (!state.gitignoreCache.has(dir)) {
+        state.gitignoreCache.set(dir, loadGitignorePatterns(dir).map((p) => resolveToAbsolute(p, dir)));
       }
-      extraExcludes.push(...(gitignoreCache.get(dir) ?? []));
+      extraExcludes.push(...(state.gitignoreCache.get(dir) ?? []));
     }
 
-    let entries: string[];
+    let entries: Dirent[];
     try {
-      entries = readdirSync(dir);
+      entries = readdirSync(dir, { withFileTypes: true });
     } catch {
       return;
     }
 
+    const maxEntries = this.options.maxEntries ?? DEFAULT_MAX_WALK_ENTRIES;
     for (const entry of entries) {
-      const fullPath = path.join(dir, entry).replace(/\\/g, '/');
+      state.entries++;
+      if (state.entries > maxEntries) {
+        this.warnOnce(state, `Directory walk stopped: more than ${String(maxEntries)} entries were inspected. Remaining files are not indexed.`);
+        return;
+      }
+      const fullPath = path.join(dir, entry.name).replace(/\\/g, '/');
 
       if (isDirExcluded(fullPath, [...this.absExcludes, ...extraExcludes])) continue;
       if (micromatch.isMatch(fullPath, [...this.absExcludes, ...extraExcludes], { dot: true })) continue;
 
-      let stat;
-      try {
-        stat = statSync(fullPath);
-      } catch {
-        continue;
+      let isDirectory = entry.isDirectory();
+      let isFile = entry.isFile();
+      if (entry.isSymbolicLink()) {
+        const real = realOrNull(fullPath);
+        if (real === null) continue;
+        let target;
+        try {
+          target = statSync(real);
+        } catch {
+          continue;
+        }
+        isDirectory = target.isDirectory();
+        isFile = target.isFile();
+        if (!this.isWithinBounds(state, real)) {
+          this.warn(`Skipping symlink "${fullPath}": it resolves outside the allowed roots.`);
+          continue;
+        }
+        // A directory inside a walked root is reached by its own path; following the link again would
+        // duplicate its files (or loop forever when the link points at an ancestor).
+        if (isDirectory && state.realRoots.some((root) => isUnder(root, real))) continue;
       }
 
-      if (stat.isDirectory()) {
-        this.walkDir(fullPath, result, gitignoreCache);
-      } else if (micromatch.isMatch(fullPath, this.absIncludes)) {
-        result.add(fullPath);
+      if (isDirectory) {
+        this.walkDir(fullPath, state, depth + 1);
+      } else if (isFile && micromatch.isMatch(fullPath, this.absIncludes)) {
+        state.result.add(fullPath);
       }
     }
   }

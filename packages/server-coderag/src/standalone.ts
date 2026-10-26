@@ -41,10 +41,10 @@ async function main(): Promise<void> {
   const db = VectorDB.open(config.dbPath, dimensions);
   const syncManager = new SyncManager();
 
-  const docsMatcher = new GlobMatcher(config.globs.docsInclude, config.globs.docsExclude, cwd, config.useGitignore);
-  const codeMatcher = new GlobMatcher(config.globs.codeInclude, config.globs.codeExclude, cwd, config.useGitignore);
-
   const pathGuard = new PathGuard(computeAllowedRoots({ cwdOrFolders: [cwd], globs: config.globs, extraRoots: config.allowedRoots }));
+
+  const docsMatcher = new GlobMatcher(config.globs.docsInclude, config.globs.docsExclude, cwd, config.useGitignore, { pathGuard, warn: (msg) => { logger.warning(msg); } });
+  const codeMatcher = new GlobMatcher(config.globs.codeInclude, config.globs.codeExclude, cwd, config.useGitignore, { pathGuard, warn: (msg) => { logger.warning(msg); } });
 
   const indexer = new Indexer(db, embedder, config.chunkSize, { docsMatcher, codeMatcher, logger, pathGuard });
 

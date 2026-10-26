@@ -8,7 +8,7 @@ import { isSupportedExtension } from './languages.js';
 import { createDefaultLoaderRegistry, type LoaderRegistry } from './loaders/index.js';
 import type { CodeSyncResult, DocumentMetadata, MarkdownChunk } from '../core/types.js';
 import type { CodeRagLogger } from '../core/logger.js';
-import { GlobMatcher } from '../core/glob-utils.js';
+import { GlobMatcher, type GlobMatcherOptions } from '../core/glob-utils.js';
 import type { PathGuard } from '../core/path-guard.js';
 
 export interface IndexerOptions {
@@ -59,6 +59,13 @@ export class Indexer {
     this.loaders = options.loaders ?? createDefaultLoaderRegistry();
     this.pathGuard = options.pathGuard;
     this.nativeModulesDir = options.nativeModulesDir;
+  }
+
+  private matcherOptions(): GlobMatcherOptions {
+    return {
+      warn: (msg) => { this.log('warning', msg); },
+      ...(this.pathGuard ? { pathGuard: this.pathGuard } : {}),
+    };
   }
 
   private log(level: 'info' | 'warning', msg: string): void {
@@ -201,6 +208,7 @@ export class Indexer {
       [...this.globalExclude, ...exclude],
       dir,
       this.useGitignore,
+      this.matcherOptions(),
     );
     const files = matcher.findFiles().filter((f) => isSupportedExtension(path.extname(f).toLowerCase()));
     return this.indexFileList(files, 'code', force);
@@ -212,6 +220,7 @@ export class Indexer {
       [...this.globalExclude, ...exclude],
       dir,
       this.useGitignore,
+      this.matcherOptions(),
     );
     const files = matcher.findFiles();
     return this.indexFileList(files, 'doc', force);
