@@ -12,6 +12,7 @@ import {
   registerIntegrationCommands,
 } from '../../src/integration-commands';
 import { FailureReporter } from '../../src/commands';
+import { deriveServerToken } from '../../src/core/server-token';
 import { SecretStorageTokenProvider, tokenSecretKey } from '../../src/core/token-provider';
 import { makeRegistry } from './fake-servers';
 import { MemorySecrets } from './test-context';
@@ -26,7 +27,10 @@ interface Fixture {
   helperPath: string;
   secrets: MemorySecrets;
   tokens: SecretStorageTokenProvider;
+  /** The git server's own token. */
   token: string;
+  /** The workspace token the server tokens derive from: it must never reach a server, a client config or the UI. */
+  workspaceToken: string;
   onApiKeyChanged: ReturnType<typeof vi.fn>;
   notifyChanged: ReturnType<typeof vi.fn>;
   run(id: string, arg?: unknown): Promise<void>;
@@ -57,6 +61,7 @@ async function setup(
   const secrets = new MemorySecrets();
   const tokens = new SecretStorageTokenProvider(secrets, tokensDir);
   const token = await tokens.getToken('git', SCOPE);
+  const workspaceToken = secrets.values.get(tokenSecretKey(SCOPE)) ?? '';
   const made = await makeRegistry(specs);
   const onApiKeyChanged = vi.fn();
   const notifyChanged = vi.fn();
@@ -83,6 +88,7 @@ async function setup(
     secrets,
     tokens,
     token,
+    workspaceToken,
     onApiKeyChanged,
     notifyChanged,
     servers: made.servers,
@@ -193,7 +199,8 @@ describe('mcpServers.rotateToken', () => {
     expect(`${message} ${options.detail ?? ''}`).toMatch(/static token/i);
     expect(`${message} ${options.detail ?? ''}`).toMatch(/headers helper|automatically/i);
     expect(buttons).toEqual(['Rotate']);
-    expect(fixture.secrets.values.get(tokenSecretKey(SCOPE))).toBe(fixture.token);
+    expect(fixture.secrets.values.get(tokenSecretKey(SCOPE))).toBe(fixture.workspaceToken);
+    expect(fixture.token).toBe(deriveServerToken(fixture.workspaceToken, 'git'));
     expect(fixture.servers['git']?.activate).toHaveBeenCalledOnce();
     expect(fixture.notifyChanged).not.toHaveBeenCalled();
   });
@@ -204,7 +211,7 @@ describe('mcpServers.rotateToken', () => {
     await fixture.run(COMMAND_ROTATE_TOKEN);
     const rotated = fixture.secrets.values.get(tokenSecretKey(SCOPE));
     expect(rotated).toMatch(/^[0-9a-f]{64}$/);
-    expect(rotated).not.toBe(fixture.token);
+    expect(rotated).not.toBe(fixture.workspaceToken);
     expect((JSON.parse(readFileSync(path.join(fixture.tokensDir, `${SCOPE}.json`), 'utf8')) as { token: string }).token).toBe(rotated);
     expect(fixture.servers['git']?.activate).toHaveBeenCalledTimes(2);
     expect(fixture.servers['coderag']?.activate).not.toHaveBeenCalled();
@@ -218,6 +225,7 @@ describe('mcpServers.rotateToken', () => {
     const rotated = fixture.secrets.values.get(tokenSecretKey(SCOPE)) ?? '';
     expect(allUiText()).not.toContain(rotated);
     expect(allUiText()).not.toContain(fixture.token);
+      expect(allUiText()).not.toContain(fixture.workspaceToken);
     expect(info).toHaveBeenCalled();
   });
 });
@@ -238,10 +246,15 @@ describe('mcpServers.addToClaudeCode', () => {
       expect(helper).toContain('mcp-headers.js');
       expect(helper).toContain(SCOPE);
       expect(helper).toContain(`--dir`);
+      // One helper command per server: the server id selects which derived token the helper prints.
+      expect(helper).toMatch(/ ["']abcdef0123456789["'] ["']git["'] --dir /);
+      expect(parsed.mcpServers['vscode-coderag']?.headersHelper).toMatch(/ ["']abcdef0123456789["'] ["']coderag["'] --dir /);
       expect(helper).toContain(fixture.tokensDir.replaceAll('\\', '/'));
       expect(Object.keys(parsed.mcpServers['vscode-git'] ?? {}).sort()).toEqual(['headersHelper', 'type', 'url']);
       expect(text).not.toContain(fixture.token);
+      expect(text).not.toContain(fixture.workspaceToken);
       expect(allUiText()).not.toContain(fixture.token);
+      expect(allUiText()).not.toContain(fixture.workspaceToken);
     });
 
     it('lists only servers that can run, with their URLs, and offers all of them preselected', async () => {
@@ -362,7 +375,9 @@ describe('mcpServers.addToClaudeCode', () => {
       expect(lines[1]).toMatch(/^claude mcp add-json --scope local vscode-coderag /);
       expect(text).toContain('http://127.0.0.1:3100/mcp');
       expect(text).not.toContain(fixture.token);
+      expect(text).not.toContain(fixture.workspaceToken);
       expect(allUiText()).not.toContain(fixture.token);
+      expect(allUiText()).not.toContain(fixture.workspaceToken);
     });
 
     it('quotes for the Windows shell on win32', async () => {
@@ -381,6 +396,7 @@ describe('mcpServers.addToClaudeCode', () => {
       const text = String(clipboard.mock.calls[0]?.[0]);
       expect(JSON.parse(text)).toMatchObject({ mcpServers: { 'vscode-git': { type: 'http', url: 'http://127.0.0.1:3000/mcp' } } });
       expect(text).not.toContain(fixture.token);
+      expect(text).not.toContain(fixture.workspaceToken);
     });
   });
 

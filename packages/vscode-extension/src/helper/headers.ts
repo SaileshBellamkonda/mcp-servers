@@ -1,16 +1,17 @@
 // Dependency-free: this file is also bundled, on its own, into dist/mcp-headers.js (a script Claude Code runs as a
 // `headersHelper`). It may import nothing but Node built-ins.
 import { join } from 'node:path';
+import { deriveServerToken, isValidServerId } from '../core/server-token';
 
 const SCOPE_KEY = /^[0-9a-f]{16}$/;
 const MIN_TOKEN_LENGTH = 32;
 const TOKEN_SHAPE = /^[\x21-\x7e]+$/;
-const USAGE = 'Usage: node mcp-headers.js <scopeKey> --dir <tokens directory>   (or set MCP_SERVERS_TOKENS_DIR)';
+const USAGE = 'Usage: node mcp-headers.js <scopeKey> <serverId> [--dir <tokens directory>]   (or set MCP_SERVERS_TOKENS_DIR)';
 
 export type HeadersResult = { ok: true; stdout: string } | { ok: false; message: string };
 
-function parseArguments(argv: readonly string[]): { scopeKey?: string; dir?: string; error?: string } {
-  let scopeKey: string | undefined;
+function parseArguments(argv: readonly string[]): { scopeKey?: string; serverId?: string; dir?: string; error?: string } {
+  const positional: string[] = [];
   let dir: string | undefined;
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i] ?? '';
@@ -19,18 +20,21 @@ function parseArguments(argv: readonly string[]): { scopeKey?: string; dir?: str
       if (dir === undefined) return { error: '--dir needs a value' };
     } else if (arg.startsWith('--dir=')) {
       dir = arg.slice('--dir='.length);
-    } else if (arg.startsWith('-') || scopeKey !== undefined) {
+    } else if (arg.startsWith('-') || positional.length >= 2) {
       return { error: `unexpected argument "${arg}"` };
     } else {
-      scopeKey = arg;
+      positional.push(arg);
     }
   }
-  return { ...(scopeKey !== undefined && { scopeKey }), ...(dir !== undefined && { dir }) };
+  const [scopeKey, serverId] = positional;
+  return { ...(scopeKey !== undefined && { scopeKey }), ...(serverId !== undefined && { serverId }), ...(dir !== undefined && { dir }) };
 }
 
 /**
- * Computes what the helper prints: the `Authorization` header JSON for the workspace `scopeKey`, read from
- * `<dir>/<scopeKey>.json`. `readFile` is injected for tests. A failure message never contains token material.
+ * Computes what the helper prints: the `Authorization` header JSON for one server of the workspace `scopeKey`. The
+ * workspace token is read from `<dir>/<scopeKey>.json` and the server's own token derived from it, so the
+ * workspace token is never printed. `readFile` is injected for tests. A failure message never contains token
+ * material.
  */
 export function computeHeaders(
   argv: readonly string[],
@@ -39,10 +43,14 @@ export function computeHeaders(
 ): HeadersResult {
   const parsed = parseArguments(argv);
   if (parsed.error !== undefined) return { ok: false, message: `${parsed.error}. ${USAGE}` };
-  const { scopeKey } = parsed;
+  const { scopeKey, serverId } = parsed;
   const dir = parsed.dir ?? env['MCP_SERVERS_TOKENS_DIR'];
   if (scopeKey === undefined) return { ok: false, message: `missing the workspace scope key. ${USAGE}` };
   if (!SCOPE_KEY.test(scopeKey)) return { ok: false, message: 'the workspace scope key must be 16 lowercase hex characters' };
+  if (serverId === undefined) {
+    return { ok: false, message: `missing the server id. ${USAGE}. Entries written by an older version of the extension lack it: run "MCP Servers: Add to Claude Code" again to rewrite them` };
+  }
+  if (!isValidServerId(serverId)) return { ok: false, message: 'the server id must be a lowercase word such as "git" (a-z, 0-9 and "-", at most 32 characters)' };
   if (dir === undefined || dir === '') return { ok: false, message: `missing --dir. ${USAGE}` };
 
   const file = join(dir, `${scopeKey}.json`);
@@ -62,5 +70,5 @@ export function computeHeaders(
   if (typeof token !== 'string' || token.length < MIN_TOKEN_LENGTH || !TOKEN_SHAPE.test(token)) {
     return { ok: false, message: `${file} does not contain a usable token; restart the MCP Servers extension to rewrite it` };
   }
-  return { ok: true, stdout: `${JSON.stringify({ Authorization: `Bearer ${token}` })}\n` };
+  return { ok: true, stdout: `${JSON.stringify({ Authorization: `Bearer ${deriveServerToken(token, serverId)}` })}\n` };
 }

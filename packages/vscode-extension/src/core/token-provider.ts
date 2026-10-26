@@ -1,10 +1,11 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { chmod, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { deriveServerToken, isValidServerId } from './server-token';
 
 /**
  * Supplies the bearer token a server requires. `scopeKey` identifies the workspace the token belongs to, so an
- * implementation backed by persistent storage can keep one stable token per workspace.
+ * implementation backed by persistent storage can keep one stable token per workspace; every server gets its own.
  */
 export interface TokenProvider {
   getToken(serverId: string, scopeKey: string): Promise<string>;
@@ -70,7 +71,9 @@ function assertScopeKey(scopeKey: string): void {
 }
 
 /**
- * One stable bearer token per workspace scope, shared by all servers of the workspace.
+ * One stable secret per workspace scope, from which every server's own bearer token is derived
+ * (`deriveServerToken`: HMAC-SHA256 keyed with the workspace token). The workspace token itself never leaves the
+ * extension host and the mirror file; a server (and a client talking to it) only ever sees its derived token.
  *
  * SecretStorage is authoritative. The token is mirrored to `<tokensDir>/<scopeKey>.json` as `{"token": "..."}`
  * (file mode 0600 inside a 0700 directory, written through a temporary 0600 file and an atomic rename) so a
@@ -88,12 +91,13 @@ export class SecretStorageTokenProvider implements TokenProvider {
     private readonly options: SecretStorageTokenProviderOptions = {}
   ) {}
 
-  /** The token of the workspace; every server asks with the same scope and gets the same value. */
-  getToken(_serverId: string, scopeKey: string): Promise<string> {
-    return this.serialised(scopeKey, () => this.resolve(scopeKey));
+  /** The token of one server of the workspace: stable until the workspace token is rotated, different per server. */
+  async getToken(serverId: string, scopeKey: string): Promise<string> {
+    if (!isValidServerId(serverId)) throw new Error('Invalid server id (expected a lowercase word such as "git")');
+    return deriveServerToken(await this.serialised(scopeKey, () => this.resolve(scopeKey)), serverId);
   }
 
-  /** Replaces the token of the workspace with a new random one and returns it. */
+  /** Replaces the workspace token with a new random one (and with it every server's token) and returns it. */
   rotate(scopeKey: string): Promise<string> {
     return this.serialised(scopeKey, async () => {
       const token = await this.storeAndAdopt(scopeKey, randomBytes(32).toString('hex'));

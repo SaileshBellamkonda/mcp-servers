@@ -4,12 +4,15 @@ import { builtinModules } from 'node:module';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
+import { deriveServerToken } from '../../src/core/server-token';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 
 const run = promisify(execFile);
 const bundle = inject('bundle');
 const SCOPE = 'abcdef0123456789';
 const TOKEN = 'k'.repeat(64);
+const GIT = deriveServerToken(TOKEN, 'git');
+const CODERAG = deriveServerToken(TOKEN, 'coderag');
 
 interface Outcome {
   code: number;
@@ -48,21 +51,31 @@ describe('dist/mcp-headers.js (the Claude Code headersHelper script)', () => {
     expect(statSync(bundle.helperJs).size).toBeLessThan(20_000);
   });
 
-  it('prints the Authorization header JSON for the scope found in --dir (a path with a space)', async () => {
-    const out = await helper([SCOPE, '--dir', path.join(dir, 'tokens dir')]);
+  it('prints the Authorization header JSON of the server for the scope found in --dir (a path with a space)', async () => {
+    const out = await helper([SCOPE, 'git', '--dir', path.join(dir, 'tokens dir')]);
     expect(out.code).toBe(0);
     expect(out.stderr).toBe('');
-    expect(JSON.parse(out.stdout)).toEqual({ Authorization: `Bearer ${TOKEN}` });
+    expect(JSON.parse(out.stdout)).toEqual({ Authorization: `Bearer ${GIT}` });
+    expect(out.stdout).not.toContain(TOKEN);
+  });
+
+  it('prints a different, stable token for each server, none of them the workspace token', async () => {
+    const args = (serverId: string): string[] => [SCOPE, serverId, '--dir', path.join(dir, 'tokens dir')];
+    const [git, coderag, gitAgain] = await Promise.all([helper(args('git')), helper(args('coderag')), helper(args('git'))]);
+    expect(git.stdout).toBe(gitAgain.stdout);
+    expect(coderag.stdout).not.toBe(git.stdout);
+    expect(JSON.parse(coderag.stdout)).toEqual({ Authorization: `Bearer ${CODERAG}` });
+    expect(`${git.stdout}${coderag.stdout}`).not.toContain(TOKEN);
   });
 
   it('reads the directory from MCP_SERVERS_TOKENS_DIR when --dir is not given', async () => {
-    const out = await helper([SCOPE], { MCP_SERVERS_TOKENS_DIR: path.join(dir, 'tokens dir') });
+    const out = await helper([SCOPE, 'git'], { MCP_SERVERS_TOKENS_DIR: path.join(dir, 'tokens dir') });
     expect(out.code).toBe(0);
-    expect(JSON.parse(out.stdout)).toEqual({ Authorization: `Bearer ${TOKEN}` });
+    expect(JSON.parse(out.stdout)).toEqual({ Authorization: `Bearer ${GIT}` });
   });
 
   it('exits 1 with a message on stderr and nothing on stdout when the token file is missing', async () => {
-    const out = await helper(['0123456789abcdef', '--dir', path.join(dir, 'tokens dir')]);
+    const out = await helper(['0123456789abcdef', 'git', '--dir', path.join(dir, 'tokens dir')]);
     expect(out.code).toBe(1);
     expect(out.stdout).toBe('');
     expect(out.stderr).toMatch(/^mcp-headers: cannot read the token file/);
@@ -70,7 +83,7 @@ describe('dist/mcp-headers.js (the Claude Code headersHelper script)', () => {
   });
 
   it('exits 1 for bad arguments without touching the file system', async () => {
-    for (const args of [[], ['../../x', '--dir', dir], [SCOPE]]) {
+    for (const args of [[], ['../../x', 'git', '--dir', dir], [SCOPE], [SCOPE, 'git'], [SCOPE, '../git', '--dir', dir], [SCOPE, 'Git', '--dir', dir], [SCOPE, '--dir', dir]]) {
       const out = await helper(args);
       expect(out.code, JSON.stringify(args)).toBe(1);
       expect(out.stdout).toBe('');
@@ -82,7 +95,7 @@ describe('dist/mcp-headers.js (the Claude Code headersHelper script)', () => {
     const bad = path.join(dir, 'bad');
     mkdirSync(bad);
     writeFileSync(path.join(bad, `${SCOPE}.json`), '{"token": "short-secret"}');
-    const out = await helper([SCOPE, '--dir', bad]);
+    const out = await helper([SCOPE, 'git', '--dir', bad]);
     expect(out.code).toBe(1);
     expect(out.stderr).not.toContain('short-secret');
     if (process.platform !== 'win32') chmodSync(path.join(bad, `${SCOPE}.json`), 0o600);

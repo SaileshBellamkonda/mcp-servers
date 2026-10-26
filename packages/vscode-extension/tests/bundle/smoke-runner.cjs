@@ -390,10 +390,10 @@ async function runExtensionOnce() {
   const item = (id) => tree().find((entry) => entry.id === id)?.item;
   const tokensDir = path.join(globalStorage, 'tokens');
   const helperPath = path.join(globalStorage, 'bin', 'mcp-headers.js');
-  /** The token as a client sees it: through the installed headers helper, run like Claude Code runs it. */
-  const tokenFromHelper = () => {
+  /** The token of one server as a client sees it: through the installed headers helper, run like Claude Code runs it. */
+  const tokenFromHelper = (serverId = 'git') => {
     const scope = fs.readdirSync(tokensDir).find((name) => /^[0-9a-f]{16}\.json$/.test(name)).replace('.json', '');
-    const out = childProcess.execFileSync(process.execPath, [helperPath, scope, '--dir', tokensDir], { encoding: 'utf8' });
+    const out = childProcess.execFileSync(process.execPath, [helperPath, scope, serverId, '--dir', tokensDir], { encoding: 'utf8' });
     const authorization = JSON.parse(out).Authorization;
     assert(authorization.startsWith('Bearer '), `helper printed ${out}`);
     return { scope, token: authorization.slice('Bearer '.length) };
@@ -471,17 +471,25 @@ async function runExtensionOnce() {
       return info;
     });
     let token;
+    let ragToken;
     await step('extension.token', () => {
-      // One token per workspace, mirrored to a file that only the helper script reads.
-      const found = tokenFromHelper();
+      // One secret per workspace, mirrored to a file that only the helper script reads; each server gets its own
+      // token derived from it, so the helper prints different tokens for git and coderag.
+      const found = tokenFromHelper('git');
       token = found.token;
+      ragToken = tokenFromHelper('coderag').token;
       assert(/^[0-9a-f]{64}$/.test(token), 'unexpected token shape');
+      assert(/^[0-9a-f]{64}$/.test(ragToken) && ragToken !== token, 'git and coderag must have different tokens');
+      assert(tokenFromHelper('git').token === token, 'the git token is not stable');
+      const workspaceToken = JSON.parse(fs.readFileSync(path.join(tokensDir, `${found.scope}.json`), 'utf8')).token;
+      assert(workspaceToken !== token && workspaceToken !== ragToken, 'the helper printed the workspace token');
       if (process.platform !== 'win32') {
         const fileMode = fs.statSync(path.join(tokensDir, `${found.scope}.json`)).mode & 0o777;
         const dirMode = fs.statSync(tokensDir).mode & 0o777;
         assert(fileMode === 0o600 && dirMode === 0o700, `modes: file ${fileMode.toString(8)}, directory ${dirMode.toString(8)}`);
       }
-      assert(!state.output.join('\n').includes(token), 'the token was written to the output channel');
+      const output = state.output.join('\n');
+      assert(![token, ragToken, workspaceToken].some((secret) => output.includes(secret)), 'a token was written to the output channel');
       return { scope: found.scope };
     });
     await step('extension.git_token', async () => {
@@ -490,8 +498,11 @@ async function runExtensionOnce() {
     });
     if (ragRunning) {
       await step('extension.coderag_works', async () => {
-        const session = await handshake(ragPort, token);
-        const status = JSON.parse(await callTool(ragPort, session, 'get_index_status', {}, token));
+        const session = await handshake(ragPort, ragToken);
+        const status = JSON.parse(await callTool(ragPort, session, 'get_index_status', {}, ragToken));
+        // A token is only good for its own server: git's token is refused by coderag and the other way round.
+        assert((await rpc(ragPort, INITIALIZE, { token })).status === 401, 'coderag accepted the git token');
+        assert((await rpc(gitPort, INITIALIZE, { token: ragToken })).status === 401, 'git accepted the coderag token');
         assert(status.embedding_dim === 8, `unexpected index status ${JSON.stringify(status)}`);
         assert(fs.existsSync(path.join(work, 'workspaceStorage', 'coderag.db')), 'the database is not in the workspace storage');
       });
@@ -505,6 +516,10 @@ async function runExtensionOnce() {
       // CodeRAG is offered only where it can run (an unavailable server is omitted).
       assert(labels.includes('MCP Servers: CodeRAG') === ragRunning, `definitions: ${labels.join(', ')}`);
       assert(!JSON.stringify(definitions).includes(token), 'a listed definition contains the token');
+      if (ragRunning) {
+        const rag = await provider.resolveMcpServerDefinition(definitions.find((d) => d.label === 'MCP Servers: CodeRAG'), {});
+        assert(rag.headers.Authorization === `Bearer ${ragToken}`, 'resolve did not inject the CodeRAG token');
+      }
       const git = await provider.resolveMcpServerDefinition(definitions.find((d) => d.label === 'MCP Servers: Git'), {});
       assert(git.headers.Authorization === `Bearer ${token}`, 'resolve did not inject the stored token');
       assert(git.uri.toString() === `http://127.0.0.1:${String(gitPort)}/mcp`, `unexpected uri ${git.uri.toString()}`);
@@ -523,12 +538,18 @@ async function runExtensionOnce() {
       assert(!text.includes(token), '.mcp.json contains the token');
       const parsed = JSON.parse(text);
       const entry = parsed.mcpServers['vscode-git'];
+      if (ragRunning) assert(!text.includes(ragToken), '.mcp.json contains the CodeRAG token');
       assert(entry.type === 'http' && entry.url === `http://127.0.0.1:${String(gitPort)}/mcp`, `unexpected entry ${JSON.stringify(entry)}`);
       if (process.platform !== 'win32') {
         // headersHelper runs through a shell; `node` stands for the runtime under test.
         const command = entry.headersHelper.replace(/^node /, `${JSON.stringify(process.execPath)} `);
         const out = childProcess.execFileSync('/bin/sh', ['-c', command], { encoding: 'utf8' });
         assert(JSON.parse(out).Authorization === `Bearer ${token}`, 'the headersHelper command line did not print the token header');
+        if (ragRunning) {
+          const ragCommand = parsed.mcpServers['vscode-coderag'].headersHelper.replace(/^node /, `${JSON.stringify(process.execPath)} `);
+          const ragOut = childProcess.execFileSync('/bin/sh', ['-c', ragCommand], { encoding: 'utf8' });
+          assert(JSON.parse(ragOut).Authorization === `Bearer ${ragToken}`, 'the CodeRAG headersHelper command line did not print the CodeRAG token');
+        }
       }
       return { entries: Object.keys(parsed.mcpServers) };
     });
@@ -536,14 +557,16 @@ async function runExtensionOnce() {
     await step('extension.rotate', async () => {
       state.warningAnswers.push('Rotate');
       await state.commands.get('mcpServers.rotateToken')();
-      const rotated = tokenFromHelper().token;
-      assert(rotated !== token, 'the token did not change');
+      const rotated = tokenFromHelper('git').token;
+      const rotatedRag = tokenFromHelper('coderag').token;
+      assert(rotated !== token && rotatedRag !== ragToken, 'the token did not change');
       assert(item('git')?.contextValue === 'server.running', 'git did not come back after the rotation');
       const old = await rpc(gitPort, INITIALIZE, { token });
       assert(old.status === 401, `the old token still works (${String(old.status)})`);
       await handshake(gitPort, rotated);
-      if (ragRunning) await handshake(ragPort, rotated);
+      if (ragRunning) await handshake(ragPort, rotatedRag);
       token = rotated;
+      ragToken = rotatedRag;
     });
     // VS Code calls deactivate(), then disposes the subscriptions.
     await step('extension.deactivate', async () => {

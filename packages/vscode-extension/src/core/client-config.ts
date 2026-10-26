@@ -4,6 +4,8 @@
  * a `headersHelper` command line that makes the client ask the helper script for the `Authorization` header.
  */
 
+import { isValidServerId } from './server-token';
+
 /** An HTTP server entry of a client configuration. */
 export interface ClientServerEntry {
   type: 'http';
@@ -61,7 +63,8 @@ export function clientServerName(serverId: string): string {
 }
 
 /**
- * The shell command a client runs to obtain the headers: `node "<helper>" "<scopeKey>" --dir "<tokens dir>"`.
+ * The shell command a client runs to obtain the headers of one server:
+ * `node "<helper>" "<scopeKey>" "<serverId>" --dir "<tokens dir>"`.
  * On Windows the paths use forward slashes, which `node` accepts and which are valid in cmd.exe, PowerShell and
  * Git Bash alike (a backslash path would be mangled by Git Bash).
  */
@@ -69,12 +72,14 @@ export function buildHeadersHelperCommand(options: {
   platform: ShellPlatform;
   helperPath: string;
   scopeKey: string;
+  serverId: string;
   tokensDir: string;
 }): string {
-  const { platform, scopeKey } = options;
+  const { platform, scopeKey, serverId } = options;
   if (!SCOPE_KEY.test(scopeKey)) throw new Error('Invalid workspace scope key (expected 16 lowercase hex characters)');
+  if (!isValidServerId(serverId)) throw new Error('Invalid server id (expected a lowercase word such as "git")');
   const path = (value: string): string => (platform === 'win32' ? value.replaceAll('\\', '/') : value);
-  return ['node', quoteFor(platform, path(options.helperPath)), quoteFor(platform, scopeKey), '--dir', quoteFor(platform, path(options.tokensDir))].join(' ');
+  return ['node', quoteFor(platform, path(options.helperPath)), quoteFor(platform, scopeKey), quoteFor(platform, serverId), '--dir', quoteFor(platform, path(options.tokensDir))].join(' ');
 }
 
 export function buildServerEntry(url: string, headersHelper: string): ClientServerEntry {

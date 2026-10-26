@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
+import { deriveServerToken } from '../../src/core/server-token';
 import { CODERAG_API_KEY_SECRET } from '../../src/integration-commands';
 import { makeContext, type TestContext } from './test-context';
 
@@ -470,7 +471,7 @@ describe('extension', () => {
       expect(rag.activateCodeRagServer).not.toHaveBeenCalled();
     });
 
-    it('with autoStart on: probes the bundle native directory, then starts on port 3100 with the shared workspace token', async () => {
+    it('with autoStart on: probes the bundle native directory, then starts on port 3100 with its own token derived from the workspace token', async () => {
       (vscode as unknown as { __test: { setSettings(v: Record<string, unknown>): void } }).__test.setSettings(ragSettings);
       activate(ctx as never);
       await untilServer('coderag', 'running');
@@ -481,18 +482,23 @@ describe('extension', () => {
         port: 3100,
         authToken: expect.stringMatching(/^[0-9a-f]{64}$/) as string,
       });
-      expect(ragOptions()['authToken']).toBe(gitToken());
+      const workspaceToken = [...ctx.secrets.values.values()][0] ?? '';
+      expect(ragOptions()['authToken']).toBe(deriveServerToken(workspaceToken, 'coderag'));
+      expect(gitToken()).toBe(deriveServerToken(workspaceToken, 'git'));
+      expect(ragOptions()['authToken']).not.toBe(gitToken());
       expect(ragOptions()['nativeModulesDir']).toMatch(/native$/);
       expect(serverInfo('coderag')?.port).toBe(3100);
     });
 
-    it('persists the workspace token in SecretStorage and mirrors it to the 0600 file', async () => {
+    it('persists the workspace token in SecretStorage (servers only get tokens derived from it)', async () => {
       activate(ctx as never);
       await until('running');
       const secrets = [...ctx.secrets.values.entries()];
       expect(secrets).toHaveLength(1);
       expect(secrets[0]?.[0]).toMatch(/^mcpServers\.token\.[0-9a-f]{16}$/);
-      expect(secrets[0]?.[1]).toBe(gitToken());
+      expect(secrets[0]?.[1]).toMatch(/^[0-9a-f]{64}$/);
+      expect(secrets[0]?.[1]).not.toBe(gitToken());
+      expect(gitToken()).toBe(deriveServerToken(secrets[0]?.[1] ?? '', 'git'));
     });
 
     it('is unavailable with the FTS5 reason on a local VS Code that lacks it (and does not stop git)', async () => {
@@ -728,14 +734,14 @@ describe('extension', () => {
       ]);
     });
 
-    it('resolving CodeRAG starts it on demand and injects the same token the servers use', async () => {
+    it('resolving CodeRAG starts it on demand and injects the token that server uses (not the git server\'s)', async () => {
       activate(ctx as never);
       await until('running');
       const coderag = provider().provide()[1] as vscode.McpHttpServerDefinition;
       const resolved = await provider().resolve(coderag);
       expect(serverInfo('coderag')?.state).toBe('running');
       expect(resolved.headers).toEqual({ Authorization: `Bearer ${String(ragOptions()['authToken'])}` });
-      expect(ragOptions()['authToken']).toBe(gitToken());
+      expect(ragOptions()['authToken']).not.toBe(gitToken());
     });
 
     it('omits CodeRAG once it is known to be unavailable, and resolving it throws the reason', async () => {

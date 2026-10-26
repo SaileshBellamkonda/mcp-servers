@@ -230,11 +230,19 @@ export function registerIntegrationCommands(deps: IntegrationDeps): vscode.Dispo
       );
       return;
     }
-    const helper = buildHeadersHelperCommand({ platform, helperPath: deps.helperPath, scopeKey: deps.scopeKey(), tokensDir: deps.tokens.tokensDir });
     const entries: Record<string, ClientServerEntry> = {};
     for (const choice of picked) {
       const offer = servers.find(({ server }) => server.id === choice.id);
-      if (offer) entries[clientServerName(offer.server.id)] = buildServerEntry(offer.url, helper);
+      if (!offer) continue;
+      // Each entry names its server: the helper prints that server's own token, never the workspace token.
+      const helper = buildHeadersHelperCommand({
+        platform,
+        helperPath: deps.helperPath,
+        scopeKey: deps.scopeKey(),
+        serverId: offer.server.id,
+        tokensDir: deps.tokens.tokensDir,
+      });
+      entries[clientServerName(offer.server.id)] = buildServerEntry(offer.url, helper);
     }
 
     if (action.action === 'write') {

@@ -67,7 +67,7 @@ describe('quoteWindows', () => {
 });
 
 describe('buildHeadersHelperCommand', () => {
-  const base = { scopeKey: 'abcdef0123456789' };
+  const base = { scopeKey: 'abcdef0123456789', serverId: 'git' };
 
   it('POSIX: node, the script, the scope key and --dir, each quoted', () => {
     const command = buildHeadersHelperCommand({
@@ -77,7 +77,7 @@ describe('buildHeadersHelperCommand', () => {
       tokensDir: "/home/my user/.config/Code/User/globalStorage/pub.mcp-servers/tokens",
     });
     expect(command).toBe(
-      "node '/home/my user/.config/Code/User/globalStorage/pub.mcp-servers/bin/mcp-headers.js' 'abcdef0123456789' --dir '/home/my user/.config/Code/User/globalStorage/pub.mcp-servers/tokens'"
+      "node '/home/my user/.config/Code/User/globalStorage/pub.mcp-servers/bin/mcp-headers.js' 'abcdef0123456789' 'git' --dir '/home/my user/.config/Code/User/globalStorage/pub.mcp-servers/tokens'"
     );
   });
 
@@ -89,19 +89,25 @@ describe('buildHeadersHelperCommand', () => {
       tokensDir: 'C:\\Users\\my user\\AppData\\Roaming\\Code\\User\\globalStorage\\pub.mcp-servers\\tokens',
     });
     expect(command).toBe(
-      'node "C:/Users/my user/AppData/Roaming/Code/User/globalStorage/pub.mcp-servers/bin/mcp-headers.js" "abcdef0123456789" --dir "C:/Users/my user/AppData/Roaming/Code/User/globalStorage/pub.mcp-servers/tokens"'
+      'node "C:/Users/my user/AppData/Roaming/Code/User/globalStorage/pub.mcp-servers/bin/mcp-headers.js" "abcdef0123456789" "git" --dir "C:/Users/my user/AppData/Roaming/Code/User/globalStorage/pub.mcp-servers/tokens"'
     );
   });
 
   it('is run by a real shell and passes the arguments through intact (POSIX)', () => {
     if (process.platform === 'win32') return;
     const command = buildHeadersHelperCommand({ ...base, platform: 'linux', helperPath: "/tmp/dir with 'quote'/h.js", tokensDir: '/tmp/t d' });
-    const argv = execFileSync('/bin/sh', ['-c', command.replace(/^node /, 'printf "%s\\n" ')], { encoding: 'utf8' }).split('\n').slice(0, 4);
-    expect(argv).toEqual(["/tmp/dir with 'quote'/h.js", 'abcdef0123456789', '--dir', '/tmp/t d']);
+    const argv = execFileSync('/bin/sh', ['-c', command.replace(/^node /, 'printf "%s\\n" ')], { encoding: 'utf8' }).split('\n').slice(0, 5);
+    expect(argv).toEqual(["/tmp/dir with 'quote'/h.js", 'abcdef0123456789', 'git', '--dir', '/tmp/t d']);
   });
 
   it('rejects an invalid scope key', () => {
-    expect(() => buildHeadersHelperCommand({ platform: 'linux', helperPath: '/h.js', tokensDir: '/t', scopeKey: '../x' })).toThrow(/scope/i);
+    expect(() => buildHeadersHelperCommand({ platform: 'linux', helperPath: '/h.js', tokensDir: '/t', scopeKey: '../x', serverId: 'git' })).toThrow(/scope/i);
+  });
+
+  it('rejects an invalid server id', () => {
+    for (const serverId of ['', 'Git', '../x', 'a b']) {
+      expect(() => buildHeadersHelperCommand({ ...base, serverId, platform: 'linux', helperPath: '/h.js', tokensDir: '/t' }), serverId).toThrow(/server id/i);
+    }
   });
 });
 
@@ -141,7 +147,7 @@ describe('buildAddJsonCommands', () => {
 
   it('the quoted JSON survives a real POSIX shell unchanged', () => {
     if (process.platform === 'win32') return;
-    const entry = { ...gitEntry, headersHelper: "node '/tmp/a b/h.js' 'abcdef0123456789' --dir '/tmp/t'" };
+    const entry = { ...gitEntry, headersHelper: "node '/tmp/a b/h.js' 'abcdef0123456789' 'git' --dir '/tmp/t'" };
     const text = buildAddJsonCommands('linux', { 'vscode-git': entry }).replace(/^claude mcp add-json --scope local vscode-git /, 'printf %s ');
     expect(JSON.parse(execFileSync('/bin/sh', ['-c', text], { encoding: 'utf8' }))).toEqual(entry);
   });

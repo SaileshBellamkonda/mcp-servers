@@ -2,6 +2,7 @@ import { chmodSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, s
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { deriveServerToken } from '../../src/core/server-token';
 import { computeScopeKey, SecretStorageTokenProvider, tokenSecretKey, type SecretStore } from '../../src/core/token-provider';
 
 class MemorySecrets implements SecretStore {
@@ -58,6 +59,7 @@ describe('SecretStorageTokenProvider', () => {
   let onMirrorError: ReturnType<typeof vi.fn>;
 
   const make = (): SecretStorageTokenProvider => new SecretStorageTokenProvider(secrets, dir, { onMirrorError });
+  const workspaceToken = (scope = SCOPE): string => secrets.values.get(tokenSecretKey(scope)) ?? '';
   const fileOf = (scope = SCOPE): string => path.join(dir, `${scope}.json`);
   const readFileToken = (scope = SCOPE): string => (JSON.parse(readFileSync(fileOf(scope), 'utf8')) as { token: string }).token;
 
@@ -71,10 +73,11 @@ describe('SecretStorageTokenProvider', () => {
     rmSync(root, { recursive: true, force: true });
   });
 
-  it('generates one 64-hex token per scope, stores it in SecretStorage and mirrors it to <scope>.json', async () => {
-    const token = await make().getToken('git', SCOPE);
+  it('generates one 64-hex workspace token per scope, stores it in SecretStorage and mirrors it to <scope>.json', async () => {
+    const serverToken = await make().getToken('git', SCOPE);
+    const token = workspaceToken();
     expect(token).toMatch(/^[0-9a-f]{64}$/);
-    expect(secrets.values.get(tokenSecretKey(SCOPE))).toBe(token);
+    expect(serverToken).toBe(deriveServerToken(token, 'git'));
     expect(readFileToken()).toBe(token);
     expect(JSON.parse(readFileSync(fileOf(), 'utf8'))).toEqual({ token });
     expect(readdirSync(dir)).toEqual([`${SCOPE}.json`]);
@@ -84,16 +87,24 @@ describe('SecretStorageTokenProvider', () => {
     expect(tokenSecretKey(SCOPE)).toBe(`mcpServers.token.${SCOPE}`);
   });
 
-  it('gives all servers of a workspace the same token, even when they ask at the same time', async () => {
+  it('gives every server its own derived token (HMAC of the workspace token), also when they ask at the same time', async () => {
     const provider = make();
-    const tokens = await Promise.all([provider.getToken('git', SCOPE), provider.getToken('coderag', SCOPE), provider.getToken('git', SCOPE)]);
-    expect(new Set(tokens).size).toBe(1);
+    const [git1, rag, git2] = await Promise.all([provider.getToken('git', SCOPE), provider.getToken('coderag', SCOPE), provider.getToken('git', SCOPE)]);
+    expect(git1).toBe(git2);
+    expect(rag).not.toBe(git1);
+    expect(git1).toBe(deriveServerToken(workspaceToken(), 'git'));
+    expect(rag).toBe(deriveServerToken(workspaceToken(), 'coderag'));
+    expect([git1, rag]).not.toContain(workspaceToken());
     expect(secrets.store_).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects a server id that is not a plain lowercase word', async () => {
+    for (const bad of ['', 'Git', '../x', 'a b']) await expect(make().getToken(bad, SCOPE)).rejects.toThrow(/server id/i);
   });
 
   it('keeps the token across provider instances (a new session) and across calls', async () => {
     const first = await make().getToken('git', SCOPE);
-    expect(await make().getToken('coderag', SCOPE)).toBe(first);
+    expect(await make().getToken('git', SCOPE)).toBe(first);
   });
 
   it('uses a different token and file per workspace scope', async () => {
@@ -101,7 +112,8 @@ describe('SecretStorageTokenProvider', () => {
     const a = await provider.getToken('git', SCOPE);
     const b = await provider.getToken('git', OTHER_SCOPE);
     expect(a).not.toBe(b);
-    expect(readFileToken(OTHER_SCOPE)).toBe(b);
+    expect(readFileToken(OTHER_SCOPE)).toBe(workspaceToken(OTHER_SCOPE));
+    expect(b).toBe(deriveServerToken(readFileToken(OTHER_SCOPE), 'git'));
   });
 
   it.runIf(posix)('writes the file with mode 0600 and creates the directory with mode 0700', async () => {
@@ -124,16 +136,16 @@ describe('SecretStorageTokenProvider', () => {
     mkdirSync(dir, { recursive: true });
     writeFileSync(fileOf(), '{"token":"stale"}', { mode: 0o666 });
     chmodSync(fileOf(), 0o666);
-    const token = await make().getToken('git', SCOPE);
+    await make().getToken('git', SCOPE);
     expect(statSync(fileOf()).mode & 0o777).toBe(0o600);
-    expect(readFileToken()).toBe(token);
+    expect(readFileToken()).toBe(workspaceToken());
   });
 
   it('SecretStorage is authoritative: a file with another token is overwritten with the secret', async () => {
     secrets.values.set(tokenSecretKey(SCOPE), 's'.repeat(64));
     mkdirSync(dir, { recursive: true });
     writeFileSync(fileOf(), JSON.stringify({ token: 'f'.repeat(64) }));
-    expect(await make().getToken('git', SCOPE)).toBe('s'.repeat(64));
+    expect(await make().getToken('git', SCOPE)).toBe(deriveServerToken('s'.repeat(64), 'git'));
     expect(readFileToken()).toBe('s'.repeat(64));
   });
 
@@ -142,14 +154,14 @@ describe('SecretStorageTokenProvider', () => {
     const token = await provider.getToken('git', SCOPE);
     rmSync(fileOf());
     expect(await make().getToken('git', SCOPE)).toBe(token);
-    expect(readFileToken()).toBe(token);
+    expect(readFileToken()).toBe(workspaceToken());
   });
 
   it('adopts a valid token from the file when the secret is missing (machine migration) and stores it as the secret', async () => {
     mkdirSync(dir, { recursive: true });
     const migrated = 'm'.repeat(40);
     writeFileSync(fileOf(), JSON.stringify({ token: migrated }));
-    expect(await make().getToken('git', SCOPE)).toBe(migrated);
+    expect(await make().getToken('git', SCOPE)).toBe(deriveServerToken(migrated, 'git'));
     expect(secrets.values.get(tokenSecretKey(SCOPE))).toBe(migrated);
   });
 
@@ -164,14 +176,14 @@ describe('SecretStorageTokenProvider', () => {
     writeFileSync(fileOf(), content);
     const token = await make().getToken('git', SCOPE);
     expect(token).toMatch(/^[0-9a-f]{64}$/);
-    expect(readFileToken()).toBe(token);
+    expect(token).toBe(deriveServerToken(readFileToken(), 'git'));
   });
 
   it('regenerates when the stored secret is unusable', async () => {
     secrets.values.set(tokenSecretKey(SCOPE), 'short');
     const token = await make().getToken('git', SCOPE);
     expect(token).toMatch(/^[0-9a-f]{64}$/);
-    expect(secrets.values.get(tokenSecretKey(SCOPE))).toBe(token);
+    expect(token).toBe(deriveServerToken(workspaceToken(), 'git'));
   });
 
   it('rotate() creates a new token, updates the secret and the file, and later calls return it', async () => {
@@ -182,8 +194,8 @@ describe('SecretStorageTokenProvider', () => {
     expect(rotated).not.toBe(old);
     expect(secrets.values.get(tokenSecretKey(SCOPE))).toBe(rotated);
     expect(readFileToken()).toBe(rotated);
-    expect(await provider.getToken('coderag', SCOPE)).toBe(rotated);
-    expect(await make().getToken('git', SCOPE)).toBe(rotated);
+    expect(await provider.getToken('coderag', SCOPE)).toBe(deriveServerToken(rotated, 'coderag'));
+    expect(await make().getToken('git', SCOPE)).toBe(deriveServerToken(rotated, 'git'));
   });
 
   it('rotate() works before any token exists', async () => {
@@ -204,9 +216,10 @@ describe('SecretStorageTokenProvider', () => {
     writeFileSync(dir, 'a file where the tokens directory should be');
     const token = await make().getToken('git', SCOPE);
     expect(token).toMatch(/^[0-9a-f]{64}$/);
-    expect(secrets.values.get(tokenSecretKey(SCOPE))).toBe(token);
+    expect(token).toBe(deriveServerToken(workspaceToken(), 'git'));
     expect(onMirrorError).toHaveBeenCalledOnce();
     expect(String((onMirrorError.mock.calls[0] as unknown[])[0])).not.toContain(token);
+    expect(String((onMirrorError.mock.calls[0] as unknown[])[0])).not.toContain(workspaceToken());
   });
 
   it('leaves no temporary files behind', async () => {
@@ -243,8 +256,9 @@ describe('SecretStorageTokenProvider', () => {
       const b = new SecretStorageTokenProvider(shared, dir, { onMirrorError });
       const [fromA, fromB] = await Promise.all([a.getToken('git', SCOPE), b.getToken('git', SCOPE)]);
       expect(fromA).toBe(fromB);
-      expect(fromA).toBe(shared.values.get(tokenSecretKey(SCOPE)));
-      expect(readFileToken()).toBe(fromA);
+      const stored = shared.values.get(tokenSecretKey(SCOPE)) ?? '';
+      expect(fromA).toBe(deriveServerToken(stored, 'git'));
+      expect(readFileToken()).toBe(stored);
     });
 
     it('rotate() also returns whatever ended up stored when two windows rotate at the same time', async () => {
