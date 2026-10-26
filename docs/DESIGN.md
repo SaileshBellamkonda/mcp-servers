@@ -1,7 +1,7 @@
 # MCP Servers Monorepo - System Design
 
 **Version:** 1.0  
-**Last Updated:** 2026-04-22  
+**Last Updated:** 2026-10-26  
 **Status:** Active
 
 ## Overview
@@ -11,8 +11,8 @@ This document describes the system design for the MCP Servers monorepo, a compre
 ### Purpose
 
 The monorepo provides a unified development environment for creating MCP servers that can operate in two distinct modes:
-- **Standalone Mode**: Independent processes communicating via stdio/HTTP
-- **Embedded Mode**: Integrated components within VS Code extensions
+- **Standalone Mode**: Independent processes communicating via stdio or Streamable HTTP
+- **Embedded Mode**: The same servers hosted in the VS Code extension host, reachable over authenticated loopback HTTP
 
 ### Key Design Goals
 
@@ -39,7 +39,7 @@ The monorepo provides a unified development environment for creating MCP servers
 │                           │                                   │
 │                  ┌────────▼────────┐                         │
 │                  │  Build System   │                         │
-│                  │  (Turbo/pnpm)   │                         │
+│                  │ (tsc/esbuild)   │                         │
 │                  └─────────────────┘                         │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -47,17 +47,19 @@ The monorepo provides a unified development environment for creating MCP servers
 ### Technology Stack
 
 - **Package Manager**: pnpm with workspaces
-- **Build System**: Turbo for orchestration, TypeScript for compilation
-- **Testing**: Vitest with coverage reporting
+- **Build System**: `tsc -b` project references (declarations, type checking) and esbuild (server and extension bundles); no Turbo
+- **Testing**: Vitest with coverage reporting (85 % thresholds)
 - **Language**: TypeScript (strict mode)
-- **MCP SDK**: @modelcontextprotocol/sdk
-- **VS Code API**: vscode module for extensions
+- **MCP SDK**: `@modelcontextprotocol/server` and `@modelcontextprotocol/hono` (2.0 alpha, pinned exactly in the shared packages)
+- **HTTP**: Hono with `@hono/node-server`
+- **Storage**: Node's built-in `node:sqlite` plus the `sqlite-vec` extension (Node >= 22.16)
+- **VS Code API**: vscode module for the extension (`engines.vscode ^1.101.0`)
 
 ## System Components
 
 ### 1. MCP Server Packages
 
-**Location**: `packages/servers/*`
+**Location**: `packages/server-*` (`server-git`, `server-coderag`)
 
 MCP servers are the core components that implement the Model Context Protocol. Each server is designed for dual-mode operation.
 
@@ -69,50 +71,49 @@ MCP servers are the core components that implement the Model Context Protocol. E
 │                                         │
 │  ┌─────────────────────────────────┐   │
 │  │     Standalone Entry Point      │   │
-│  │      (index.ts + stdio)         │   │
+│  │ (standalone.ts: stdio or HTTP)  │   │
 │  └─────────────────────────────────┘   │
 │                 │                       │
 │                 ▼                       │
 │  ┌─────────────────────────────────┐   │
 │  │      Core Server Logic          │   │
-│  │   (server.ts - mode agnostic)   │   │
+│  │ (server/*-server.ts, tools/)    │   │
 │  └─────────────────────────────────┘   │
 │                 │                       │
 │                 ▼                       │
 │  ┌─────────────────────────────────┐   │
 │  │     Embedded Entry Point        │   │
-│  │   (embedded.ts + in-memory)     │   │
+│  │ (embedded.ts: HTTP + bearer)    │   │
 │  └─────────────────────────────────┘   │
 └─────────────────────────────────────────┘
 ```
 
 #### Key Features
 
-- **Dual Entry Points**: Separate entry points for standalone and embedded modes
-- **Transport Abstraction**: stdio for standalone, in-memory for embedded
-- **Tool Registry**: Centralized tool registration and management
-- **Resource Handlers**: Support for MCP resources
+- **Dual Entry Points**: Separate entry points for standalone and embedded modes (both bundled by `scripts/bundle-server.mjs`)
+- **Transport Abstraction**: stdio or HTTP for standalone, authenticated loopback HTTP for embedded; HTTP always goes through `@mcp-servers/http-host`
+- **One server per session**: the HTTP host calls a `createServer` factory for every session, so each session has its own `McpServer` while the domain services (repository manager, vector database) are shared
+- **Tool Registration**: each tool lives in `tools/` and is registered with `server.registerTool()`
 
 
 #### Package Structure
 
 ```
-packages/servers/server-name/
+packages/server-name/
 ├── src/
-│   ├── index.ts          # Standalone entry (stdio transport)
-│   ├── embedded.ts       # Embedded entry (in-memory transport)
-│   ├── server.ts         # Core logic (mode-agnostic)
-│   ├── tools/            # Tool implementations
-│   ├── resources/        # Resource implementations
-│   └── types.ts          # Server-specific types
-├── tests/                # Test files
-├── package.json          # Package configuration
+│   ├── standalone.ts     # Standalone entry (stdio or HTTP, configured by environment variables)
+│   ├── embedded.ts       # Embedded entry (activate*Server({ port, authToken, ... }) -> { port, close })
+│   ├── server/           # createXServer(server, services): registers the tools (mode-agnostic)
+│   ├── core/             # Domain services, configuration, validation
+│   └── tools/            # Tool implementations
+├── tests/                # unit/, integration/, fixtures/
+├── package.json          # exports "." (standalone) and "./embedded"; bin
 └── README.md             # Documentation
 ```
 
 ### 2. VS Code Extension Packages
 
-**Location**: `packages/extensions/*`
+**Location**: `packages/vscode-extension` (package name `mcp-servers`)
 
 Extensions provide VS Code integration for MCP servers, running them in embedded mode within the extension host process.
 
@@ -149,7 +150,8 @@ Extensions provide VS Code integration for MCP servers, running them in embedded
 
 #### Key Responsibilities
 
-- **Server Lifecycle**: Initialize and manage embedded MCP server instances
+- **Server Lifecycle**: A descriptor-driven adapter starts, stops and restarts each embedded server (Git, CodeRAG); CodeRAG is feature-detected and only offered where `node:sqlite` with FTS5, sqlite-vec and tree-sitter load
+- **Authentication**: One stable bearer token per workspace (Secret Storage, mirrored to a `0600` file), used by the VS Code MCP server definition provider and by a headers helper script for Claude Code
 - **UI Integration**: Expose MCP functionality through VS Code commands and views
 - **Configuration**: Manage extension settings and preferences
 - **Error Handling**: Graceful error handling and user feedback
@@ -158,63 +160,53 @@ Extensions provide VS Code integration for MCP servers, running them in embedded
 
 **Location**: `packages/shared/*`
 
-Shared packages provide common functionality used across servers and extensions.
+Shared packages provide common functionality used across servers and extensions. They are `private` (never
+published) and are inlined into the server and extension bundles at build time, so published or npx-run servers need
+no unpublished package. Workspace consumers resolve them to source through the `@mcp-servers/source` export condition.
 
-#### Package Types
+#### Packages
 
-**@mcp-servers/types**
-- Common TypeScript types and interfaces
-- MCP protocol type definitions
-- Shared type utilities
+**@mcp-servers/common**
+- `parsePort`, `parseList` (`;`-separated, trimmed), `parseBool`
+- `McpLogger` (stderr plus MCP logging notifications)
 
-**@mcp-servers/utils**
-- File system utilities
-- Validation helpers
-- Logging utilities
-- Error handling
+**@mcp-servers/http-host**
+- `startMcpHttpServer`: the Streamable HTTP host (one `McpServer` per session, graceful `close()`)
+- Bearer-token authentication, loopback checks, Origin and Content-Type guards, session and body limits
+- `@mcp-servers/http-host/testing`: ephemeral-port start and a raw JSON-RPC client for tests
 
-**@mcp-servers/testing**
-- Test fixtures and mock data
-- MCP-specific test utilities
-- Custom Vitest matchers
-- Server test harness
+Code that only one package uses (for example CodeRAG's `PathGuard`) stays in that package until a second consumer
+exists.
 
 ## Build System Design
 
 ### Dependency Graph
 
 ```
-Level 1: @mcp-servers/types (no dependencies)
+Level 1: @mcp-servers/common (no workspace dependencies)
            ↓
-Level 2: @mcp-servers/utils (depends on types)
+Level 2: @mcp-servers/http-host (depends on common)
            ↓
-Level 3: Server packages (depend on types + utils)
+Level 3: server-git, server-coderag (bundle common + http-host)
            ↓
-Level 4: Extension packages (depend on servers + shared)
+Level 4: vscode-extension (bundles the servers' embedded entry points)
 ```
 
 ### Build Orchestration
 
-**Turbo Pipeline**:
-- Handles dependency ordering automatically
-- Caches unchanged packages
-- Parallelizes independent builds
-- Supports incremental compilation
+**Root scripts** run `pnpm -r`, which orders packages by their workspace dependencies.
 
-
-**Build Process**:
-1. Clean previous artifacts
-2. Build shared types package
-3. Build shared utils package
-4. Build server packages in parallel
-5. Build extension packages in parallel
-6. Run type checking and tests
+**Build Process** (`pnpm build`):
+1. Shared packages: `tsc -b` emits JavaScript and declarations
+2. Servers: clean, esbuild bundles `src/standalone.ts` and `src/embedded.ts` into `dist/` (the private `@mcp-servers/*` packages are inlined; third-party and native dependencies stay external), then `tsc -b` emits declarations only
+3. Extension: esbuild bundles the extension and the headers helper to CommonJS; `pnpm --filter ./packages/vscode-extension run package` also stages the native modules for a target and runs `vsce package`
+4. `pnpm typecheck`, `pnpm test` and `pnpm lint` run separately
 
 ### Workspace Configuration
 
 **pnpm Workspaces**:
-- Manages inter-package dependencies
-- Uses `workspace:*` protocol for local packages
+- Manages inter-package dependencies (`packages/*` and `packages/shared/*`)
+- Uses `workspace:*` protocol for local packages and a `catalog:` for shared version ranges
 - Hoists common dependencies to root
 - Enables hot reload in development
 
@@ -224,37 +216,52 @@ Level 4: Extension packages (depend on servers + shared)
 
 **Purpose**: Run as independent MCP server for external clients
 
-**Transport**: stdio (StdioServerTransport)
+**Transport**: stdio (`StdioServerTransport`, the default) or Streamable HTTP (`MCP_TRANSPORT=http`, served by `@mcp-servers/http-host`)
 
-**Entry Point**: `src/index.ts`
+**Entry Point**: `src/standalone.ts`
 
 **Characteristics**:
 - Runs as separate process
-- Communicates via standard input/output
+- stdio: communicates via standard input/output; HTTP: listens on `127.0.0.1` by default
 - Can be used with any MCP-compatible client
 - Suitable for CLI tools and external integrations
+- Configured by environment variables (`MCP_TRANSPORT`, `MCP_HTTP_HOST`, `MCP_HTTP_PORT`, `MCP_AUTH_TOKEN` and per-server variables)
 
 ### Embedded Mode
 
 **Purpose**: Run within VS Code extension host process
 
-**Transport**: In-memory (InMemoryTransport)
+**Transport**: Streamable HTTP on `127.0.0.1` (never another interface), bearer token mandatory
 
-**Entry Point**: `src/embedded.ts`
+**Entry Point**: `src/embedded.ts` (`activateGitServer` / `activateCodeRagServer` take `{ port, authToken, ... }` and return `{ port, close }`)
 
 **Characteristics**:
-- Shares extension's process
-- Direct function calls (no stdio overhead)
-- Access to VS Code APIs
+- Shares the extension host process (no child process)
+- The embedded entry points do not import `vscode`; the extension passes workspace folders, settings and the token in
+- The extension registers each server with VS Code's MCP API and can write a Claude Code configuration
 - Integrated lifecycle management
+- A native crash in CodeRAG would take the whole extension host down
 
 ### Mode Abstraction
 
-The core server logic (`server.ts`) is mode-agnostic:
+The core server logic (`server/*-server.ts`, `core/`, `tools/`) is mode-agnostic:
 - No transport-specific code
 - Pure business logic
-- Tool and resource implementations
+- Tool implementations
 - Reusable across both modes
+- Each entry point builds the shared services once and registers the tools on a new `McpServer` per session (HTTP) or on one server (stdio)
+
+### Storage (server-coderag)
+
+- One SQLite file per index, opened with Node's built-in `node:sqlite` (`DatabaseSync`) through a thin adapter in
+  `vectordb/sqlite-db.ts`; there is no `better-sqlite3` dependency
+- Vectors are stored in a `vec0` virtual table from the `sqlite-vec` extension, loaded with `allowExtension`; keyword
+  search uses an FTS5 table. New databases create `vec0` with `chunk_size=256` (the default 1024 blocks the event loop
+  for seconds during bulk inserts)
+- Requires Node.js >= 22.16 (earlier 22.x lacks FTS5; tree-sitter crashes on 22.13). The VS Code extension feature-detects
+  all of this and reports CodeRAG as unavailable with the reason where it does not hold
+- Native modules (tree-sitter and its grammars, sqlite-vec) are not bundled; the extension stages them per target
+  under `dist/native` and passes `nativeModulesDir` to the server
 
 
 ## Type Safety & TypeScript Configuration
@@ -361,10 +368,10 @@ Use `workspace:*` protocol for all internal dependencies:
 - Vitest
 - ESLint
 - Prettier
-- Turbo
+- esbuild (a devDependency of each bundled package)
 
 **Package-Level** (specific to package needs):
-- @modelcontextprotocol/sdk
+- @modelcontextprotocol/server and @modelcontextprotocol/hono (servers, `http-host`)
 - @types/vscode (for extensions)
 - Package-specific libraries
 
@@ -382,12 +389,12 @@ Use `workspace:*` protocol for all internal dependencies:
 
 ### Package Naming
 
-**Format**: `@mcp-servers/[type]-[name]`
+**Format**: `@mcp-servers/server-[name]` for servers, `@mcp-servers/[name]` for shared packages
 
 **Examples**:
-- Servers: `@mcp-servers/server-filesystem`, `@mcp-servers/server-database`
-- Extensions: `@mcp-servers/extension-filesystem`, `@mcp-servers/extension-database`
-- Shared: `@mcp-servers/types`, `@mcp-servers/utils`
+- Servers: `@mcp-servers/server-git`, `@mcp-servers/server-coderag`
+- Extension: `mcp-servers` (unscoped, as the Marketplace requires), in `packages/vscode-extension`
+- Shared (private): `@mcp-servers/common`, `@mcp-servers/http-host`
 
 ### Code Naming
 
@@ -401,16 +408,16 @@ Use `workspace:*` protocol for all internal dependencies:
 
 ### Adding New Servers
 
-1. Create package directory: `packages/servers/server-new/`
+1. Create package directory: `packages/server-new/`
 2. Copy template structure from existing server
-3. Implement dual-mode pattern (index.ts, embedded.ts, server.ts)
+3. Implement dual-mode pattern (`standalone.ts`, `embedded.ts`, `server/`) on top of `@mcp-servers/http-host`
 4. Add comprehensive tests
 5. Update root TypeScript references
 6. Document in README
 
 ### Adding New Extensions
 
-1. Create package directory: `packages/extensions/extension-new/`
+1. Create package directory under `packages/` (today there is one extension, `packages/vscode-extension`, which hosts every server through a descriptor)
 2. Copy template structure from existing extension
 3. Implement extension activation and server manager
 4. Add VS Code commands and UI
@@ -431,12 +438,6 @@ Use `workspace:*` protocol for all internal dependencies:
 ## Performance Optimization
 
 ### Build Performance
-
-**Turbo Caching**:
-- Caches build outputs based on input hash
-- Skips unchanged packages
-- Shares cache across CI and local development
-- Dramatically reduces build times
 
 **Incremental Compilation**:
 - TypeScript project references enable incremental builds
@@ -474,13 +475,28 @@ Use `workspace:*` protocol for all internal dependencies:
 
 **Standalone Mode**:
 - Runs with user's permissions
-- File system access controlled by OS
-- Network access as needed
+- File system access is further limited by the servers: `server-git` to the repositories in `GIT_ALLOWED_REPOS`, `server-coderag` to its allowed roots
+- Network access as needed (CodeRAG sends indexed text to the configured embeddings endpoint)
 
 **Embedded Mode**:
-- Runs within VS Code sandbox
-- Limited to workspace access
-- Respects VS Code security model
+- Runs in the VS Code extension host process with the user's permissions (the extension host is not a sandbox)
+- Access limited to the workspace folders by the same server-level checks
+- Requires a bearer token; the token is never in settings, logs, URLs or generated client configuration
+
+### HTTP Transport Security
+
+All HTTP serving goes through `@mcp-servers/http-host`:
+- Binds `127.0.0.1` by default and always passes the host to `listen`; a non-loopback `MCP_HTTP_HOST` is refused unless `MCP_AUTH_TOKEN` (>= 32 characters) is set; embedded servers never bind anything but loopback
+- With a token, every request needs `Authorization: Bearer <token>` (constant-time comparison, bare `401` otherwise, token never logged)
+- `Host` header validation on loopback binds; a foreign `Origin` is rejected with `403` unless listed in `allowedOrigins`; `POST` requires `application/json` (`415`)
+- Limits: 64 concurrent sessions (`429`), 30 minutes session idle timeout, 4 MiB request bodies (`413`)
+- Not provided: TLS, rate limiting, OAuth, per-tool authorization
+
+### Path Confinement
+
+- `server-git`: repository allow-list, path validation with symlinks resolved, git argument validation (no option or pathspec injection, remotes limited to configured names unless `GIT_ALLOW_REMOTE_URLS`), and an allow-listed environment for git processes
+- `server-coderag`: `PathGuard` limits every tool that reads or writes a path to the working directory or workspace folders, the include-glob bases and `CODERAG_ALLOWED_ROOTS`, with symlinks resolved
+- In the extension, settings that widen file access or redirect data (`allowedRoots`, include patterns, `embeddingUrl`) are machine scoped so a repository's `.vscode/settings.json` cannot set them
 
 ### Dependency Security
 
@@ -677,7 +693,7 @@ Each package includes:
 
 **npm Registry**:
 - Publish to public npm registry
-- Scoped packages under @mcp-servers
+- Server packages under the @mcp-servers scope; the shared packages are private and bundled into them
 - Semantic versioning
 - Automated via CI/CD
 
@@ -707,8 +723,8 @@ Each package includes:
 - Version compatibility
 
 **Custom Transports**:
-- HTTP transport for web servers
 - WebSocket for real-time communication
+- TLS for non-loopback HTTP (today put the server behind a reverse proxy)
 - Custom transport implementations
 
 ### Performance Enhancements
@@ -748,7 +764,7 @@ Each package includes:
 
 ### 3. Developer Experience
 
-- **Fast Builds**: Turbo caching and parallelization
+- **Fast Builds**: Incremental `tsc -b`, esbuild bundling and parallel `pnpm -r` execution
 - **Hot Reload**: Watch mode for rapid iteration
 - **Type Safety**: Catch errors at compile time
 - **Clear Errors**: Meaningful error messages
