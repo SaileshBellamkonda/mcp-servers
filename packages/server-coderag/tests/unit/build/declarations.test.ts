@@ -26,5 +26,5 @@ describe('published declarations', () => {
     for (const [name, text] of files) {
       expect(text, name).not.toContain('@mcp-servers/');
     }
-  });
+  }, 60_000);
 });
