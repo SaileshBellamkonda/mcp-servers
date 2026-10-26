@@ -37,12 +37,14 @@
         "mcpServers.git.autoStart": {
           "type": "boolean",
           "default": true,
-          "description": "Auto-start Git MCP Server on workspace open"
+          "description": "Start the Git MCP server automatically when VS Code opens with a workspace folder, and when a folder is opened later."
         },
         "mcpServers.git.port": {
           "type": "integer",
           "default": 3000,
-          "description": "HTTP port for the Git MCP Server"
+          "description": "Port of the Git MCP server on 127.0.0.1. Changing it restarts a running server. 0 picks a free port (the URL then changes on every start).",
+          "minimum": 0,
+          "maximum": 65535
         }
       }
     },
@@ -50,24 +52,85 @@
       {
         "command": "mcpServers.startServer",
         "title": "Start Server",
-        "category": "MCP Servers"
+        "category": "MCP Servers",
+        "icon": "$(play)"
       },
       {
         "command": "mcpServers.stopServer",
         "title": "Stop Server",
-        "category": "MCP Servers"
+        "category": "MCP Servers",
+        "icon": "$(debug-stop)"
       },
       {
         "command": "mcpServers.restartServer",
         "title": "Restart Server",
-        "category": "MCP Servers"
+        "category": "MCP Servers",
+        "icon": "$(debug-restart)"
       },
       {
         "command": "mcpServers.copyServerUrl",
         "title": "Copy Server URL",
-        "category": "MCP Servers"
+        "category": "MCP Servers",
+        "icon": "$(copy)"
       }
     ],
+    "menus": {
+      "commandPalette": [
+        {
+          "command": "mcpServers.startServer",
+          "when": "mcpServers.anyStartable"
+        },
+        {
+          "command": "mcpServers.stopServer",
+          "when": "mcpServers.anyRunning"
+        },
+        {
+          "command": "mcpServers.restartServer",
+          "when": "mcpServers.anyRunning"
+        },
+        {
+          "command": "mcpServers.copyServerUrl",
+          "when": "mcpServers.anyRunning"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "mcpServers.startServer",
+          "when": "view == mcpServers && (viewItem == server.stopped || viewItem == server.error)",
+          "group": "inline@1"
+        },
+        {
+          "command": "mcpServers.stopServer",
+          "when": "view == mcpServers && viewItem == server.running",
+          "group": "inline@2"
+        },
+        {
+          "command": "mcpServers.restartServer",
+          "when": "view == mcpServers && viewItem == server.running",
+          "group": "inline@3"
+        },
+        {
+          "command": "mcpServers.startServer",
+          "when": "view == mcpServers && (viewItem == server.stopped || viewItem == server.error)",
+          "group": "1_lifecycle@1"
+        },
+        {
+          "command": "mcpServers.stopServer",
+          "when": "view == mcpServers && viewItem == server.running",
+          "group": "1_lifecycle@2"
+        },
+        {
+          "command": "mcpServers.restartServer",
+          "when": "view == mcpServers && viewItem == server.running",
+          "group": "1_lifecycle@3"
+        },
+        {
+          "command": "mcpServers.copyServerUrl",
+          "when": "view == mcpServers && viewItem == server.running",
+          "group": "2_copy@1"
+        }
+      ]
+    },
     "viewsContainers": {
       "activitybar": [
         {

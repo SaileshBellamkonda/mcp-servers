@@ -1,6 +1,61 @@
 import { vi } from 'vitest';
 
 // ---------------------------------------------------------------------------
+// Test controls: the mock has no real workspace, so tests drive it through `__test`.
+// ---------------------------------------------------------------------------
+type ConfigListener = (event: { affectsConfiguration(section: string): boolean }) => void;
+type FolderListener = (event: { added: unknown[]; removed: unknown[] }) => void;
+
+const configListeners: ConfigListener[] = [];
+const folderListeners: FolderListener[] = [];
+const settings = new Map<string, unknown>();
+
+function disposableFor<T>(list: T[], listener: T): { dispose: () => void } {
+  list.push(listener);
+  return {
+    dispose: () => {
+      const index = list.indexOf(listener);
+      if (index >= 0) list.splice(index, 1);
+    },
+  };
+}
+
+export const __test = {
+  /** Replaces the workspace folders (an empty list means "no folder open"). */
+  setFolders(paths: string[]): void {
+    workspace.workspaceFolders = paths.length === 0 ? undefined : paths.map((fsPath, index) => ({ uri: { fsPath, scheme: 'file' }, name: `ws-${String(index)}`, index }));
+  },
+  /** Sets settings by full key, e.g. `{ 'mcpServers.git.port': 4000 }`. */
+  setSettings(values: Record<string, unknown>): void {
+    for (const [key, value] of Object.entries(values)) settings.set(key, value);
+  },
+  /** Fires onDidChangeConfiguration for the given full setting keys. */
+  fireConfigChange(keys: string[]): void {
+    const event = {
+      affectsConfiguration: (section: string): boolean =>
+        keys.some((key) => key === section || key.startsWith(`${section}.`) || section.startsWith(`${key}.`)),
+    };
+    [...configListeners].forEach((listener) => {
+      listener(event);
+    });
+  },
+  /** Fires onDidChangeWorkspaceFolders (set the folders first with setFolders). */
+  fireFolderChange(): void {
+    [...folderListeners].forEach((listener) => {
+      listener({ added: [], removed: [] });
+    });
+  },
+  listenerCounts: () => ({ config: configListeners.length, folders: folderListeners.length }),
+  /** Back to a pristine workspace: no folders, no settings, no listeners. */
+  reset(): void {
+    settings.clear();
+    configListeners.length = 0;
+    folderListeners.length = 0;
+    workspace.workspaceFolders = undefined;
+  },
+};
+
+// ---------------------------------------------------------------------------
 // EventEmitter — mirrors vscode.EventEmitter<T>
 // ---------------------------------------------------------------------------
 export class EventEmitter<T = void> {
@@ -35,7 +90,9 @@ export const window = {
     dispose: vi.fn(),
   })),
   showErrorMessage: vi.fn(),
+  showWarningMessage: vi.fn(),
   showInformationMessage: vi.fn(),
+  showQuickPick: vi.fn(),
   createStatusBarItem: vi.fn(() => ({
     text: '' as string,
     tooltip: '' as string,
@@ -44,26 +101,32 @@ export const window = {
     hide: vi.fn(),
     dispose: vi.fn(),
   })),
-  createTreeView: vi.fn(() => ({ dispose: vi.fn() })),
+  createTreeView: vi.fn((_id: string, _options: unknown) => ({ dispose: vi.fn() })),
 };
 
 // ---------------------------------------------------------------------------
 // workspace
 // ---------------------------------------------------------------------------
 export const workspace = {
-  getConfiguration: vi.fn(() => ({
-    get: vi.fn((_key: string, defaultValue?: unknown) => defaultValue),
+  getConfiguration: vi.fn((section?: string) => ({
+    get: vi.fn((key: string, defaultValue?: unknown) => {
+      const full = section ? `${section}.${key}` : key;
+      return settings.has(full) ? settings.get(full) : defaultValue;
+    }),
   })),
   workspaceFolders: undefined as
-    | Array<{ uri: { fsPath: string }; name: string; index: number }>
+    | Array<{ uri: { fsPath: string; scheme: string }; name: string; index: number }>
     | undefined,
+  workspaceFile: undefined as { toString(): string } | undefined,
+  onDidChangeConfiguration: vi.fn((listener: ConfigListener) => disposableFor(configListeners, listener)),
+  onDidChangeWorkspaceFolders: vi.fn((listener: FolderListener) => disposableFor(folderListeners, listener)),
 };
 
 // ---------------------------------------------------------------------------
 // commands
 // ---------------------------------------------------------------------------
 export const commands = {
-  registerCommand: vi.fn(() => ({ dispose: vi.fn() })),
+  registerCommand: vi.fn((_id: string, _handler: (...args: unknown[]) => unknown) => ({ dispose: vi.fn() })),
   executeCommand: vi.fn(),
 };
 
@@ -96,6 +159,9 @@ export enum TreeItemCollapsibleState {
 export class TreeItem {
   label: string;
   collapsibleState: TreeItemCollapsibleState;
+  id?: string;
+  description?: string;
+  tooltip?: string;
   iconPath?: unknown;
   contextValue?: string;
   command?: unknown;
@@ -109,6 +175,13 @@ export class TreeItem {
   }
 }
 
-export class ThemeIcon {
+export class ThemeColor {
   constructor(public readonly id: string) {}
+}
+
+export class ThemeIcon {
+  constructor(
+    public readonly id: string,
+    public readonly color?: ThemeColor
+  ) {}
 }

@@ -243,22 +243,31 @@ function createVscodeStub(state) {
     dispose() { this.listeners = []; }
   }
   const settings = state.settings;
+  const listenerList = () => {
+    const listeners = [];
+    return (listener) => { listeners.push(listener); return { dispose() { listeners.splice(listeners.indexOf(listener), 1); } }; };
+  };
   return {
     EventEmitter,
     StatusBarAlignment: { Left: 1, Right: 2 },
     TreeItemCollapsibleState: { None: 0, Collapsed: 1, Expanded: 2 },
     TreeItem: class { constructor(label, collapsibleState) { this.label = label; this.collapsibleState = collapsibleState; } },
-    ThemeIcon: class { constructor(id) { this.id = id; } },
+    ThemeColor: class { constructor(id) { this.id = id; } },
+    ThemeIcon: class { constructor(id, color) { this.id = id; this.color = color; } },
     window: {
       createOutputChannel: () => ({ appendLine: (line) => { state.output.push(line); }, dispose() {} }),
       showErrorMessage: (message) => { state.errors.push(message); return Promise.resolve(undefined); },
+      showWarningMessage: (message) => { state.warnings.push(message); return Promise.resolve(undefined); },
       showInformationMessage: () => Promise.resolve(undefined),
+      showQuickPick: () => Promise.resolve(undefined),
       createStatusBarItem: () => ({ text: '', tooltip: '', command: undefined, show() {}, hide() {}, dispose() {} }),
-      createTreeView: () => ({ dispose() {} }),
+      createTreeView: (_id, options) => { state.tree = options.treeDataProvider; return { dispose() {} }; },
     },
     workspace: {
       workspaceFolders: state.folders,
-      getConfiguration: () => ({ get: (key, fallback) => (Object.hasOwn(settings, key) ? settings[key] : fallback) }),
+      getConfiguration: (section) => ({ get: (key, fallback) => (Object.hasOwn(settings, `${section}.${key}`) ? settings[`${section}.${key}`] : fallback) }),
+      onDidChangeConfiguration: listenerList(),
+      onDidChangeWorkspaceFolders: listenerList(),
     },
     commands: {
       registerCommand: (id, handler) => { state.commands.set(id, handler); return { dispose() { state.commands.delete(id); } }; },
@@ -268,14 +277,50 @@ function createVscodeStub(state) {
   };
 }
 
+/** A port nothing listens on right now. */
+function freePort() {
+  return new Promise((resolve, reject) => {
+    const server = require('node:net').createServer();
+    server.once('error', reject);
+    server.listen(0, '127.0.0.1', () => { const { port } = server.address(); server.close(() => { resolve(port); }); });
+  });
+}
+
+function assertClosed(port, what) {
+  return new Promise((resolve, reject) => {
+    const socket = require('node:net').connect(port, '127.0.0.1');
+    socket.once('connect', () => { socket.destroy(); reject(new Error(`port ${String(port)} still open ${what}`)); });
+    socket.once('error', () => { resolve(); });
+  });
+}
+
+async function waitFor(what, predicate, timeoutMs = 20000) {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    const value = await predicate();
+    if (value) return value;
+    if (Date.now() > deadline) throw new Error(`timed out waiting for ${what}`);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+}
+
 async function runExtension() {
   const bundle = path.resolve(arg('bundle'));
   const work = fs.mkdtempSync(path.join(os.tmpdir(), 'bundle-smoke-ext-'));
   const repo = path.join(work, 'repo');
   fs.mkdirSync(repo);
   childProcess.execFileSync('git', ['init', '-q'], { cwd: repo, stdio: 'ignore' });
-  const state = { settings: { port: 0, autoStart: false }, folders: [{ uri: { fsPath: repo }, name: 'repo', index: 0 }], output: [], errors: [], commands: new Map(), clipboard: [] };
+  const port = await freePort();
+  const state = {
+    settings: { 'mcpServers.git.port': port, 'mcpServers.git.autoStart': true },
+    folders: [{ uri: { fsPath: repo, scheme: 'file' }, name: 'repo', index: 0 }],
+    output: [], errors: [], warnings: [], commands: new Map(), clipboard: [], tree: undefined,
+  };
   const stub = createVscodeStub(state);
+  const treeState = () => {
+    const [element] = state.tree.getChildren();
+    return element ? state.tree.getTreeItem(element) : undefined;
+  };
 
   // Resolve `vscode` to the stub for any module the bundle loads.
   const originalLoad = Module._load;
@@ -295,26 +340,51 @@ async function runExtension() {
       extension.activate(context);
       const commands = [...state.commands.keys()].sort();
       assert(commands.includes('mcpServers.startServer') && commands.includes('mcpServers.stopServer'), `commands registered: ${commands.join(', ')}`);
+      assert(state.tree, 'no tree view was created');
       return { commands };
     });
-    // Start the git server through the registered command and prove it listens, authenticated, then stop it.
-    await step('extension.start_stop', async () => {
-      await state.commands.get('mcpServers.startServer')('git');
-      const started = state.output.find((line) => /started on port (\d+)/.test(line));
-      assert(started, `no "started" line in the output channel: ${state.output.join(' | ')} ${state.errors.join(' | ')}`);
-      const port = Number(/started on port (\d+)/.exec(started)[1]);
+    // autoStart is on and the workspace folder is a real git repository: the git server must come up by itself on
+    // the configured port and refuse unauthenticated requests.
+    await step('extension.autostart', async () => {
+      const item = await waitFor('the git server to run', () => {
+        const current = treeState();
+        assert(current?.contextValue !== 'server.error', `git server failed: ${state.errors.join(' | ')} ${state.output.join(' | ')}`);
+        return current?.contextValue === 'server.running' ? current : undefined;
+      });
+      assert(item.description === `running on port ${String(port)}`, `unexpected description: ${item.description}`);
       const unauthenticated = await rpc(port, INITIALIZE);
       assert(unauthenticated.status === 401, `unauthenticated initialize returned ${String(unauthenticated.status)}`);
-      await state.commands.get('mcpServers.stopServer')('git');
-      await new Promise((resolve, reject) => {
-        const socket = require('node:net').connect(port, '127.0.0.1');
-        socket.once('connect', () => { socket.destroy(); reject(new Error('port still open after stopServer')); });
-        socket.once('error', () => { resolve(); });
-      });
+      assert(state.errors.length === 0, `unexpected error messages: ${state.errors.join(' | ')}`);
+    });
+    await step('extension.copy_url', async () => {
+      await state.commands.get('mcpServers.copyServerUrl')();
+      assert(state.clipboard.at(-1) === `http://127.0.0.1:${String(port)}/mcp`, `clipboard: ${state.clipboard.join(' | ')}`);
+    });
+    // A port held by someone else must surface as one clear error from the awaited activation, and the server must
+    // start once the port is free again.
+    await step('extension.port_in_use', async () => {
+      await state.commands.get('mcpServers.stopServer')();
+      await assertClosed(port, 'after stopServer');
+      const squatter = require('node:net').createServer();
+      await new Promise((resolve, reject) => { squatter.once('error', reject); squatter.listen(port, '127.0.0.1', resolve); });
+      try {
+        await state.commands.get('mcpServers.startServer')();
+        assert(treeState()?.contextValue === 'server.error', `expected server.error, got ${String(treeState()?.contextValue)}`);
+        assert(state.errors.length === 1 && state.errors[0].includes(`Port ${String(port)} is already in use`), `error messages: ${state.errors.join(' | ')}`);
+      } finally {
+        await new Promise((resolve) => { squatter.close(resolve); });
+      }
+      await state.commands.get('mcpServers.startServer')();
+      assert(treeState()?.contextValue === 'server.running', `expected server.running after retry, got ${String(treeState()?.contextValue)}`);
+    });
+    // VS Code calls deactivate(), then disposes the subscriptions.
+    await step('extension.deactivate', async () => {
+      await extension.deactivate();
+      await assertClosed(port, 'after deactivate()');
+      assert(treeState()?.contextValue === 'server.stopped', `expected server.stopped, got ${String(treeState()?.contextValue)}`);
     });
     await step('extension.dispose', () => {
       for (const disposable of context.subscriptions) disposable.dispose();
-      extension.deactivate();
     });
   } finally {
     Module._load = originalLoad;

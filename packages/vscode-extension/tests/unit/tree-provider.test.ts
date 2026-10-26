@@ -1,169 +1,78 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
 import { McpServersTreeProvider } from '../../src/tree-provider';
-import type { ServerRegistry } from '../../src/server-registry';
-import type { IManagedServer, ServerStatus } from '../../src/managed-server';
+import { makeRegistry } from './fake-servers';
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-function makeMockRegistry(servers: IManagedServer[] = []): {
-  registry: ServerRegistry;
-  triggerChange: () => void;
-} {
-  const listeners: (() => void)[] = [];
-  const registry = {
-    servers,
-    onDidChange: (listener: () => void): { dispose: () => void } => {
-      listeners.push(listener);
-      return { dispose: vi.fn() };
-    },
-    register: vi.fn(),
-    start: vi.fn(),
-    stop: vi.fn(),
-    stopAll: vi.fn(),
-    dispose: vi.fn(),
-  } as unknown as ServerRegistry;
-
-  return {
-    registry,
-    triggerChange: () => listeners.forEach(l => l()),
-  };
-}
-
-function makeMockServer(
-  overrides: Partial<IManagedServer> = {}
-): IManagedServer {
-  return {
-    id: 'test',
-    displayName: 'Test Server',
-    status: 'stopped' as ServerStatus,
-    port: undefined,
-    onDidChangeStatus: vi.fn(),
-    start: vi.fn(),
-    stop: vi.fn(),
-    ...overrides,
-  } as unknown as IManagedServer;
-}
-
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
 describe('McpServersTreeProvider', () => {
-  // ---- getChildren --------------------------------------------------------
-  describe('getChildren()', () => {
-    it('returns all servers from the registry', () => {
-      const servers = [
-        makeMockServer({ id: 'git' }),
-        makeMockServer({ id: 'other' }),
-      ];
-      const { registry } = makeMockRegistry(servers);
-      const provider = new McpServersTreeProvider(registry);
-      expect(provider.getChildren()).toEqual(servers);
+  it('lists every server as a flat root and gives them no children', async () => {
+    const { registry, servers } = await makeRegistry([['git', 'stopped'], ['files', 'stopped']]);
+    const tree = new McpServersTreeProvider(registry);
+    expect(tree.getChildren()).toEqual([servers['git']?.adapter, servers['files']?.adapter]);
+    expect(tree.getChildren(servers['git']?.adapter)).toEqual([]);
+  });
+
+  describe('tree items', () => {
+    const cases = [
+      ['stopped', 'server.stopped', 'circle-outline', 'stopped'],
+      ['starting', 'server.starting', 'loading~spin', 'starting...'],
+      ['running', 'server.running', 'circle-filled', 'running on port 4000'],
+      ['error', 'server.error', 'error', 'error'],
+      ['unavailable', 'server.unavailable', 'warning', 'unavailable'],
+    ] as const;
+
+    it.each(cases)('%s: contextValue %s, icon %s, description "%s"', async (state, contextValue, icon, description) => {
+      const { registry, servers } = await makeRegistry([['git', state, 4000]]);
+      const item = new McpServersTreeProvider(registry).getTreeItem(servers['git']!.adapter);
+      expect(item.label).toBe('GIT');
+      expect(item.contextValue).toBe(contextValue);
+      expect((item.iconPath as vscode.ThemeIcon).id).toBe(icon);
+      expect(item.description).toBe(description);
+      expect(item.collapsibleState).toBe(vscode.TreeItemCollapsibleState.None);
+      expect(item.id).toBe('git');
     });
 
-    it('returns empty array when no servers registered', () => {
-      const { registry } = makeMockRegistry([]);
-      const provider = new McpServersTreeProvider(registry);
-      expect(provider.getChildren()).toEqual([]);
+    it('colours the state icons', async () => {
+      const { registry, servers } = await makeRegistry([['a', 'running'], ['b', 'error'], ['c', 'unavailable'], ['d', 'stopped']]);
+      const tree = new McpServersTreeProvider(registry);
+      const color = (id: string): string | undefined => ((tree.getTreeItem(servers[id]!.adapter).iconPath as vscode.ThemeIcon).color as vscode.ThemeColor | undefined)?.id;
+      expect(color('a')).toBe('testing.iconPassed');
+      expect(color('b')).toBe('testing.iconFailed');
+      expect(color('c')).toBe('list.warningForeground');
+      expect(color('d')).toBeUndefined();
+    });
+
+    it('the tooltip of a running server shows its URL', async () => {
+      const { registry, servers } = await makeRegistry([['git', 'running', 4000]]);
+      const tooltip = new McpServersTreeProvider(registry).getTreeItem(servers['git']!.adapter).tooltip;
+      expect(tooltip).toContain('State: running');
+      expect(tooltip).toContain('http://127.0.0.1:4000/mcp');
+    });
+
+    it('the tooltip of an errored or unavailable server shows the reason', async () => {
+      const { registry, servers } = await makeRegistry([['a', 'error'], ['b', 'unavailable']]);
+      const tree = new McpServersTreeProvider(registry);
+      expect(tree.getTreeItem(servers['a']!.adapter).tooltip).toContain('Reason: A exploded');
+      expect(tree.getTreeItem(servers['b']!.adapter).tooltip).toContain('Reason: B cannot run here');
+    });
+
+    it('never shows a token', async () => {
+      const { registry, servers } = await makeRegistry([['git', 'running']]);
+      const token = servers['git']!.activate.mock.calls[0]?.[0] as { authToken: string };
+      const item = new McpServersTreeProvider(registry).getTreeItem(servers['git']!.adapter);
+      expect(JSON.stringify(item)).not.toContain(token.authToken);
     });
   });
 
-  // ---- getTreeItem — icons ------------------------------------------------
-  describe('getTreeItem() — icon', () => {
-    it.each([
-      ['stopped', 'circle-outline'],
-      ['starting', 'loading~spin'],
-      ['running', 'circle-filled'],
-      ['error', 'error'],
-    ] as [ServerStatus, string][])(
-      'sets icon "%s" for status "%s"',
-      (status, expectedIcon) => {
-        const { registry } = makeMockRegistry();
-        const provider = new McpServersTreeProvider(registry);
-        const server = makeMockServer({ status });
-        const item = provider.getTreeItem(server);
-        expect((item.iconPath as vscode.ThemeIcon).id).toBe(expectedIcon);
-      }
-    );
-  });
-
-  // ---- getTreeItem — label ------------------------------------------------
-  describe('getTreeItem() — label', () => {
-    it('includes displayName in the label', () => {
-      const { registry } = makeMockRegistry();
-      const provider = new McpServersTreeProvider(registry);
-      const server = makeMockServer({
-        displayName: 'Git MCP Server',
-        status: 'stopped',
-      });
-      const item = provider.getTreeItem(server);
-      expect(item.label as string).toContain('Git MCP Server');
-    });
-
-    it('includes status in the label', () => {
-      const { registry } = makeMockRegistry();
-      const provider = new McpServersTreeProvider(registry);
-      const server = makeMockServer({ status: 'running' });
-      const item = provider.getTreeItem(server);
-      expect(item.label as string).toContain('running');
-    });
-
-    it('includes port in the label when status is running', () => {
-      const { registry } = makeMockRegistry();
-      const provider = new McpServersTreeProvider(registry);
-      const server = makeMockServer({ status: 'running', port: 3000 });
-      const item = provider.getTreeItem(server);
-      expect(item.label as string).toContain('3000');
-    });
-
-    it('does not include port in label when status is stopped', () => {
-      const { registry } = makeMockRegistry();
-      const provider = new McpServersTreeProvider(registry);
-      const server = makeMockServer({ status: 'stopped', port: undefined });
-      const item = provider.getTreeItem(server);
-      expect(item.label as string).not.toMatch(/port/i);
-    });
-  });
-
-  // ---- getTreeItem — contextValue -----------------------------------------
-  describe('getTreeItem() — contextValue', () => {
-    it.each([
-      ['stopped'],
-      ['starting'],
-      ['running'],
-      ['error'],
-    ] as [ServerStatus][])(
-      'sets contextValue to status "%s"',
-      (status) => {
-        const { registry } = makeMockRegistry();
-        const provider = new McpServersTreeProvider(registry);
-        const server = makeMockServer({ status });
-        const item = provider.getTreeItem(server);
-        expect(item.contextValue).toBe(status);
-      }
-    );
-  });
-
-  // ---- onDidChange integration --------------------------------------------
-  describe('onDidChangeTreeData', () => {
-    it('fires when registry fires onDidChange', () => {
-      const { registry, triggerChange } = makeMockRegistry();
-      const provider = new McpServersTreeProvider(registry);
-      const listener = vi.fn();
-      provider.onDidChangeTreeData!(listener);
-      triggerChange();
-      expect(listener).toHaveBeenCalledOnce();
-    });
-
-    it('fires multiple times for multiple registry change events', () => {
-      const { registry, triggerChange } = makeMockRegistry();
-      const provider = new McpServersTreeProvider(registry);
-      const listener = vi.fn();
-      provider.onDidChangeTreeData!(listener);
-      triggerChange();
-      triggerChange();
-      expect(listener).toHaveBeenCalledTimes(2);
-    });
+  it('refreshes the tree when a server changes state and stops after dispose()', async () => {
+    const { registry, servers } = await makeRegistry([['git', 'stopped']]);
+    const tree = new McpServersTreeProvider(registry);
+    const listener = vi.fn();
+    tree.onDidChangeTreeData(listener);
+    await servers['git']!.adapter.start();
+    expect(listener).toHaveBeenCalled();
+    listener.mockClear();
+    tree.dispose();
+    await servers['git']!.adapter.stop();
+    expect(listener).not.toHaveBeenCalled();
   });
 });
