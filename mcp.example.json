@@ -1,0 +1,42 @@
+{
+  "mcpServers": {
+    "git-stdio": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["/absolute/path/to/mcp-servers/packages/server-git/dist/standalone.js"],
+      "env": {
+        "GIT_ALLOWED_REPOS": "/absolute/path/to/repo1;/absolute/path/to/repo2"
+      }
+    },
+    "coderag-stdio": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["/absolute/path/to/mcp-servers/packages/server-coderag/dist/standalone.js"],
+      "env": {
+        "CODERAG_EMBEDDING_URL": "http://localhost:11434/v1",
+        "CODERAG_EMBEDDING_MODEL": "nomic-embed-text",
+        "CODERAG_EMBEDDING_API_KEY": "${CODERAG_EMBEDDING_API_KEY:-}",
+        "CODERAG_DB_PATH": "/absolute/path/to/coderag.db"
+      }
+    },
+    "git-http": {
+      "type": "http",
+      "url": "http://127.0.0.1:3000/mcp",
+      "headers": {
+        "Authorization": "Bearer ${MCP_AUTH_TOKEN}"
+      }
+    },
+    "coderag-http": {
+      "type": "http",
+      "url": "http://127.0.0.1:3100/mcp",
+      "headers": {
+        "Authorization": "Bearer ${MCP_AUTH_TOKEN}"
+      }
+    },
+    "vscode-git": {
+      "type": "http",
+      "url": "http://127.0.0.1:3000/mcp",
+      "headersHelper": "node '/path/to/globalStorage/bin/mcp-headers.js' '<scope>' --dir '/path/to/globalStorage/tokens'"
+    }
+  }
+}
