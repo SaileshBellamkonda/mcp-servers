@@ -5,6 +5,7 @@ import type { CodeRagLogger } from '../core/logger.js';
 import type { GlobConfig } from '../core/types.js';
 import { GlobMatcher } from '../core/glob-utils.js';
 import { SyncManager } from './sync-manager.js';
+import { CODE_PARSER_VERSION } from './code-parser.js';
 
 export interface SyncResult {
   indexed: number;
@@ -86,8 +87,10 @@ export async function runStartupSync(
     const rulesChanged = storedRules === null || !globConfigEqual(storedRules, currentGlobs);
     // Set by a schema migration when existing docs must be re-embedded (e.g. new heading/metadata context).
     const docsReindexRequired = db.isDocsReindexRequired();
+    // Indexed code written by an older parser (e.g. old signature rules) is re-parsed even though its files are unchanged.
+    const codeParserStale = !noCodeIndexed && db.getCodeParserVersion() !== CODE_PARSER_VERSION;
 
-    logger.info(`Startup sync: rules_changed=${String(rulesChanged)}, no_docs=${String(noDocsIndexed)}, no_code=${String(noCodeIndexed)}, docs_reindex=${String(docsReindexRequired)}`);
+    logger.info(`Startup sync: rules_changed=${String(rulesChanged)}, no_docs=${String(noDocsIndexed)}, no_code=${String(noCodeIndexed)}, docs_reindex=${String(docsReindexRequired)}, code_parser_stale=${String(codeParserStale)}`);
 
     const docsMatcher = new GlobMatcher(currentGlobs.docsInclude, currentGlobs.docsExclude, cwd, config.useGitignore);
     const codeMatcher = new GlobMatcher(currentGlobs.codeInclude, currentGlobs.codeExclude, cwd, config.useGitignore);
@@ -106,11 +109,13 @@ export async function runStartupSync(
       if (docsReindexRequired && docsResult.failed === 0) db.clearDocsReindexRequired();
     }
 
-    if (rulesChanged || noCodeIndexed) {
-      logger.info('Scanning code...');
-      const codeResult = await indexer.scanCode(false);
+    if (rulesChanged || noCodeIndexed || codeParserStale) {
+      logger.info(codeParserStale ? 'Scanning code (parser version changed, forced re-parse)...' : 'Scanning code...');
+      const codeResult = await indexer.scanCode(codeParserStale);
       logger.info(`Code scan: ${String(codeResult.indexed)} indexed, ${String(codeResult.skipped)} skipped, ${String(codeResult.failed)} failed`);
       db.setLastSyncAt('code', new Date());
+      // A failed forced scan leaves the marker unset, so the next startup tries again.
+      if (!codeParserStale || codeResult.failed === 0) db.setCodeParserVersion(CODE_PARSER_VERSION);
     }
 
     if (!rulesChanged && !noDocsIndexed) {

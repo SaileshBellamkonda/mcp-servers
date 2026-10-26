@@ -4,6 +4,13 @@ import path from 'node:path';
 import type { CodeChunk, SymbolType } from '../core/types.js';
 import { getLanguageByExtension, SUPPORTED_LANGUAGES } from './languages.js';
 
+/**
+ * Version of what `CodeParser` stores per symbol (signature rules, symbol selection). Bump it when the output for an
+ * unchanged file would differ: the next startup sync then re-parses every indexed code file.
+ * 2: signatures come from the tree-sitter `body` field instead of the first `=>` or `{` in the text.
+ */
+export const CODE_PARSER_VERSION = 2;
+
 let defaultRequire: NodeJS.Require | undefined;
 
 export interface CodeParserOptions {
@@ -29,6 +36,7 @@ interface TSNode {
   parent: TSNode | null;
   childCount: number;
   child(index: number): TSNode | null;
+  childForFieldName(fieldName: string): TSNode | null;
 }
 
 interface TSCapture {
@@ -199,7 +207,7 @@ export class CodeParser {
       const content = source.slice(symbolNode.startIndex, symbolNode.endIndex);
       const startLine = symbolNode.startPosition.row + 1;
       const endLine = symbolNode.endPosition.row + 1;
-      const signature = extractSignature(content, lang);
+      const signature = extractSignature(symbolNode, source);
       const parentSymbol = findParentSymbol(symbolNode, source, lang);
 
       chunks.push({
@@ -223,26 +231,55 @@ export class CodeParser {
   }
 }
 
-function extractSignature(content: string, lang: string): string {
-  const braceIdx = content.indexOf('{');
-  switch (lang) {
-    case 'python': {
-      const colonIdx = content.indexOf(':');
-      if (colonIdx === -1) return content.split('\n')[0]?.trim() ?? content;
-      return content.slice(0, colonIdx).trim().replace(/\s+/g, ' ');
+const MAX_SIGNATURE_CHARS = 200;
+
+function tidySignature(text: string): string {
+  const collapsed = text
+    .replace(/\s+/g, ' ')
+    .replace(/\( /g, '(')
+    .replace(/,? \)/g, ')')
+    .trim();
+  if (collapsed.length <= MAX_SIGNATURE_CHARS) return collapsed;
+  return `${collapsed.slice(0, MAX_SIGNATURE_CHARS - 1).trimEnd()}…`;
+}
+
+/** The `=>` token of an arrow function assigned to a variable declared by `node` (`const f = (a) => ...`). */
+function findArrowToken(node: TSNode): TSNode | null {
+  for (let i = 0; i < node.childCount; i++) {
+    const declarator = node.child(i);
+    if (declarator?.type !== 'variable_declarator') continue;
+    const value = declarator.childForFieldName('value');
+    if (value?.type !== 'arrow_function') continue;
+    for (let j = 0; j < value.childCount; j++) {
+      const token = value.child(j);
+      if (token?.type === '=>') return token;
     }
-    case 'typescript':
-    case 'javascript':
-      if (content.includes('=>')) {
-        const arrowIdx = content.indexOf('=>');
-        return content.slice(0, arrowIdx + 2).trim().replace(/\s+/g, ' ');
-      }
-      if (braceIdx === -1) return content.split('\n')[0]?.trim() ?? content;
-      return content.slice(0, braceIdx).trim().replace(/\s+/g, ' ');
-    default:
-      if (braceIdx === -1) return content.split('\n')[0]?.trim() ?? content;
-      return content.slice(0, braceIdx).trim().replace(/\s+/g, ' ');
   }
+  return null;
+}
+
+/** First child that is not a decorator: signatures start at the declaration keyword, not at `@Decorator(...)`. */
+function firstNonDecoratorStart(node: TSNode): number {
+  for (let i = 0; i < node.childCount; i++) {
+    const child = node.child(i);
+    if (child && child.type !== 'decorator') return child.startIndex;
+  }
+  return node.startIndex;
+}
+
+/**
+ * The declaration text from the symbol node's start up to its `body` field child (arrow functions assigned to a
+ * variable: up to their own `=>`), whitespace collapsed and capped at 200 characters. A node without a body
+ * (struct declarations in Go, abstract methods) falls back to its first line.
+ */
+function extractSignature(node: TSNode, source: string): string {
+  const arrow = findArrowToken(node);
+  if (arrow) return tidySignature(source.slice(node.startIndex, arrow.endIndex));
+  const body = node.childForFieldName('body');
+  if (body && body.startIndex > node.startIndex) {
+    return tidySignature(source.slice(firstNonDecoratorStart(node), body.startIndex));
+  }
+  return tidySignature(source.slice(node.startIndex, node.endIndex).split('\n')[0] ?? '');
 }
 
 function findParentSymbol(node: TSNode, source: string, _lang: string): string {

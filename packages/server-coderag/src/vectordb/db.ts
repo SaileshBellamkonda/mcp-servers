@@ -196,6 +196,21 @@ export class VectorDB {
     this.db.prepare("DELETE FROM db_meta WHERE key = 'docs_reindex_required'").run();
   }
 
+  /** `CODE_PARSER_VERSION` in effect when the code documents were last scanned; null when never recorded. */
+  getCodeParserVersion(): number | null {
+    const row = this.db.prepare<{ value: string }>("SELECT value FROM db_meta WHERE key = 'code_parser_version'").get();
+    const version = row ? parseInt(row.value, 10) : NaN;
+    return Number.isNaN(version) ? null : version;
+  }
+
+  setCodeParserVersion(version: number): void {
+    this.db.prepare('INSERT OR REPLACE INTO db_meta (key, value) VALUES (?, ?)').run('code_parser_version', String(version));
+  }
+
+  clearCodeParserVersion(): void {
+    this.db.prepare("DELETE FROM db_meta WHERE key = 'code_parser_version'").run();
+  }
+
   getDocumentCount(): number {
     const row = this.db.prepare<{ cnt: number }>('SELECT COUNT(*) as cnt FROM documents').get();
     return row?.cnt ?? 0;
