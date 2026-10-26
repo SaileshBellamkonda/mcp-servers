@@ -2,6 +2,7 @@ import { McpServer } from '@modelcontextprotocol/server';
 import { McpLogger } from '@mcp-servers/common';
 import { requireToken, startMcpHttpServer, type McpHttpServer } from '@mcp-servers/http-host';
 import { assertSecureEmbeddingUrl, loadConfigFromVsCode, type VsCodeConfiguration } from './core/config.js';
+import { ConfigError } from './core/types.js';
 import { resolveDimensions } from './core/dimensions.js';
 import { createStderrLogger, type CodeRagLogger } from './core/logger.js';
 import { Embedder } from './embedder/embedder.js';
@@ -38,6 +39,11 @@ export interface ActivateCodeRagServerOptions {
   watch?: boolean;
   /** Which tools to offer: `search`, `standard` (default) or `all`. */
   toolset?: string;
+  /**
+   * Longest text (characters) sent to the embedding endpoint per chunk or query; longer text is cut for embedding only.
+   * 0 disables the limit. Overrides the `embedMaxChars` configuration value (default 6000).
+   */
+  embedMaxChars?: number;
 }
 
 export interface CodeRagServerInstance {
@@ -58,10 +64,16 @@ export async function activateCodeRagServer(options: ActivateCodeRagServerOption
   }
 
   const toolset = parseToolset(options.toolset, 'toolset');
+  if (options.embedMaxChars !== undefined && !(Number.isInteger(options.embedMaxChars) && options.embedMaxChars >= 0)) {
+    throw new ConfigError('embedMaxChars must be a whole number of characters (0 disables the limit)');
+  }
   const loaded = loadConfigFromVsCode(options.vsCodeConfig, workspaceFolders);
-  const config = options.apiKey !== undefined && options.apiKey !== ''
-    ? { ...loaded, embedding: { ...loaded.embedding, apiKey: options.apiKey } }
-    : loaded;
+  const embedding = {
+    ...loaded.embedding,
+    ...(options.apiKey !== undefined && options.apiKey !== '' && { apiKey: options.apiKey }),
+    ...(options.embedMaxChars !== undefined && { maxChars: options.embedMaxChars }),
+  };
+  const config = { ...loaded, embedding };
   assertSecureEmbeddingUrl(config.embedding.url, config.embedding.apiKey, 'mcpServers.coderag.embeddingUrl', 'the embedding API key');
   const { nativeModulesDir } = options;
   // Shared services outlive every session, so they never log through a session's server.

@@ -3,6 +3,11 @@ export interface EmbeddingConfig {
   model: string;
   apiKey?: string | undefined;
   batchSize: number;
+  /**
+   * Longest text (UTF-16 code units) sent to the embedding endpoint; longer texts are cut before the request, the stored
+   * text is not. 0 or unset: no limit. The configuration loaders default it to 6000.
+   */
+  maxChars?: number | undefined;
 }
 
 export interface GlobConfig {

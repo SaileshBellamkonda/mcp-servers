@@ -32,6 +32,7 @@
         "CODERAG_EMBEDDING_API_KEY": "",
         "CODERAG_EMBEDDING_DIM": "768",
         "CODERAG_DB_PATH": "/path/to/coderag.db",
+        "CODERAG_EMBED_MAX_CHARS": "6000",
         "CODERAG_CHUNK_SIZE": "500",
         "CODERAG_TOP_K": "5",
         "CODERAG_USE_GITIGNORE": "true",

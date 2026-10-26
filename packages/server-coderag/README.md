@@ -66,6 +66,7 @@ are watched for changes unless `CODERAG_WATCH=0`. See [Freshness](#freshness).
 | `CODERAG_DB_PATH` | required | Path of the SQLite database file |
 | `CODERAG_EMBEDDING_API_KEY` | unset | Sent as `Authorization: Bearer <key>` to the embeddings endpoint; omit for Ollama. With a key, the URL must be `https:` or `http:` to localhost |
 | `CODERAG_EMBEDDING_DIM` | `768` | Vector dimensions; must match the model. Only used for a new database, see [Storage](#storage) |
+| `CODERAG_EMBED_MAX_CHARS` | `6000` | Longest text sent to the embeddings endpoint per chunk or query, in characters. Longer chunks are cut for embedding only (at a line break when possible); the stored text and the keyword index stay complete. `0` disables the limit. Embedded: the `embedMaxChars` option or the extension setting `mcpServers.coderag.embedMaxChars` |
 | `CODERAG_CHUNK_SIZE` | `500` | Target size of a text chunk in characters (not related to the vec0 `chunk_size` below) |
 | `CODERAG_TOP_K` | `5` | Default number of search results |
 | `CODERAG_USE_GITIGNORE` | `true` | Skip files matched by `.gitignore` |

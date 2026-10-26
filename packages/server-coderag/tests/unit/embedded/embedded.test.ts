@@ -156,6 +156,59 @@ describe('activateCodeRagServer', () => {
     }
   });
 
+  describe('embedMaxChars', () => {
+    async function queryLengthSeen(extra: { config?: Record<string, unknown>; option?: number }): Promise<number> {
+      const inputs: string[] = [];
+      const embeddingServer: Server = createServer((req, res) => {
+        const chunks: Buffer[] = [];
+        req.on('data', (c: Buffer) => chunks.push(c));
+        req.on('end', () => {
+          const body = JSON.parse(Buffer.concat(chunks).toString('utf8')) as { input: string[] };
+          inputs.push(...body.input);
+          res.setHeader('Content-Type', 'application/json');
+          res.end(JSON.stringify({ data: body.input.map((_t, index) => ({ index, embedding: [0.1, 0.2, 0.3, 0.4] })) }));
+        });
+      });
+      await new Promise<void>((resolve) => { embeddingServer.listen(0, '127.0.0.1', resolve); });
+      try {
+        const { port } = embeddingServer.address() as { port: number };
+        instance = await activateCodeRagServer({
+          ...base(),
+          vsCodeConfig: vsConfig({ embeddingUrl: `http://127.0.0.1:${String(port)}/v1`, ...extra.config }),
+          ...(extra.option !== undefined && { embedMaxChars: extra.option }),
+        });
+        const url = urlOf(instance);
+        const { sessionId } = await initializeSession(url, { token: TOKEN });
+        inputs.length = 0;
+        await callTool(url, sessionId ?? '', 'search', { query: 'q'.repeat(400) });
+        return Math.max(...inputs.map((t) => t.length));
+      } finally {
+        await new Promise<void>((resolve) => { embeddingServer.close(() => { resolve(); }); });
+      }
+    }
+
+    it('limits the text sent to the embedding endpoint, from the configuration', async () => {
+      expect(await queryLengthSeen({ config: { embedMaxChars: 120 } })).toBe(120);
+    });
+
+    it('the embedMaxChars option overrides the configuration', async () => {
+      expect(await queryLengthSeen({ config: { embedMaxChars: 120 }, option: 80 })).toBe(80);
+    });
+
+    it('0 disables the limit', async () => {
+      expect(await queryLengthSeen({ config: { embedMaxChars: 0 } })).toBe(400);
+    });
+
+    it('rejects a negative or fractional option before opening the database', async () => {
+      await expect(activateCodeRagServer({ ...base(), embedMaxChars: -1 })).rejects.toThrow('embedMaxChars');
+      await expect(activateCodeRagServer({ ...base(), embedMaxChars: 2.5 })).rejects.toThrow('embedMaxChars');
+    });
+
+    it('is 6000 by default, so a short query is not cut', async () => {
+      expect(await queryLengthSeen({})).toBe(400);
+    });
+  });
+
   it('close() frees the port and closes the indexer and the database', async () => {
     const closeDb = vi.spyOn(VectorDB.prototype, 'close');
     const closeIndexer = vi.spyOn(Indexer.prototype, 'close');

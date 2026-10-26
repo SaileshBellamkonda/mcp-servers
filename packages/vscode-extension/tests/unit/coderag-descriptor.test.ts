@@ -65,7 +65,7 @@ describe('coderag descriptor', () => {
   it('restarts for every setting that changes the index or where data goes, but not for autoStart', () => {
     const { descriptor } = setup();
     expect(descriptor.restartSettings).toEqual(
-      expect.arrayContaining(['embeddingUrl', 'embeddingModel', 'embeddingDim', 'chunkSize', 'topK', 'docsInclude', 'docsExclude', 'codeInclude', 'codeExclude', 'useGitignore', 'allowedRoots', 'watch', 'toolset'])
+      expect.arrayContaining(['embeddingUrl', 'embeddingModel', 'embeddingDim', 'embedMaxChars', 'chunkSize', 'topK', 'docsInclude', 'docsExclude', 'codeInclude', 'codeExclude', 'useGitignore', 'allowedRoots', 'watch', 'toolset'])
     );
     expect(descriptor.restartSettings).not.toContain('autoStart');
     expect(descriptor.restartSettings).not.toContain('port');
@@ -254,6 +254,7 @@ describe('coderag descriptor', () => {
           'mcpServers.coderag.embeddingModel': 'nomic-embed-text',
           'mcpServers.coderag.embeddingDim': 768,
           'mcpServers.coderag.chunkSize': 400,
+          'mcpServers.coderag.embedMaxChars': 3000,
           'mcpServers.coderag.topK': 7,
           'mcpServers.coderag.useGitignore': false,
           'mcpServers.coderag.docsInclude': ['docs/**/*.md'],
@@ -270,6 +271,7 @@ describe('coderag descriptor', () => {
       expect(get('embeddingModel')).toBe('nomic-embed-text');
       expect(get('embeddingDim')).toBe(768);
       expect(get('chunkSize')).toBe(400);
+      expect(get('embedMaxChars')).toBe(3000);
       expect(get('topK')).toBe(7);
       expect(get('useGitignore')).toBe(false);
       expect(get('docsInclude')).toEqual(['docs/**/*.md']);

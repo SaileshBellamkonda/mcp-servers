@@ -107,6 +107,12 @@
           "minimum": 1,
           "description": "Target size of a text chunk, in characters, when indexing documents."
         },
+        "mcpServers.coderag.embedMaxChars": {
+          "type": "integer",
+          "default": 6000,
+          "minimum": 0,
+          "description": "Longest text, in characters, sent to the embedding endpoint for one chunk or query. Longer code or document chunks are cut (at a line break when possible) for embedding only: the stored text and the keyword index stay complete. Keeps requests within the model's context limit. 0 disables the limit. Changing it restarts a running server; texts that are already indexed keep their embeddings."
+        },
         "mcpServers.coderag.topK": {
           "type": "integer",
           "default": 5,

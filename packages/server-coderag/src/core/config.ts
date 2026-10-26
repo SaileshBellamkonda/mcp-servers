@@ -11,6 +11,8 @@ const DEFAULT_BATCH_SIZE = 100;
 const DEFAULT_CHUNK_SIZE = 500;
 const DEFAULT_TOP_K = 5;
 const DEFAULT_EMBEDDING_DIM = 768;
+/** Longest text sent to the embedding endpoint, in characters; longer chunks are cut for embedding only. 0 disables the limit. */
+export const DEFAULT_EMBED_MAX_CHARS = 6000;
 
 /** Environment variables as read by {@link loadConfigFromEnv}; `process.env` satisfies it. */
 export type Env = Readonly<Record<string, string | undefined>>;
@@ -43,6 +45,14 @@ export function assertSecureEmbeddingUrl(
     `${urlSetting} uses plain http:// to ${parsed.hostname}, so the API key (${keySetting}) would be sent unencrypted. ` +
       'Use an https:// URL, point at localhost, or remove the API key.',
   );
+}
+
+function parseEmbedMaxChars(raw: string | undefined): number {
+  if (raw === undefined || raw.trim() === '') return DEFAULT_EMBED_MAX_CHARS;
+  if (!/^\d+$/.test(raw.trim())) {
+    throw new ConfigError(`CODERAG_EMBED_MAX_CHARS must be a whole number of characters (0 disables the limit), got "${raw}".`);
+  }
+  return parseInt(raw.trim(), 10);
 }
 
 /** Builds the configuration from `env` only; it never reads or writes `process.env` itself. */
@@ -88,6 +98,7 @@ export function loadConfigFromEnv(env: Env = process.env): CodeRagConfig {
       model,
       apiKey: env['CODERAG_EMBEDDING_API_KEY'] ?? undefined,
       batchSize: DEFAULT_BATCH_SIZE,
+      maxChars: parseEmbedMaxChars(env['CODERAG_EMBED_MAX_CHARS']),
     },
     dbPath,
     globs,
@@ -153,6 +164,7 @@ export function loadConfigFromVsCode(
   const topK = vsConfig.get('topK');
   const embeddingDim = vsConfig.get('embeddingDim');
   const useGitignore = vsConfig.get('useGitignore');
+  const embedMaxChars = vsConfig.get('embedMaxChars');
 
   function parseVsCodeGlob(key: string, defaults: string[]): string[] {
     const val = vsConfig.get(key);
@@ -180,6 +192,7 @@ export function loadConfigFromVsCode(
       model: model.trim(),
       apiKey: apiKey && typeof apiKey === 'string' && apiKey.trim() !== '' ? apiKey.trim() : undefined,
       batchSize: DEFAULT_BATCH_SIZE,
+      maxChars: typeof embedMaxChars === 'number' && Number.isInteger(embedMaxChars) && embedMaxChars >= 0 ? embedMaxChars : DEFAULT_EMBED_MAX_CHARS,
     },
     dbPath: dbPath.trim(),
     globs,

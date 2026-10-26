@@ -24,6 +24,7 @@ const CONFIG_SETTINGS = [
   'embeddingUrl',
   'embeddingModel',
   'embeddingDim',
+  'embedMaxChars',
   'chunkSize',
   'topK',
   'docsInclude',

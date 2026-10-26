@@ -152,7 +152,7 @@ describe('package.json contributes', () => {
 
     it('uses the key names loadConfigFromVsCode reads, plus the server options watch and toolset', () => {
       expect([...(coderag.restartSettings ?? [])].sort()).toEqual(
-        ['allowedRoots', 'chunkSize', 'codeExclude', 'codeInclude', 'docsExclude', 'docsInclude', 'embeddingDim', 'embeddingModel', 'embeddingUrl', 'toolset', 'topK', 'useGitignore', 'watch'].sort()
+        ['allowedRoots', 'chunkSize', 'codeExclude', 'codeInclude', 'docsExclude', 'docsInclude', 'embedMaxChars', 'embeddingDim', 'embeddingModel', 'embeddingUrl', 'toolset', 'topK', 'useGitignore', 'watch'].sort()
       );
     });
 
@@ -163,6 +163,14 @@ describe('package.json contributes', () => {
       expect(props['mcpServers.coderag.toolset']?.scope).toBeUndefined();
       expect(props['mcpServers.coderag.toolset']?.description).toMatch(/get_index_status/);
       expect(props['mcpServers.coderag.watch']?.description).toMatch(/restart/i);
+    });
+
+    it('contributes embedMaxChars (integer, min 0, default 6000) in the default window scope', () => {
+      const setting = props['mcpServers.coderag.embedMaxChars'];
+      expect(setting).toMatchObject({ type: 'integer', default: 6000, minimum: 0 });
+      expect(setting?.scope).toBeUndefined();
+      expect(setting?.description).toMatch(/0 disables/i);
+      expect(setting?.description).toMatch(/restart/i);
     });
 
     it('scopes every setting that widens file access or redirects data to the machine (a repository settings file cannot set them)', () => {

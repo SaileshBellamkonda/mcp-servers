@@ -19,6 +19,20 @@ function sanitizeErrorBody(body: string, apiKey: string | undefined): string {
   return text.length > MAX_ERROR_BODY_CHARS ? `${text.slice(0, MAX_ERROR_BODY_CHARS)}... (truncated)` : text;
 }
 
+/**
+ * The text as it is sent to the embedding endpoint: at most `maxChars` UTF-16 code units, cut after the last whole line
+ * when that keeps at least half of them (else mid-line), never between the halves of a surrogate pair. `undefined` or
+ * 0 means no limit.
+ */
+export function truncateForEmbedding(text: string, maxChars: number | undefined): string {
+  if (maxChars === undefined || maxChars <= 0 || text.length <= maxChars) return text;
+  const head = text.slice(0, maxChars);
+  const lastLine = head.lastIndexOf('\n');
+  if (lastLine >= maxChars / 2) return head.slice(0, lastLine);
+  const last = head.charCodeAt(head.length - 1);
+  return last >= 0xd800 && last <= 0xdbff ? head.slice(0, -1) : head;
+}
+
 export class Embedder {
   private readonly config: EmbeddingConfig;
   private readonly fetchFn: typeof fetch;
@@ -69,7 +83,7 @@ export class Embedder {
     const response = await this.fetchFn(url, {
       method: 'POST',
       headers,
-      body: JSON.stringify({ model: this.config.model, input: texts }),
+      body: JSON.stringify({ model: this.config.model, input: texts.map((text) => truncateForEmbedding(text, this.config.maxChars)) }),
     });
 
     if (!response.ok) {

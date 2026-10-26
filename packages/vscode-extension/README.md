@@ -59,6 +59,7 @@ From the palette with several candidates you pick the server; with exactly one i
 | `mcpServers.coderag.toolset` | `standard` | Tools CodeRAG offers: `search`, `standard` (search, search_relations, get_index_status, sync_documents) or `all` (11 tools; their definitions cost about 1.1k more tokens per session) |
 | `mcpServers.coderag.embeddingUrl` | *(required)* | Base URL of the OpenAI-compatible embeddings endpoint, e.g. `http://localhost:11434/v1`. **Machine scoped** |
 | `mcpServers.coderag.embeddingModel` | *(required)* | Embedding model name, e.g. `nomic-embed-text` |
+| `mcpServers.coderag.embedMaxChars` | `6000` | Longest text sent to the embedding endpoint for one chunk or query, in characters; longer chunks are cut for embedding only (`0` disables the limit) |
 | `mcpServers.coderag.embeddingDim` | `768` | Vector dimensions; must match the model. Used only when the workspace database is created: an existing database keeps its stored dimensions (a different value only logs a warning) |
 | `mcpServers.coderag.chunkSize` | `500` | Target chunk size in characters |
 | `mcpServers.coderag.topK` | `5` | Default number of search results |
