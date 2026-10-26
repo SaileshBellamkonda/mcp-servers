@@ -14,6 +14,7 @@ export default defineConfig({
     },
   },
   test: {
+    globalSetup: ['tests/bundle/global-setup.ts'],
     globals: false,
     environment: 'node',
     pool: 'forks',

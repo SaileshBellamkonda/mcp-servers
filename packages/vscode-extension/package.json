@@ -87,7 +87,8 @@
     }
   },
   "scripts": {
-    "build": "tsc --noEmit",
+    "build": "node ../../scripts/bundle-extension.mjs .",
+    "stage:native": "node ../../scripts/stage-native.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",

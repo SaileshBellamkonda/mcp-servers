@@ -4,15 +4,18 @@ import path from 'node:path';
 import type { CodeChunk, SymbolType } from '../core/types.js';
 import { getLanguageByExtension, SUPPORTED_LANGUAGES } from './languages.js';
 
-const defaultRequire = createRequire(import.meta.url);
+let defaultRequire: NodeJS.Require | undefined;
 
 export interface CodeParserOptions {
   /** Directory whose `node_modules` holds tree-sitter and the grammars (bundled builds); default: this package's own resolution. */
   nativeModulesDir?: string | undefined;
 }
 
+// `import.meta.url` is only read when no `nativeModulesDir` is given, so a CommonJS bundle (where it is
+// undefined) loads fine as long as it passes one.
 function requireFor(nativeModulesDir: string | undefined): NodeJS.Require {
-  return nativeModulesDir === undefined ? defaultRequire : createRequire(path.join(nativeModulesDir, 'index.js'));
+  if (nativeModulesDir !== undefined) return createRequire(path.join(nativeModulesDir, 'index.js'));
+  return (defaultRequire ??= createRequire(import.meta.url));
 }
 
 // Minimal type declarations for tree-sitter's Node.js API (v0.21.x)

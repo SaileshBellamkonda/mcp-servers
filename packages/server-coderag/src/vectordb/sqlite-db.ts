@@ -30,7 +30,16 @@ export interface OpenSqliteOptions {
   allowExtension?: boolean | undefined;
 }
 
-const defaultRequire = createRequire(import.meta.url);
+let defaultRequire: NodeJS.Require | undefined;
+
+/**
+ * Resolves packages from `nativeModulesDir` when given, else from this package. `import.meta.url` is only read on
+ * the second path, so a CommonJS bundle (where it is undefined) loads fine as long as it passes `nativeModulesDir`.
+ */
+function requireFrom(nativeModulesDir: string | undefined): NodeJS.Require {
+  if (nativeModulesDir !== undefined) return createRequire(path.join(nativeModulesDir, 'index.js'));
+  return (defaultRequire ??= createRequire(import.meta.url));
+}
 
 let cachedModule: NodeSqliteModule | undefined;
 
@@ -182,7 +191,7 @@ export function openSqliteDatabase(dbPath: string, options: OpenSqliteOptions = 
  */
 export function loadSqliteVec(db: SqliteDatabase, nativeModulesDir: string | undefined): void {
   try {
-    const require = nativeModulesDir === undefined ? defaultRequire : createRequire(path.join(nativeModulesDir, 'index.js'));
+    const require = requireFrom(nativeModulesDir);
     const sqliteVec = require('sqlite-vec') as { load: (db: NodeSqlite.DatabaseSync) => void };
     sqliteVec.load(db.raw);
   } catch (err) {
