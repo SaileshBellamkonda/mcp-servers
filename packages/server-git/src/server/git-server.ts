@@ -45,7 +45,7 @@ export function createGitServer(
 ): void {
   // Create core services
   const pathValidator = new PathValidator(repoManager);
-  const gitExecutor = new GitExecutor(logger);
+  const gitExecutor = new GitExecutor(logger, repoManager);
   const outputParser = new OutputParser();
 
   const services: Services = {

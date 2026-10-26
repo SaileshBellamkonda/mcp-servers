@@ -1,6 +1,7 @@
 import { execFile } from 'node:child_process';
 import which from 'which';
 import { GitMcpError, ErrorCode } from './types.js';
+import type { RepositoryManager } from './repository-manager.js';
 import type { GitCommandResult, ExecuteOptions, ServerLogger } from './types.js';
 
 const POSIX_ALLOWED = [
@@ -48,9 +49,16 @@ export class GitExecutor {
   private static readonly DEFAULT_TIMEOUT = 30000; // 30 seconds
   private static gitPath: string | null = null;
   private readonly logger: ServerLogger | undefined;
+  private readonly repoManager: RepositoryManager | undefined;
 
-  constructor(logger?: ServerLogger) {
+  /**
+   * @param repoManager when given, every `execute` re-validates its repository against the allow-list and
+   *   runs git in the validated REAL path, so no tool can reach git with an unchecked or symlink-confused
+   *   `cwd`, whatever it validated (or forgot to validate) beforehand.
+   */
+  constructor(logger?: ServerLogger, repoManager?: RepositoryManager) {
     this.logger = logger;
+    this.repoManager = repoManager;
   }
 
   /**
@@ -90,8 +98,9 @@ export class GitExecutor {
     options: ExecuteOptions = {}
   ): Promise<GitCommandResult> {
     const timeout = options.timeout ?? GitExecutor.DEFAULT_TIMEOUT;
+    const cwd = this.repoManager ? this.repoManager.validateRepository(repoPath) : repoPath;
     const gitPath = await GitExecutor.findGit();
-    this.logger?.debug({ cmd: `git ${args.join(' ')}`, cwd: repoPath });
+    this.logger?.debug({ cmd: `git ${args.join(' ')}`, cwd });
 
     return new Promise((resolve, reject) => {
       let timedOut = false;
@@ -101,7 +110,7 @@ export class GitExecutor {
       
       // Use execFile which handles paths with spaces better than spawn
       const proc = execFile(gitPath, args, {
-        cwd: repoPath,
+        cwd,
         env,
         maxBuffer: 10 * 1024 * 1024, // 10MB buffer
       }, (error, stdout, stderr) => {
