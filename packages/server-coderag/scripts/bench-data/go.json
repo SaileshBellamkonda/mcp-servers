@@ -1,0 +1,31 @@
+{
+  "repo": "https://github.com/spf13/cobra",
+  "sha": "adbc8813901bba65827259daa8e22ff94ec1f30e",
+  "include": ["**/*.go"],
+  "queries": [
+    { "query": "ExecuteC", "kind": "identifier", "expect": [{ "file": "command.go", "symbol": "ExecuteC" }] },
+    { "query": "GenBashCompletionV2", "kind": "identifier", "expect": [{ "file": "bash_completionsV2.go", "symbol": "GenBashCompletionV2" }] },
+    { "query": "gen markdown tree", "kind": "camel-fragment", "expect": [{ "file": "doc/md_docs.go", "symbol": "GenMarkdownTree" }, { "file": "doc/md_docs.go", "symbol": "GenMarkdownTreeCustom" }] },
+    { "query": "where is the Command struct defined", "kind": "natural", "expect": [{ "file": "command.go", "symbol": "Command" }] },
+    { "query": "positional args validator requiring exactly n arguments", "kind": "concept", "expect": [{ "file": "args.go", "symbol": "ExactArgs" }] },
+    { "query": "mark a persistent flag as required", "kind": "concept", "expect": [{ "file": "shell_completions.go", "symbol": "MarkPersistentFlagRequired" }] },
+    { "query": "write a string to a buffer and check the error", "kind": "concept", "expect": [{ "file": "cobra.go", "symbol": "WriteStringAndCheck" }] },
+    { "query": "functions to run before each command is executed", "kind": "concept", "expect": [{ "file": "cobra.go", "symbol": "OnInitialize" }] },
+    { "query": "levenshtein distance between two strings", "kind": "concept", "expect": [{ "file": "cobra.go", "symbol": "ld" }] },
+    { "query": "generate man pages for a command and its subcommands", "kind": "concept", "expect": [{ "file": "doc/man_docs.go", "symbol": "GenManTree" }, { "file": "doc/man_docs.go", "symbol": "GenManTreeFromOpts" }] },
+    { "query": "register a completion function for a flag", "kind": "concept", "expect": [{ "file": "completions.go", "symbol": "RegisterFlagCompletionFunc" }] },
+    { "query": "print the error and exit the program", "kind": "natural", "expect": [{ "file": "cobra.go", "symbol": "CheckErr" }] }
+  ],
+  "knownEdges": [
+    { "type": "calls", "file": "cobra.go", "symbol": "CheckErr", "target": "Exit" },
+    { "type": "calls", "file": "cobra.go", "symbol": "WriteStringAndCheck", "target": "CheckErr" },
+    { "type": "calls", "file": "cobra.go", "symbol": "WriteStringAndCheck", "target": "WriteString" },
+    { "type": "calls", "file": "command.go", "symbol": "ExecuteC", "target": "InitDefaultHelpCmd" },
+    { "type": "calls", "file": "command.go", "symbol": "ExecuteC", "target": "Traverse" },
+    { "type": "calls", "file": "command.go", "symbol": "ExecuteC", "target": "Find" },
+    { "type": "calls", "file": "doc/man_docs.go", "symbol": "GenManTree", "target": "GenManTreeFromOpts" },
+    { "type": "calls", "file": "doc/md_docs.go", "symbol": "GenMarkdownTree", "target": "GenMarkdownTreeCustom" },
+    { "type": "calls", "file": "bash_completionsV2.go", "symbol": "GenBashCompletionV2", "target": "genBashCompletion" },
+    { "type": "imports", "file": "doc/man_docs.go", "symbol": "", "target": "github.com/spf13/pflag" }
+  ]
+}

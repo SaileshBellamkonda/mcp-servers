@@ -1,0 +1,31 @@
+{
+  "repo": "https://github.com/pallets/flask",
+  "sha": "d086db856be187255b8ec61ef409357393020f32",
+  "include": ["src/**/*.py", "tests/**/*.py"],
+  "queries": [
+    { "query": "url_for", "kind": "identifier", "expect": [{ "file": "src/flask/helpers.py", "symbol": "url_for" }, { "file": "src/flask/app.py", "symbol": "url_for" }] },
+    { "query": "get_debug_flag", "kind": "identifier", "expect": [{ "file": "src/flask/helpers.py", "symbol": "get_debug_flag" }] },
+    { "query": "from_pyfile", "kind": "identifier", "expect": [{ "file": "src/flask/config.py", "symbol": "from_pyfile" }] },
+    { "query": "stream with context", "kind": "snake-kebab", "expect": [{ "file": "src/flask/helpers.py", "symbol": "stream_with_context" }] },
+    { "query": "where is the Blueprint class defined", "kind": "natural", "expect": [{ "file": "src/flask/sansio/blueprints.py", "symbol": "Blueprint" }, { "file": "src/flask/blueprints.py", "symbol": "Blueprint" }] },
+    { "query": "render a template from a string", "kind": "concept", "expect": [{ "file": "src/flask/templating.py", "symbol": "render_template_string" }] },
+    { "query": "register an error handler for an exception or status code", "kind": "concept", "expect": [{ "file": "src/flask/sansio/scaffold.py", "symbol": "errorhandler" }, { "file": "src/flask/sansio/scaffold.py", "symbol": "register_error_handler" }] },
+    { "query": "session cookie signed with the secret key", "kind": "concept", "expect": [{ "file": "src/flask/sessions.py", "symbol": "SecureCookieSessionInterface" }] },
+    { "query": "default json provider serialization", "kind": "camel-fragment", "expect": [{ "file": "src/flask/json/provider.py", "symbol": "DefaultJSONProvider" }] },
+    { "query": "load configuration values from a json or toml file", "kind": "concept", "expect": [{ "file": "src/flask/config.py", "symbol": "from_file" }] },
+    { "query": "raise an http exception for a status code", "kind": "concept", "expect": [{ "file": "src/flask/helpers.py", "symbol": "abort" }] },
+    { "query": "where is run defined for the development server", "kind": "natural", "expect": [{ "file": "src/flask/app.py", "symbol": "run" }] }
+  ],
+  "knownEdges": [
+    { "type": "calls", "file": "src/flask/helpers.py", "symbol": "abort", "target": "_wz_abort" },
+    { "type": "calls", "file": "src/flask/templating.py", "symbol": "render_template_string", "target": "from_string" },
+    { "type": "calls", "file": "src/flask/templating.py", "symbol": "render_template_string", "target": "_render" },
+    { "type": "calls", "file": "src/flask/helpers.py", "symbol": "get_template_attribute", "target": "get_template" },
+    { "type": "inherits", "file": "src/flask/blueprints.py", "symbol": "Blueprint", "target": "SansioBlueprint" },
+    { "type": "inherits", "file": "src/flask/sessions.py", "symbol": "SecureCookieSessionInterface", "target": "SessionInterface" },
+    { "type": "inherits", "file": "src/flask/sessions.py", "symbol": "NullSession", "target": "SecureCookieSession" },
+    { "type": "inherits", "file": "src/flask/cli.py", "symbol": "FlaskGroup", "target": "AppGroup" },
+    { "type": "imports", "file": "src/flask/blueprints.py", "symbol": "", "target": ".helpers" },
+    { "type": "imports", "file": "src/flask/blueprints.py", "symbol": "", "target": "os" }
+  ]
+}

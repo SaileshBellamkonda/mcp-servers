@@ -1,0 +1,31 @@
+{
+  "repo": "https://github.com/BurntSushi/ripgrep",
+  "sha": "6892bc2b7efe5909cbbeec8f757ed2c4c76b1d30",
+  "include": ["crates/**/*.rs"],
+  "queries": [
+    { "query": "WalkBuilder", "kind": "identifier", "expect": [{ "file": "crates/ignore/src/walk.rs", "symbol": "WalkBuilder" }] },
+    { "query": "parse_human_readable_size", "kind": "identifier", "expect": [{ "file": "crates/cli/src/human.rs", "symbol": "parse_human_readable_size" }] },
+    { "query": "glob set builder", "kind": "camel-fragment", "expect": [{ "file": "crates/globset/src/lib.rs", "symbol": "GlobSetBuilder" }] },
+    { "query": "where is the Matcher trait defined", "kind": "natural", "expect": [{ "file": "crates/matcher/src/lib.rs", "symbol": "Matcher" }] },
+    { "query": "is_readable_stdin", "kind": "identifier", "expect": [{ "file": "crates/cli/src/lib.rs", "symbol": "is_readable_stdin" }] },
+    { "query": "unescape a string with backslash escapes into bytes", "kind": "concept", "expect": [{ "file": "crates/cli/src/escape.rs", "symbol": "unescape" }] },
+    { "query": "get the hostname of this machine", "kind": "concept", "expect": [{ "file": "crates/cli/src/hostname.rs", "symbol": "hostname" }] },
+    { "query": "searcher builder", "kind": "camel-fragment", "expect": [{ "file": "crates/searcher/src/searcher/mod.rs", "symbol": "SearcherBuilder" }] },
+    { "query": "gitignore builder add a pattern line", "kind": "concept", "expect": [{ "file": "crates/ignore/src/gitignore.rs", "symbol": "GitignoreBuilder" }] },
+    { "query": "json lines printer", "kind": "concept", "expect": [{ "file": "crates/printer/src/json.rs", "symbol": "JSONBuilder" }, { "file": "crates/printer/src/json.rs", "symbol": "JSON" }] },
+    { "query": "trait implemented by consumers of search results", "kind": "concept", "expect": [{ "file": "crates/searcher/src/sink.rs", "symbol": "Sink" }] },
+    { "query": "decompression matcher", "kind": "camel-fragment", "expect": [{ "file": "crates/cli/src/decompress.rs", "symbol": "DecompressionMatcher" }] }
+  ],
+  "knownEdges": [
+    { "type": "calls", "file": "crates/cli/src/escape.rs", "symbol": "unescape", "target": "unescape_bytes" },
+    { "type": "calls", "file": "crates/cli/src/decompress.rs", "symbol": "DecompressionMatcher.new", "target": "build" },
+    { "type": "calls", "file": "crates/cli/src/decompress.rs", "symbol": "DecompressionMatcher.command", "target": "args" },
+    { "type": "calls", "file": "crates/cli/src/decompress.rs", "symbol": "DecompressionMatcher.command", "target": "matches" },
+    { "type": "calls", "file": "crates/cli/src/hostname.rs", "symbol": "hostname", "target": "get_computer_name" },
+    { "type": "inherits", "file": "crates/cli/src/process.rs", "symbol": "CommandError", "target": "Error" },
+    { "type": "inherits", "file": "crates/ignore/src/walk.rs", "symbol": "Walk", "target": "Iterator" },
+    { "type": "inherits", "file": "crates/ignore/src/walk.rs", "symbol": "Walk", "target": "FusedIterator" },
+    { "type": "imports", "file": "crates/cli/src/decompress.rs", "symbol": "", "target": "globset" },
+    { "type": "imports", "file": "crates/cli/src/decompress.rs", "symbol": "", "target": "crate::process" }
+  ]
+}

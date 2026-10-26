@@ -1,0 +1,31 @@
+{
+  "repo": "https://github.com/JamesNK/Newtonsoft.Json",
+  "sha": "52fa3aef1f2cadcd3a3f874251eddc98d3efbbaa",
+  "include": ["Src/Newtonsoft.Json/**/*.cs"],
+  "queries": [
+    { "query": "SerializeObject", "kind": "identifier", "expect": [{ "file": "Src/Newtonsoft.Json/JsonConvert.cs", "symbol": "SerializeObject" }] },
+    { "query": "ToCamelCase", "kind": "identifier", "expect": [{ "file": "Src/Newtonsoft.Json/Utilities/StringUtils.cs", "symbol": "ToCamelCase" }] },
+    { "query": "snake case naming strategy", "kind": "camel-fragment", "expect": [{ "file": "Src/Newtonsoft.Json/Serialization/SnakeCaseNamingStrategy.cs", "symbol": "SnakeCaseNamingStrategy" }] },
+    { "query": "where is DefaultContractResolver defined", "kind": "natural", "expect": [{ "file": "Src/Newtonsoft.Json/Serialization/DefaultContractResolver.cs", "symbol": "DefaultContractResolver" }] },
+    { "query": "convert enum values to and from strings", "kind": "concept", "expect": [{ "file": "Src/Newtonsoft.Json/Converters/StringEnumConverter.cs", "symbol": "StringEnumConverter" }] },
+    { "query": "type name handling", "kind": "camel-fragment", "expect": [{ "file": "Src/Newtonsoft.Json/TypeNameHandling.cs" }] },
+    { "query": "check whether a type is Nullable", "kind": "concept", "expect": [{ "file": "Src/Newtonsoft.Json/Utilities/ReflectionUtils.cs", "symbol": "IsNullable" }, { "file": "Src/Newtonsoft.Json/Utilities/ReflectionUtils.cs", "symbol": "IsNullableType" }] },
+    { "query": "read binary BSON data", "kind": "concept", "expect": [{ "file": "Src/Newtonsoft.Json/Bson/BsonReader.cs", "symbol": "BsonReader" }] },
+    { "query": "where is JsonSerializerSettings defined", "kind": "natural", "expect": [{ "file": "Src/Newtonsoft.Json/JsonSerializerSettings.cs", "symbol": "JsonSerializerSettings" }] },
+    { "query": "convert a DateTime to and from the ISO 8601 format", "kind": "concept", "expect": [{ "file": "Src/Newtonsoft.Json/Converters/IsoDateTimeConverter.cs", "symbol": "IsoDateTimeConverter" }] },
+    { "query": "GetTypeName", "kind": "identifier", "expect": [{ "file": "Src/Newtonsoft.Json/Utilities/ReflectionUtils.cs", "symbol": "GetTypeName" }] },
+    { "query": "generate a JSON schema from a .NET type", "kind": "concept", "expect": [{ "file": "Src/Newtonsoft.Json/Schema/JsonSchemaGenerator.cs", "symbol": "JsonSchemaGenerator" }] }
+  ],
+  "knownEdges": [
+    { "type": "calls", "file": "Src/Newtonsoft.Json/JsonConvert.cs", "symbol": "JsonConvert.DeserializeObject", "target": "DeserializeObject" },
+    { "type": "calls", "file": "Utilities/ReflectionUtils.cs", "symbol": "ReflectionUtils.IsNullable", "target": "IsNullableType" },
+    { "type": "calls", "file": "Utilities/ReflectionUtils.cs", "symbol": "ReflectionUtils.IsNullable", "target": "ArgumentNotNull" },
+    { "type": "calls", "file": "Utilities/ReflectionUtils.cs", "symbol": "ReflectionUtils.IsNullableType", "target": "GetGenericTypeDefinition" },
+    { "type": "calls", "file": "Utilities/StringUtils.cs", "symbol": "StringUtils.ToCamelCase", "target": "ToCharArray" },
+    { "type": "calls", "file": "Utilities/StringUtils.cs", "symbol": "StringUtils.ToCamelCase", "target": "IsUpper" },
+    { "type": "inherits", "file": "Serialization/SnakeCaseNamingStrategy.cs", "symbol": "SnakeCaseNamingStrategy", "target": "NamingStrategy" },
+    { "type": "inherits", "file": "Converters/IsoDateTimeConverter.cs", "symbol": "IsoDateTimeConverter", "target": "DateTimeConverterBase" },
+    { "type": "inherits", "file": "Converters/StringEnumConverter.cs", "symbol": "StringEnumConverter", "target": "JsonConverter" },
+    { "type": "imports", "file": "Serialization/SnakeCaseNamingStrategy.cs", "symbol": "", "target": "Newtonsoft.Json.Utilities" }
+  ]
+}

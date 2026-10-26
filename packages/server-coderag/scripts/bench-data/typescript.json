@@ -1,0 +1,31 @@
+{
+  "repo": "https://github.com/sindresorhus/got",
+  "sha": "05b4476913da39a47dd8e20d29e250f28b0a6dca",
+  "include": ["source/**/*.ts", "test/**/*.ts"],
+  "queries": [
+    { "query": "calculateRetryDelay", "kind": "identifier", "expect": [{ "file": "source/core/calculate-retry-delay.ts", "symbol": "calculateRetryDelay" }] },
+    { "query": "getUnixSocketPath", "kind": "identifier", "expect": [{ "file": "source/core/utils/is-unix-socket-url.ts", "symbol": "getUnixSocketPath" }] },
+    { "query": "weakable map", "kind": "camel-fragment", "expect": [{ "file": "source/core/utils/weakable-map.ts", "symbol": "WeakableMap" }] },
+    { "query": "where is the RequestError class defined", "kind": "natural", "expect": [{ "file": "source/core/errors.ts", "symbol": "RequestError" }] },
+    { "query": "remove username and password from a URL", "kind": "concept", "expect": [{ "file": "source/core/utils/strip-url-auth.ts", "symbol": "stripUrlAuth" }] },
+    { "query": "forward events from one emitter to another", "kind": "concept", "expect": [{ "file": "source/core/utils/proxy-events.ts", "symbol": "proxyEvents" }] },
+    { "query": "body that cannot be replayed on retry or redirect", "kind": "concept", "expect": [{ "file": "source/core/utils/is-non-replayable-body.ts", "symbol": "isNonReplayableBody" }] },
+    { "query": "decompress gzip or brotli response body", "kind": "concept", "expect": [{ "file": "source/core/utils/decompress-response.ts", "symbol": "decompressResponseBody" }] },
+    { "query": "publish request create diagnostics channel", "kind": "camel-fragment", "expect": [{ "file": "source/core/diagnostics-channel.ts", "symbol": "publishRequestCreate" }] },
+    { "query": "where is the Options class defined", "kind": "natural", "expect": [{ "file": "source/core/options.ts", "symbol": "Options" }] },
+    { "query": "timeout error thrown when a request phase takes too long", "kind": "concept", "expect": [{ "file": "source/core/timed-out.ts", "symbol": "TimeoutError" }, { "file": "source/core/errors.ts", "symbol": "TimeoutError" }] },
+    { "query": "parse link header", "kind": "camel-fragment", "expect": [{ "file": "source/core/parse-link-header.ts" }] }
+  ],
+  "knownEdges": [
+    { "type": "calls", "file": "source/core/utils/is-unix-socket-url.ts", "symbol": "getUnixSocketPath", "target": "isUnixSocketUrl" },
+    { "type": "calls", "file": "source/core/utils/is-unix-socket-url.ts", "symbol": "getUnixSocketPath", "target": "exec" },
+    { "type": "calls", "file": "source/core/utils/is-non-replayable-body.ts", "symbol": "isNonReplayableBody", "target": "nodeStream" },
+    { "type": "calls", "file": "source/core/utils/is-non-replayable-body.ts", "symbol": "isNonReplayableBody", "target": "object" },
+    { "type": "calls", "file": "source/core/utils/strip-url-auth.ts", "symbol": "stripUrlAuth", "target": "URL" },
+    { "type": "inherits", "file": "source/core/errors.ts", "symbol": "RequestError", "target": "Error" },
+    { "type": "inherits", "file": "source/core/errors.ts", "symbol": "HTTPError", "target": "RequestError" },
+    { "type": "inherits", "file": "source/core/index.ts", "symbol": "Request", "target": "Duplex" },
+    { "type": "imports", "file": "source/core/errors.ts", "symbol": "", "target": "./utils/strip-url-auth.js" },
+    { "type": "imports", "file": "source/core/utils/decompress-response.ts", "symbol": "", "target": "node:zlib" }
+  ]
+}

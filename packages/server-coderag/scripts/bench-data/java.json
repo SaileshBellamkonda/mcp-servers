@@ -1,0 +1,31 @@
+{
+  "repo": "https://github.com/google/gson",
+  "sha": "57731049da3e415be3d5d34db1ca3b80f3c73810",
+  "include": ["gson/src/**/*.java"],
+  "queries": [
+    { "query": "Excluder", "kind": "identifier", "expect": [{ "file": "gson/src/main/java/com/google/gson/internal/Excluder.java", "symbol": "Excluder" }] },
+    { "query": "canonicalize", "kind": "identifier", "expect": [{ "file": "gson/src/main/java/com/google/gson/internal/GsonTypes.java", "symbol": "canonicalize" }] },
+    { "query": "linked tree map", "kind": "camel-fragment", "expect": [{ "file": "gson/src/main/java/com/google/gson/internal/LinkedTreeMap.java", "symbol": "LinkedTreeMap" }] },
+    { "query": "where is the JsonWriter class defined", "kind": "natural", "expect": [{ "file": "gson/src/main/java/com/google/gson/stream/JsonWriter.java", "symbol": "JsonWriter" }] },
+    { "query": "parse an ISO 8601 date string", "kind": "concept", "expect": [{ "file": "gson/src/main/java/com/google/gson/internal/bind/util/ISO8601Utils.java", "symbol": "parse" }] },
+    { "query": "field naming policy that converts names to lower case with underscores", "kind": "concept", "expect": [{ "file": "gson/src/main/java/com/google/gson/FieldNamingPolicy.java" }] },
+    { "query": "exclude fields without the Expose annotation", "kind": "concept", "expect": [{ "file": "gson/src/main/java/com/google/gson/GsonBuilder.java", "symbol": "excludeFieldsWithoutExposeAnnotation" }, { "file": "gson/src/main/java/com/google/gson/internal/Excluder.java", "symbol": "excludeFieldsWithoutExposeAnnotation" }] },
+    { "query": "reflection access filter", "kind": "camel-fragment", "expect": [{ "file": "gson/src/main/java/com/google/gson/ReflectionAccessFilter.java", "symbol": "ReflectionAccessFilter" }] },
+    { "query": "where is TypeToken defined", "kind": "natural", "expect": [{ "file": "gson/src/main/java/com/google/gson/reflect/TypeToken.java", "symbol": "TypeToken" }] },
+    { "query": "allocate an instance of a class without calling its constructor using Unsafe", "kind": "concept", "expect": [{ "file": "gson/src/main/java/com/google/gson/internal/UnsafeAllocator.java", "symbol": "UnsafeAllocator" }] },
+    { "query": "number that is parsed lazily from a string", "kind": "concept", "expect": [{ "file": "gson/src/main/java/com/google/gson/internal/LazilyParsedNumber.java", "symbol": "LazilyParsedNumber" }] },
+    { "query": "registerTypeAdapter", "kind": "identifier", "expect": [{ "file": "gson/src/main/java/com/google/gson/GsonBuilder.java", "symbol": "registerTypeAdapter" }] }
+  ],
+  "knownEdges": [
+    { "type": "calls", "file": "GsonBuilder.java", "symbol": "GsonBuilder.excludeFieldsWithoutExposeAnnotation", "target": "excludeFieldsWithoutExposeAnnotation" },
+    { "type": "calls", "file": "internal/Excluder.java", "symbol": "Excluder.clone", "target": "clone" },
+    { "type": "calls", "file": "GsonBuilder.java", "symbol": "GsonBuilder.registerTypeAdapter", "target": "getName" },
+    { "type": "calls", "file": "GsonBuilder.java", "symbol": "GsonBuilder.registerTypeAdapter", "target": "IllegalArgumentException" },
+    { "type": "inherits", "file": "internal/Excluder.java", "symbol": "Excluder", "target": "TypeAdapterFactory" },
+    { "type": "inherits", "file": "internal/Excluder.java", "symbol": "Excluder", "target": "Cloneable" },
+    { "type": "inherits", "file": "JsonSyntaxException.java", "symbol": "JsonSyntaxException", "target": "JsonParseException" },
+    { "type": "inherits", "file": "JsonObject.java", "symbol": "JsonObject", "target": "JsonElement" },
+    { "type": "imports", "file": "internal/Excluder.java", "symbol": "", "target": "com.google.gson.TypeAdapterFactory" },
+    { "type": "imports", "file": "GsonBuilder.java", "symbol": "", "target": "com.google.gson.internal.Excluder" }
+  ]
+}
