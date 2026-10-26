@@ -2,6 +2,7 @@ import path from 'node:path';
 import matter from 'gray-matter';
 import type { DocumentLoader, DocumentMetadata, DocumentSection, LoadedDocument } from './types.js';
 import { isFenceClose, matchFenceOpen, type Fence } from './fence.js';
+import { createStderrLogger } from '../../core/logger.js';
 
 const ATX_OPEN = /^ {0,3}(#{1,6})[ \t]/;
 const SETEXT_UNDERLINE = /^ {0,3}(=+|-+)[ \t]*$/;
@@ -14,6 +15,12 @@ const KNOWN_KEYS = new Set(['title', 'tags', 'doc_type', 'docType', 'domain', 'p
 const MAX_EXTRA_NODES = 1000; // per frontmatter value
 const MAX_EXTRA_TOTAL_NODES = 5000; // across all accepted values
 const MAX_EXTRA_DEPTH = 6;
+/**
+ * Largest frontmatter block (opening delimiter up to the closing one) that is parsed. js-yaml 3.x resolves
+ * merge keys in quadratic time, so a ~230 KB block of chained `<<: *alias` entries blocks the event loop for
+ * seconds. The limit is checked on the raw text, before any YAML is parsed.
+ */
+export const MAX_FRONTMATTER_BYTES = 64 * 1024;
 
 interface Frontmatter {
   data: Record<string, unknown>;
@@ -38,6 +45,8 @@ function disabledEngine(): never {
 }
 const MATTER_OPTIONS = { engines: { js: disabledEngine, javascript: disabledEngine } };
 
+const sizeLogger = createStderrLogger('coderag-markdown');
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
@@ -54,6 +63,30 @@ function noFrontmatter(source: string): Frontmatter {
   return { data: {}, body: source, lineOffset: 0 };
 }
 
+/** Thrown instead of parsing a frontmatter block larger than {@link MAX_FRONTMATTER_BYTES}. */
+export class FrontmatterTooLargeError extends Error {
+  constructor(size: number) {
+    super(
+      `Frontmatter block is ${String(size)} characters, over the ${String(MAX_FRONTMATTER_BYTES / 1024)} KB limit, ` +
+        'so it was not parsed. Frontmatter tools leave the file unchanged, and indexing treats the document as plain text ' +
+        'without frontmatter metadata. Shorten the frontmatter to fix this.',
+    );
+    this.name = 'FrontmatterTooLargeError';
+  }
+}
+
+/**
+ * Length of the text gray-matter would hand to the YAML parser: from the opening `---` to the first line that
+ * starts with `---` (gray-matter's own closing rule). Zero when there is no frontmatter opening. Scans with
+ * indexOf only, never parsing.
+ */
+function frontmatterBlockSize(source: string): number {
+  const start = source.charCodeAt(0) === 0xfeff ? 1 : 0;
+  if (!source.startsWith('---', start)) return 0;
+  const close = source.indexOf('\n---', start + 3);
+  return (close === -1 ? source.length : close) - start;
+}
+
 /**
  * Parses YAML (or JSON) frontmatter with code engines disabled. Returns an empty mapping when the header is
  * absent or never closed. Throws on code (`---js`), malformed or non-mapping frontmatter, so callers that
@@ -62,6 +95,10 @@ function noFrontmatter(source: string): Frontmatter {
 export function parseFrontmatter(source: string): { data: Record<string, unknown>; content: string } {
   // gray-matter treats an unterminated header as running to the end of the file, so never hand it one.
   if (HAS_FRONTMATTER_OPEN.test(source) && !CLOSED_FRONTMATTER.test(source)) return { data: {}, content: source };
+  const size = frontmatterBlockSize(source);
+  if (size > MAX_FRONTMATTER_BYTES) {
+    throw new FrontmatterTooLargeError(size);
+  }
   const parsed = matter(source, MATTER_OPTIONS);
   if (!isRecord(parsed.data)) throw new Error('Frontmatter must be a mapping of keys to values');
   return { data: parsed.data, content: parsed.content };
@@ -81,7 +118,11 @@ export function splitFrontmatter(source: string): Frontmatter {
     const parsed = parseFrontmatter(source);
     const prefix = source.slice(0, source.length - parsed.content.length);
     return { data: parsed.data, body: parsed.content, lineOffset: countNewlines(prefix) };
-  } catch {
+  } catch (error) {
+    if (error instanceof FrontmatterTooLargeError) {
+      // Without the cap the document would stall the server; it is indexed as plain text instead.
+      sizeLogger.warning(error.message);
+    }
     return noFrontmatter(source);
   }
 }
