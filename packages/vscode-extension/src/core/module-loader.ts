@@ -5,6 +5,7 @@
  */
 export interface ServerModules {
   '@mcp-servers/server-git/embedded': typeof import('@mcp-servers/server-git/embedded');
+  '@mcp-servers/server-coderag/embedded': typeof import('@mcp-servers/server-coderag/embedded');
 }
 
 /** Loads a server module by specifier (a dynamic import in production, a fake in tests). */

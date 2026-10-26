@@ -7,6 +7,7 @@ import type { ModuleLoader, ServerModules } from '../core/module-loader';
  */
 const LOADERS: { [S in keyof ServerModules]: () => Promise<ServerModules[S]> } = {
   '@mcp-servers/server-git/embedded': () => import('@mcp-servers/server-git/embedded'),
+  '@mcp-servers/server-coderag/embedded': () => import('@mcp-servers/server-coderag/embedded'),
 };
 
 export const loadServerModule: ModuleLoader = (specifier) => LOADERS[specifier]();
