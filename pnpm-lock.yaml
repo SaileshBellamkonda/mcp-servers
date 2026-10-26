@@ -158,6 +158,9 @@ importers:
       '@mcp-servers/common':
         specifier: workspace:*
         version: link:../shared/common
+      '@mcp-servers/http-host':
+        specifier: workspace:*
+        version: link:../shared/http-host
       '@modelcontextprotocol/hono':
         specifier: 'catalog:'
         version: 2.0.0-alpha.2(@modelcontextprotocol/server@2.0.0-alpha.2(@cfworker/json-schema@4.1.1))(hono@4.12.27)
@@ -261,6 +264,9 @@ importers:
       '@mcp-servers/common':
         specifier: workspace:*
         version: link:../shared/common
+      '@mcp-servers/http-host':
+        specifier: workspace:*
+        version: link:../shared/http-host
       '@modelcontextprotocol/hono':
         specifier: 'catalog:'
         version: 2.0.0-alpha.2(@modelcontextprotocol/server@2.0.0-alpha.2(@cfworker/json-schema@4.1.1))(hono@4.12.27)

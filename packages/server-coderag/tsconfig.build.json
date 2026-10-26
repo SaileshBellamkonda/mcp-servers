@@ -20,6 +20,9 @@
   "references": [
     {
       "path": "../shared/common/tsconfig.build.json"
+    },
+    {
+      "path": "../shared/http-host/tsconfig.build.json"
     }
   ]
 }

@@ -1,48 +1,44 @@
 #!/usr/bin/env node
-import { McpServer, StdioServerTransport, WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/server';
-import { createMcpHonoApp } from '@modelcontextprotocol/hono';
-import { serve } from '@hono/node-server';
-import { randomUUID } from 'node:crypto';
-import type { Server } from 'node:http';
+import { McpServer, StdioServerTransport } from '@modelcontextprotocol/server';
+import { McpLogger, parseBool, parsePort } from '@mcp-servers/common';
+import { resolveHttpSecurity, startMcpHttpServer, type McpHttpServer } from '@mcp-servers/http-host';
 import { loadConfigFromEnv } from './core/config.js';
-import type { CodeRagConfig } from './core/types.js';
+import { resolveDimensions } from './core/dimensions.js';
+import { createStderrLogger, type CodeRagLogger } from './core/logger.js';
 import { Embedder } from './embedder/embedder.js';
 import { VectorDB } from './vectordb/db.js';
 import { Indexer } from './indexer/indexer.js';
 import { GlobMatcher } from './core/glob-utils.js';
 import { PathGuard, computeAllowedRoots } from './core/path-guard.js';
-import { McpLogger, parseBool, parsePort } from '@mcp-servers/common';
 import { SyncManager } from './indexer/sync-manager.js';
 import { runStartupSync } from './indexer/sync.js';
 import { createCodeRagServer } from './server/coderag-server.js';
 import { CodeRagWatcher } from './indexer/watcher.js';
 
-function resolveDimensions(config: CodeRagConfig): number {
-  const stored = VectorDB.readStoredDimensions(config.dbPath);
-  if (stored !== null && stored !== config.embeddingDim) {
-    process.stderr.write(`[WARN] Embedding dimension changed (${String(stored)} → ${String(config.embeddingDim)}). Vectors will be reset and a full re-index will run on startup.\n`);
-  }
-  if (stored !== null) {
-    process.stderr.write(`[INFO] Using stored embedding dimensions: ${String(stored)}\n`);
-    return stored;
-  }
-  process.stderr.write(`[INFO] Using configured embedding dimensions: ${String(config.embeddingDim)}\n`);
-  return config.embeddingDim;
-}
-
-async function main(): Promise<void> {
-  const config = loadConfigFromEnv();
-  const embedder = new Embedder(config.embedding);
-  const cwd = process.cwd();
-
-  const dimensions = resolveDimensions(config);
-  const db = VectorDB.open(config.dbPath, dimensions);
-
-  const server = new McpServer(
+function newServer(): McpServer {
+  return new McpServer(
     { name: 'coderag-server', version: '1.0.0' },
     { capabilities: { tools: {}, logging: {} } }
   );
-  const logger = new McpLogger(server, 'coderag');
+}
+
+async function main(): Promise<void> {
+  const httpMode = process.env['MCP_TRANSPORT']?.toLowerCase() === 'http';
+  // Validate the HTTP binding before any resource is opened.
+  const security = httpMode ? resolveHttpSecurity(process.env) : undefined;
+  const port = parsePort(process.env['MCP_HTTP_PORT'], 3100);
+
+  const config = loadConfigFromEnv(process.env);
+  const embedder = new Embedder(config.embedding);
+  const cwd = process.cwd();
+
+  // stdio has exactly one server, so its logger can talk to the client. In HTTP mode the indexer,
+  // watcher and startup sync outlive every session and must not be bound to one session's server.
+  const stdioServer = httpMode ? undefined : newServer();
+  const logger: CodeRagLogger = stdioServer ? new McpLogger(stdioServer, 'coderag') : createStderrLogger('coderag');
+
+  const dimensions = resolveDimensions(config, logger);
+  const db = VectorDB.open(config.dbPath, dimensions);
   const syncManager = new SyncManager();
 
   const docsMatcher = new GlobMatcher(config.globs.docsInclude, config.globs.docsExclude, cwd, config.useGitignore);
@@ -53,13 +49,15 @@ async function main(): Promise<void> {
   const indexer = new Indexer(db, embedder, config.chunkSize, { docsMatcher, codeMatcher, logger, pathGuard });
 
   // Use docsInclude roots as the default sync dirs for sync_documents tool
-  const includeDirs = config.globs.docsInclude.map((p) => {
+  const includeDirs = [...new Set(config.globs.docsInclude.map((p) => {
     const abs = p.startsWith('/') ? p : `${cwd}/${p}`;
     const base = abs.replace(/[*?{[!].*$/, '').replace(/\/+$/, '');
     return base || cwd;
-  });
+  }))];
 
-  createCodeRagServer(server, db, embedder, indexer, config.topK, [...new Set(includeDirs)], syncManager, logger, config.dbPath, config.embedding.model, pathGuard);
+  const registerTools = (server: McpServer, toolLogger: CodeRagLogger): void => {
+    createCodeRagServer(server, db, embedder, indexer, config.topK, includeDirs, syncManager, toolLogger, config.dbPath, config.embedding.model, pathGuard);
+  };
 
   const scheduleStartupSync = (): void => {
     setImmediate(() => {
@@ -81,82 +79,55 @@ async function main(): Promise<void> {
     watcher.start(watchDirs);
   }
 
-  if (process.env['MCP_TRANSPORT']?.toLowerCase() === 'http') {
-    const port = parsePort(process.env['MCP_HTTP_PORT'], 3100);
-    const transports = new Map<string, WebStandardStreamableHTTPServerTransport>();
-    const app = createMcpHonoApp({ host: '127.0.0.1' });
-
-    app.post('/mcp', async (c) => {
-      const sessionId = c.req.header('mcp-session-id');
-      try {
-        let t: WebStandardStreamableHTTPServerTransport;
-        if (sessionId) {
-          const existing = transports.get(sessionId);
-          if (!existing) return c.text('Invalid session ID', 400);
-          t = existing;
-        } else {
-          t = new WebStandardStreamableHTTPServerTransport({
-            sessionIdGenerator: () => randomUUID(),
-            onsessioninitialized: (sid) => { transports.set(sid, t); },
-          });
-          t.onclose = () => {
-            const sid = t.sessionId;
-            if (sid) transports.delete(sid);
-          };
-          await server.connect(t);
-        }
-        return await t.handleRequest(c.req.raw);
-      } catch (err) {
-        logger.error(`MCP request error: ${String(err)}`);
-        return c.text('Internal server error', 500);
-      }
-    });
-
-    app.get('/mcp', (c) => {
-      const sessionId = c.req.header('mcp-session-id');
-      const t = sessionId ? transports.get(sessionId) : undefined;
-      if (!t) return c.text('Invalid or missing session ID', 400);
-      return t.handleRequest(c.req.raw);
-    });
-
-    app.delete('/mcp', (c) => {
-      const sessionId = c.req.header('mcp-session-id');
-      const t = sessionId ? transports.get(sessionId) : undefined;
-      if (!t) return c.text('Invalid or missing session ID', 400);
-      return t.handleRequest(c.req.raw);
-    });
-
-    const httpServer = serve(
-      { fetch: app.fetch, port, hostname: '127.0.0.1' },
-      () => { logger.info(`CodeRAG MCP Server running on http://127.0.0.1:${String(port)}/mcp (model: ${config.embedding.model}, db: ${config.dbPath})`); }
-    ) as unknown as Server;
-
-    scheduleStartupSync();
-
-    const shutdown = async (): Promise<void> => {
+  if (security) {
+    let httpServer: McpHttpServer;
+    try {
+      httpServer = await startMcpHttpServer({
+        createServer: () => {
+          const server = newServer();
+          registerTools(server, new McpLogger(server, 'coderag'));
+          return server;
+        },
+        port,
+        host: security.host,
+        token: security.token,
+        logger,
+      });
+    } catch (err) {
       watcher?.close();
-      for (const [sid, t] of transports) {
-        try { await t.close(); } catch (err) { process.stderr.write(`[ERROR] closing transport ${sid}: ${String(err)}\n`); }
-      }
-      transports.clear();
       indexer.close();
       db.close();
-      await new Promise<void>((resolve) => { httpServer.close(() => { resolve(); }); });
-      process.exit(0);
-    };
-    process.on('SIGINT', () => { void shutdown(); });
-    process.on('SIGTERM', () => { void shutdown(); });
-  } else {
-    // Default: stdio
-    const transport = new StdioServerTransport();
-    await server.connect(transport);
+      throw err;
+    }
     logger.info(`CodeRAG MCP Server ready (model: ${config.embedding.model}, db: ${config.dbPath})`);
 
     scheduleStartupSync();
 
     const shutdown = async (): Promise<void> => {
       watcher?.close();
-      await server.close();
+      try {
+        await httpServer.close();
+      } catch (err) {
+        logger.error(`closing HTTP server: ${String(err)}`);
+      }
+      indexer.close();
+      db.close();
+      process.exit(0);
+    };
+    process.on('SIGINT', () => { void shutdown(); });
+    process.on('SIGTERM', () => { void shutdown(); });
+  } else if (stdioServer) {
+    registerTools(stdioServer, logger);
+    const transport = new StdioServerTransport();
+    await stdioServer.connect(transport);
+    logger.info(`CodeRAG MCP Server ready (model: ${config.embedding.model}, db: ${config.dbPath})`);
+
+    scheduleStartupSync();
+
+    const shutdown = async (): Promise<void> => {
+      watcher?.close();
+      await stdioServer.close();
+      indexer.close();
       db.close();
       process.exit(0);
     };

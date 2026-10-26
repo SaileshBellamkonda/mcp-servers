@@ -37,6 +37,7 @@
   "license": "MIT",
   "dependencies": {
     "@mcp-servers/common": "workspace:*",
+    "@mcp-servers/http-host": "workspace:*",
     "@cfworker/json-schema": "catalog:",
     "@modelcontextprotocol/server": "catalog:",
     "@modelcontextprotocol/hono": "catalog:",

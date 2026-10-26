@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 import type { VectorDB } from '../vectordb/db.js';
 import type { Indexer } from './indexer.js';
-import type { McpLogger } from '@mcp-servers/common';
+import type { CodeRagLogger } from '../core/logger.js';
 import type { GlobConfig } from '../core/types.js';
 import { GlobMatcher } from '../core/glob-utils.js';
 import { SyncManager } from './sync-manager.js';
@@ -28,7 +28,7 @@ export async function syncDocuments(
   includeDirs: string[],
   db: VectorDB,
   indexer: Indexer,
-  logger?: McpLogger,
+  logger?: CodeRagLogger,
 ): Promise<SyncResult> {
   const log = (msg: string): void => {
     if (logger) { logger.info(msg); } else { process.stderr.write(`[INFO] ${msg}\n`); }
@@ -76,7 +76,7 @@ export async function runStartupSync(
   syncManager: SyncManager,
   config: { globs: GlobConfig; useGitignore: boolean },
   cwd: string,
-  logger: McpLogger,
+  logger: CodeRagLogger,
 ): Promise<void> {
   await syncManager.run('startup', async () => {
     const storedRules = db.getStoredRules();
@@ -131,7 +131,7 @@ function pruneExcluded(
   db: VectorDB,
   docsMatcher: GlobMatcher,
   codeMatcher: GlobMatcher,
-  logger: McpLogger,
+  logger: CodeRagLogger,
 ): void {
   for (const [filename] of db.listDocumentsByType('doc')) {
     if (!docsMatcher.isIncluded(filename)) {
@@ -145,7 +145,7 @@ function pruneExcluded(
   }
 }
 
-async function removeStaleDocs(db: VectorDB, logger: McpLogger): Promise<void> {
+async function removeStaleDocs(db: VectorDB, logger: CodeRagLogger): Promise<void> {
   const { existsSync } = await import('node:fs');
   for (const [filename] of db.listDocumentsByType('doc')) {
     if (!existsSync(filename)) {
@@ -154,7 +154,7 @@ async function removeStaleDocs(db: VectorDB, logger: McpLogger): Promise<void> {
   }
 }
 
-async function removeStaleCode(db: VectorDB, logger: McpLogger): Promise<void> {
+async function removeStaleCode(db: VectorDB, logger: CodeRagLogger): Promise<void> {
   const { existsSync } = await import('node:fs');
   for (const [filename] of db.listDocumentsByType('code')) {
     if (!existsSync(filename)) {

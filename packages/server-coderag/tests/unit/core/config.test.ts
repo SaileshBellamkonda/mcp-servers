@@ -411,3 +411,75 @@ describe('allowedRoots', () => {
     expect(config.allowedRoots).toEqual(['/data/a', '/data/b']);
   });
 });
+
+describe('loadConfigFromEnv(env) is a pure function of its argument', () => {
+  const REQUIRED = {
+    CODERAG_EMBEDDING_URL: 'http://explicit/v1',
+    CODERAG_EMBEDDING_MODEL: 'explicit-model',
+    CODERAG_DB_PATH: '/tmp/explicit.db',
+  };
+
+  afterEach(() => {
+    delete process.env['CODERAG_EMBEDDING_URL'];
+    delete process.env['CODERAG_EMBEDDING_MODEL'];
+    delete process.env['CODERAG_DB_PATH'];
+  });
+
+  it('reads only the supplied env, ignoring process.env', () => {
+    process.env['CODERAG_EMBEDDING_URL'] = 'http://from-process/v1';
+    process.env['CODERAG_EMBEDDING_MODEL'] = 'process-model';
+    process.env['CODERAG_DB_PATH'] = '/tmp/process.db';
+    const config = loadConfigFromEnv(REQUIRED);
+    expect(config.embedding.url).toBe('http://explicit/v1');
+    expect(config.embedding.model).toBe('explicit-model');
+    expect(config.dbPath).toBe('/tmp/explicit.db');
+  });
+
+  it('throws for a missing variable even when process.env provides it', () => {
+    process.env['CODERAG_EMBEDDING_URL'] = 'http://from-process/v1';
+    expect(() => loadConfigFromEnv({})).toThrow('CODERAG_EMBEDDING_URL');
+  });
+
+  it('never mutates the supplied env or process.env', () => {
+    const env = { ...REQUIRED, CODERAG_ALLOWED_ROOTS: '/a; /b ', CODERAG_EMBEDDING_API_KEY: 'k' };
+    const frozen = Object.freeze({ ...env });
+    const before = { ...process.env };
+    const config = loadConfigFromEnv(frozen);
+    expect(config.allowedRoots).toEqual(['/a', '/b']);
+    expect(config.embedding.apiKey).toBe('k');
+    expect(process.env).toEqual(before);
+  });
+});
+
+describe('loadConfigFromVsCode with several workspace folders', () => {
+  const cfg = (extra: Record<string, unknown> = {}): { get: (key: string) => unknown } => ({
+    get: (key: string): unknown => ({
+      embeddingUrl: 'http://localhost:11434/v1',
+      embeddingModel: 'm',
+      dbPath: './coderag.db',
+      ...extra,
+    })[key],
+  });
+
+  it('defaults docs and code globs to every folder', () => {
+    const config = loadConfigFromVsCode(cfg(), ['/ws/a', '/ws/b']);
+    expect(config.globs.docsInclude).toEqual(['/ws/a/**/*.{md,mdx}', '/ws/b/**/*.{md,mdx}']);
+    expect(config.globs.codeInclude).toContain('/ws/a/**/*.py');
+    expect(config.globs.codeInclude).toContain('/ws/b/**/*.py');
+    expect(config.globs.codeInclude.every((p) => p.startsWith('/ws/'))).toBe(true);
+  });
+
+  it('expands relative configured globs per folder and keeps absolute ones once', () => {
+    const config = loadConfigFromVsCode(
+      cfg({ codeInclude: ['src/**/*.ts', '/shared/**/*.ts'], docsExclude: ['drafts/**'] }),
+      ['/ws/a', '/ws/b'],
+    );
+    expect(config.globs.codeInclude).toEqual(['/ws/a/src/**/*.ts', '/ws/b/src/**/*.ts', '/shared/**/*.ts']);
+    expect(config.globs.docsExclude).toEqual(['/ws/a/drafts/**', '/ws/b/drafts/**']);
+  });
+
+  it('leaves single-folder configuration untouched', () => {
+    const config = loadConfigFromVsCode(cfg({ codeInclude: ['src/**/*.ts'] }), ['/ws/a']);
+    expect(config.globs.codeInclude).toEqual(['src/**/*.ts']);
+  });
+});

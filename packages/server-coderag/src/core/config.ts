@@ -1,8 +1,10 @@
+import { parseBool, parseList } from '@mcp-servers/common';
 import type { CodeRagConfig, GlobConfig } from './types.js';
 import { ConfigError } from './types.js';
 import {
   DEFAULT_DOCS_INCLUDE,
   DEFAULT_CODE_INCLUDE,
+  resolveToAbsolute,
 } from './glob-utils.js';
 
 const DEFAULT_BATCH_SIZE = 100;
@@ -10,60 +12,72 @@ const DEFAULT_CHUNK_SIZE = 500;
 const DEFAULT_TOP_K = 5;
 const DEFAULT_EMBEDDING_DIM = 768;
 
-function parseSemicolon(raw: string | undefined, defaults: string[]): string[] {
-  if (!raw || raw.trim() === '') return defaults;
-  return raw.split(';').map((p) => p.trim()).filter(Boolean);
-}
+/** Environment variables as read by {@link loadConfigFromEnv}; `process.env` satisfies it. */
+export type Env = Readonly<Record<string, string | undefined>>;
 
-export function loadConfigFromEnv(): CodeRagConfig {
-  const url = process.env['CODERAG_EMBEDDING_URL'];
+/** Builds the configuration from `env` only; it never reads or writes `process.env` itself. */
+export function loadConfigFromEnv(env: Env = process.env): CodeRagConfig {
+  const url = env['CODERAG_EMBEDDING_URL'];
   if (!url) {
     throw new ConfigError(
       'CODERAG_EMBEDDING_URL is required. Set it to your OpenAI-compatible embedding endpoint (e.g. http://localhost:11434/v1 for Ollama).'
     );
   }
 
-  const model = process.env['CODERAG_EMBEDDING_MODEL'];
+  const model = env['CODERAG_EMBEDDING_MODEL'];
   if (!model) {
     throw new ConfigError(
       'CODERAG_EMBEDDING_MODEL is required. Set it to your embedding model name (e.g. nomic-embed-text for Ollama).'
     );
   }
 
-  const dbPath = process.env['CODERAG_DB_PATH'];
+  const dbPath = env['CODERAG_DB_PATH'];
   if (!dbPath) {
     throw new ConfigError(
       'CODERAG_DB_PATH is required. Set it to the path where CodeRAG should store its SQLite database (e.g. /data/coderag.db).'
     );
   }
 
-  const chunkSizeRaw = process.env['CODERAG_CHUNK_SIZE'];
-  const topKRaw = process.env['CODERAG_TOP_K'];
-  const embeddingDimRaw = process.env['CODERAG_EMBEDDING_DIM'];
-  const useGitignoreRaw = process.env['CODERAG_USE_GITIGNORE'];
+  const chunkSizeRaw = env['CODERAG_CHUNK_SIZE'];
+  const topKRaw = env['CODERAG_TOP_K'];
+  const embeddingDimRaw = env['CODERAG_EMBEDDING_DIM'];
+  const useGitignoreRaw = env['CODERAG_USE_GITIGNORE'];
 
   const globs: GlobConfig = {
-    docsInclude: parseSemicolon(process.env['CODERAG_DOCS_INCLUDE'], DEFAULT_DOCS_INCLUDE),
-    docsExclude: parseSemicolon(process.env['CODERAG_DOCS_EXCLUDE'], []),
-    codeInclude: parseSemicolon(process.env['CODERAG_CODE_INCLUDE'], DEFAULT_CODE_INCLUDE),
-    codeExclude: parseSemicolon(process.env['CODERAG_CODE_EXCLUDE'], []),
+    docsInclude: parseList(env['CODERAG_DOCS_INCLUDE'], DEFAULT_DOCS_INCLUDE),
+    docsExclude: parseList(env['CODERAG_DOCS_EXCLUDE'], []),
+    codeInclude: parseList(env['CODERAG_CODE_INCLUDE'], DEFAULT_CODE_INCLUDE),
+    codeExclude: parseList(env['CODERAG_CODE_EXCLUDE'], []),
   };
 
   return {
     embedding: {
       url,
       model,
-      apiKey: process.env['CODERAG_EMBEDDING_API_KEY'] ?? undefined,
+      apiKey: env['CODERAG_EMBEDDING_API_KEY'] ?? undefined,
       batchSize: DEFAULT_BATCH_SIZE,
     },
     dbPath,
     globs,
     chunkSize: chunkSizeRaw ? parseInt(chunkSizeRaw, 10) : DEFAULT_CHUNK_SIZE,
     topK: topKRaw ? parseInt(topKRaw, 10) : DEFAULT_TOP_K,
-    useGitignore: useGitignoreRaw === undefined ? true : /^(true|1|yes)$/i.test(useGitignoreRaw),
+    useGitignore: parseBool(useGitignoreRaw, true),
     embeddingDim: embeddingDimRaw ? parseInt(embeddingDimRaw, 10) : DEFAULT_EMBEDDING_DIM,
-    allowedRoots: parseSemicolon(process.env['CODERAG_ALLOWED_ROOTS'], []),
+    allowedRoots: parseList(env['CODERAG_ALLOWED_ROOTS'], []),
   };
+}
+
+/**
+ * With several workspace folders a relative pattern would only match under the first one, so it is
+ * expanded into one absolute pattern per folder. Absolute patterns are kept as they are.
+ */
+function expandPerFolder(patterns: string[], workspaceFolders: string[]): string[] {
+  if (workspaceFolders.length < 2) return patterns;
+  const expanded = new Set<string>();
+  for (const pattern of patterns) {
+    for (const folder of workspaceFolders) expanded.add(resolveToAbsolute(pattern, folder));
+  }
+  return [...expanded];
 }
 
 export interface VsCodeConfiguration {
@@ -112,13 +126,13 @@ export function loadConfigFromVsCode(
     return defaults;
   }
 
-  const defaultIncludeDir = workspaceFolders[0] !== undefined ? [`${workspaceFolders[0]}/**/*.{md,mdx}`] : DEFAULT_DOCS_INCLUDE;
+  const defaultIncludeDir = workspaceFolders.length > 0 ? workspaceFolders.map((folder) => `${folder}/**/*.{md,mdx}`) : DEFAULT_DOCS_INCLUDE;
 
   const globs: GlobConfig = {
-    docsInclude: parseVsCodeGlob('docsInclude', defaultIncludeDir),
-    docsExclude: parseVsCodeGlob('docsExclude', []),
-    codeInclude: parseVsCodeGlob('codeInclude', DEFAULT_CODE_INCLUDE),
-    codeExclude: parseVsCodeGlob('codeExclude', []),
+    docsInclude: expandPerFolder(parseVsCodeGlob('docsInclude', defaultIncludeDir), workspaceFolders),
+    docsExclude: expandPerFolder(parseVsCodeGlob('docsExclude', []), workspaceFolders),
+    codeInclude: expandPerFolder(parseVsCodeGlob('codeInclude', DEFAULT_CODE_INCLUDE), workspaceFolders),
+    codeExclude: expandPerFolder(parseVsCodeGlob('codeExclude', []), workspaceFolders),
   };
 
   return {

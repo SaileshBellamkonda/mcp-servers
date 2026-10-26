@@ -4,7 +4,16 @@ import path from 'node:path';
 import type { CodeChunk, SymbolType } from '../core/types.js';
 import { getLanguageByExtension, SUPPORTED_LANGUAGES } from './languages.js';
 
-const require = createRequire(import.meta.url);
+const defaultRequire = createRequire(import.meta.url);
+
+export interface CodeParserOptions {
+  /** Directory whose `node_modules` holds tree-sitter and the grammars (bundled builds); default: this package's own resolution. */
+  nativeModulesDir?: string | undefined;
+}
+
+function requireFor(nativeModulesDir: string | undefined): NodeJS.Require {
+  return nativeModulesDir === undefined ? defaultRequire : createRequire(path.join(nativeModulesDir, 'index.js'));
+}
 
 // Minimal type declarations for tree-sitter's Node.js API (v0.21.x)
 interface TSNode {
@@ -67,7 +76,7 @@ const CAPTURE_TO_SYMBOL_TYPE: Record<CaptureType, SymbolType> = {
 // an ESM graph with top-level await"). Going straight to the native
 // binding sidesteps that regardless of how a package's JS wrapper is
 // authored, including if other grammars migrate to the same style later.
-function loadNativeBinding(packageName: string): Record<string, TSLanguage> {
+function loadNativeBinding(require: NodeJS.Require, packageName: string): Record<string, TSLanguage> {
   const pkgRoot = path.dirname(require.resolve(`${packageName}/package.json`));
   const nodeGypBuild = require(require.resolve('node-gyp-build', { paths: [pkgRoot] })) as (
     dir: string
@@ -76,28 +85,28 @@ function loadNativeBinding(packageName: string): Record<string, TSLanguage> {
 }
 
 // Picks one named grammar out of a multi-grammar native binding.
-function pickGrammar(packageName: string, exportName: string): TSLanguage {
-  const language = loadNativeBinding(packageName)[exportName];
+function pickGrammar(require: NodeJS.Require, packageName: string, exportName: string): TSLanguage {
+  const language = loadNativeBinding(require, packageName)[exportName];
   if (!language) {
     throw new Error(`Grammar "${exportName}" not found in ${packageName}`);
   }
   return language;
 }
 
-function loadGrammar(grammarKey: string): TSLanguage {
+function loadGrammar(require: NodeJS.Require, grammarKey: string): TSLanguage {
   // tree-sitter-typescript's native binding exports { typescript, tsx }
   if (grammarKey === 'typescript') {
-    return pickGrammar('tree-sitter-typescript', 'typescript');
+    return pickGrammar(require, 'tree-sitter-typescript', 'typescript');
   }
   if (grammarKey === 'tsx') {
-    return pickGrammar('tree-sitter-typescript', 'tsx');
+    return pickGrammar(require, 'tree-sitter-typescript', 'tsx');
   }
   // tree-sitter-php's native binding exports { php, php_only } - use php
   if (grammarKey === 'php') {
-    return pickGrammar('tree-sitter-php', 'php');
+    return pickGrammar(require, 'tree-sitter-php', 'php');
   }
   const packageName = grammarKey === 'c_sharp' ? 'tree-sitter-c-sharp' : `tree-sitter-${grammarKey}`;
-  return loadNativeBinding(packageName);
+  return loadNativeBinding(require, packageName);
 }
 
 export class CodeParser {
@@ -106,16 +115,17 @@ export class CodeParser {
   private readonly queries = new Map<string, TSQuery>();
   private readonly languages = new Map<string, TSLanguage>();
 
-  constructor() {
+  constructor(options: CodeParserOptions = {}) {
+    const require = requireFor(options.nativeModulesDir);
     this.ParserClass = require('tree-sitter') as TSParserConstructor;
-    this.initLanguages();
+    this.initLanguages(require);
   }
 
-  private initLanguages(): void {
+  private initLanguages(require: NodeJS.Require): void {
     for (const [key, config] of Object.entries(SUPPORTED_LANGUAGES)) {
       if (key === 'vue') continue; // Vue uses special handling
       try {
-        const lang = loadGrammar(config.grammarKey);
+        const lang = loadGrammar(require, config.grammarKey);
         const parser = new this.ParserClass();
         parser.setLanguage(lang);
         const query = new this.ParserClass.Query(lang, config.query);

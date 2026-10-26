@@ -2,7 +2,7 @@ import type { McpServer } from '@modelcontextprotocol/server';
 import type { VectorDB } from '../vectordb/db.js';
 import type { Embedder } from '../embedder/embedder.js';
 import type { Indexer } from '../indexer/indexer.js';
-import type { McpLogger } from '@mcp-servers/common';
+import type { CodeRagLogger } from '../core/logger.js';
 import type { SyncManager } from '../indexer/sync-manager.js';
 import { PathGuard } from '../core/path-guard.js';
 import { registerSearch } from '../tools/search.js';
@@ -25,7 +25,7 @@ export function createCodeRagServer(
   defaultTopK: number,
   includeDirs: string[],
   syncManager: SyncManager,
-  logger?: McpLogger,
+  logger?: CodeRagLogger,
   dbPath?: string,
   embeddingModel?: string,
   pathGuard: PathGuard = new PathGuard([process.cwd()]),

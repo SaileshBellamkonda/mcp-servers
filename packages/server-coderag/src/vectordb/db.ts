@@ -1,5 +1,6 @@
 import Database from 'better-sqlite3';
 import { createRequire } from 'node:module';
+import path from 'node:path';
 import { buildSchema, buildMigrations, buildDocMetadataMigration } from './schema.js';
 import type {
   MarkdownChunk,
@@ -12,10 +13,16 @@ import type {
   GlobConfig,
 } from '../core/types.js';
 
-const require = createRequire(import.meta.url);
+const defaultRequire = createRequire(import.meta.url);
 
-function loadSqliteVec(db: Database.Database): void {
+export interface VectorDBOpenOptions {
+  /** Directory whose `node_modules` holds sqlite-vec (bundled builds); default: this package's own resolution. */
+  nativeModulesDir?: string | undefined;
+}
+
+function loadSqliteVec(db: Database.Database, nativeModulesDir: string | undefined): void {
   try {
+    const require = nativeModulesDir === undefined ? defaultRequire : createRequire(path.join(nativeModulesDir, 'index.js'));
     const sqliteVec = require('sqlite-vec') as { load: (db: Database.Database) => void };
     sqliteVec.load(db);
   } catch (err) {
@@ -135,9 +142,14 @@ export class VectorDB {
     }
   }
 
-  static open(dbPath: string, dimensions: number): VectorDB {
+  static open(dbPath: string, dimensions: number, options: VectorDBOpenOptions = {}): VectorDB {
     const db = new Database(dbPath);
-    loadSqliteVec(db);
+    try {
+      loadSqliteVec(db, options.nativeModulesDir);
+    } catch (err) {
+      db.close();
+      throw err;
+    }
     db.pragma('foreign_keys = ON');
     db.pragma('journal_mode = WAL');
 

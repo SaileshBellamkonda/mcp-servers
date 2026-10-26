@@ -7,7 +7,7 @@ import { CodeParser } from './code-parser.js';
 import { isSupportedExtension } from './languages.js';
 import { createDefaultLoaderRegistry, type LoaderRegistry } from './loaders/index.js';
 import type { CodeSyncResult, DocumentMetadata, MarkdownChunk } from '../core/types.js';
-import type { McpLogger } from '@mcp-servers/common';
+import type { CodeRagLogger } from '../core/logger.js';
 import { GlobMatcher } from '../core/glob-utils.js';
 import type { PathGuard } from '../core/path-guard.js';
 
@@ -16,10 +16,12 @@ export interface IndexerOptions {
   codeMatcher?: GlobMatcher;
   globalExclude?: string[];
   useGitignore?: boolean;
-  logger?: McpLogger;
+  logger?: CodeRagLogger;
   loaders?: LoaderRegistry;
   /** Confines indexing to the allowed roots; files resolving outside them are rejected or skipped. */
   pathGuard?: PathGuard;
+  /** Directory whose `node_modules` holds tree-sitter and the grammars (bundled builds). */
+  nativeModulesDir?: string | undefined;
 }
 
 /** Text sent to the embedder: document title, heading breadcrumb and tags give the chunk its context. */
@@ -35,13 +37,14 @@ export class Indexer {
   private readonly db: VectorDB;
   private readonly embedder: Embedder;
   private readonly chunkSize: number;
-  private readonly logger: McpLogger | undefined;
+  private readonly logger: CodeRagLogger | undefined;
   private readonly docsMatcher: GlobMatcher | undefined;
   private readonly codeMatcher: GlobMatcher | undefined;
   private readonly globalExclude: string[];
   private readonly useGitignore: boolean;
   private readonly loaders: LoaderRegistry;
   private readonly pathGuard: PathGuard | undefined;
+  private readonly nativeModulesDir: string | undefined;
   private codeParser: CodeParser | null = null;
 
   constructor(db: VectorDB, embedder: Embedder, chunkSize: number, options: IndexerOptions = {}) {
@@ -55,6 +58,7 @@ export class Indexer {
     this.useGitignore = options.useGitignore ?? false;
     this.loaders = options.loaders ?? createDefaultLoaderRegistry();
     this.pathGuard = options.pathGuard;
+    this.nativeModulesDir = options.nativeModulesDir;
   }
 
   private log(level: 'info' | 'warning', msg: string): void {
@@ -67,7 +71,7 @@ export class Indexer {
   }
 
   private getCodeParser(): CodeParser {
-    this.codeParser ??= new CodeParser();
+    this.codeParser ??= new CodeParser({ nativeModulesDir: this.nativeModulesDir });
     return this.codeParser;
   }
 

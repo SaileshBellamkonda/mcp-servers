@@ -2,7 +2,7 @@ import { watch, existsSync, type FSWatcher } from 'node:fs';
 import path from 'node:path';
 import type { VectorDB } from '../vectordb/db.js';
 import type { Indexer } from './indexer.js';
-import type { McpLogger } from '@mcp-servers/common';
+import type { CodeRagLogger } from '../core/logger.js';
 import type { SyncManager } from './sync-manager.js';
 import type { GlobMatcher } from '../core/glob-utils.js';
 import { isSupportedExtension } from './languages.js';
@@ -13,7 +13,7 @@ export class CodeRagWatcher {
   private readonly syncManager: SyncManager;
   private readonly docsMatcher: GlobMatcher;
   private readonly codeMatcher: GlobMatcher;
-  private readonly logger: McpLogger;
+  private readonly logger: CodeRagLogger;
   private readonly debounceMs: number;
   private readonly watchers: FSWatcher[] = [];
   private readonly debounceTimers = new Map<string, ReturnType<typeof setTimeout>>();
@@ -24,7 +24,7 @@ export class CodeRagWatcher {
     syncManager: SyncManager,
     docsMatcher: GlobMatcher,
     codeMatcher: GlobMatcher,
-    logger: McpLogger,
+    logger: CodeRagLogger,
     debounceMs = 500,
   ) {
     this.db = db;

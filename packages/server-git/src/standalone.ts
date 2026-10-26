@@ -1,12 +1,16 @@
 #!/usr/bin/env node
-import { McpServer, StdioServerTransport, WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/server';
-import { createMcpHonoApp } from '@modelcontextprotocol/hono';
-import { serve } from '@hono/node-server';
-import { randomUUID } from 'node:crypto';
-import type { Server } from 'node:http';
+import { McpServer, StdioServerTransport } from '@modelcontextprotocol/server';
+import { McpLogger, parseList, parsePort } from '@mcp-servers/common';
+import { resolveHttpSecurity, startMcpHttpServer } from '@mcp-servers/http-host';
 import { createGitServer } from './server/git-server.js';
 import { RepositoryManager } from './core/repository-manager.js';
-import { McpLogger, parseList, parsePort } from '@mcp-servers/common';
+
+function newServer(): McpServer {
+  return new McpServer(
+    { name: 'git-server', version: '1.0.0' },
+    { capabilities: { tools: {}, logging: {} } }
+  );
+}
 
 async function main() {
   const allowedReposEnv = process.env['GIT_ALLOWED_REPOS'];
@@ -24,77 +28,41 @@ async function main() {
     process.exit(1);
   }
 
+  // Created once; every HTTP session shares it.
   const repoManager = new RepositoryManager(allowedRepos);
 
-  const server = new McpServer(
-    { name: 'git-server', version: '1.0.0' },
-    { capabilities: { tools: {}, logging: {} } }
-  );
-  const logger = new McpLogger(server, 'git-server');
-
-  createGitServer(server, repoManager, logger);
-
   if (process.env['MCP_TRANSPORT']?.toLowerCase() === 'http') {
+    const { host, token } = resolveHttpSecurity(process.env);
     const port = parsePort(process.env['MCP_HTTP_PORT'], 3000);
-    const transports = new Map<string, WebStandardStreamableHTTPServerTransport>();
-    const app = createMcpHonoApp({ host: '127.0.0.1' });
 
-    app.post('/mcp', async (c) => {
-      const sessionId = c.req.header('mcp-session-id');
-      try {
-        let t: WebStandardStreamableHTTPServerTransport;
-        if (sessionId) {
-          const existing = transports.get(sessionId);
-          if (!existing) return c.text('Invalid session ID', 400);
-          t = existing;
-        } else {
-          t = new WebStandardStreamableHTTPServerTransport({
-            sessionIdGenerator: () => randomUUID(),
-            onsessioninitialized: (sid) => { transports.set(sid, t); },
-          });
-          t.onclose = () => {
-            const sid = t.sessionId;
-            if (sid) transports.delete(sid);
-          };
-          await server.connect(t);
-        }
-        return await t.handleRequest(c.req.raw);
-      } catch (err) {
-        logger.error(`MCP request error: ${String(err)}`);
-        return c.text('Internal server error', 500);
-      }
+    const httpServer = await startMcpHttpServer({
+      createServer: () => {
+        const server = newServer();
+        createGitServer(server, repoManager, new McpLogger(server, 'git-server'));
+        return server;
+      },
+      port,
+      host,
+      token,
     });
-
-    app.get('/mcp', (c) => {
-      const sessionId = c.req.header('mcp-session-id');
-      const t = sessionId ? transports.get(sessionId) : undefined;
-      if (!t) return c.text('Invalid or missing session ID', 400);
-      return t.handleRequest(c.req.raw);
-    });
-
-    app.delete('/mcp', (c) => {
-      const sessionId = c.req.header('mcp-session-id');
-      const t = sessionId ? transports.get(sessionId) : undefined;
-      if (!t) return c.text('Invalid or missing session ID', 400);
-      return t.handleRequest(c.req.raw);
-    });
-
-    serve(
-      { fetch: app.fetch, port, hostname: '127.0.0.1' },
-      () => { logger.info(`Git MCP Server running on http://127.0.0.1:${String(port)}/mcp. Allowed repositories: ${allowedRepos.join(', ')}`); }
-    ) as unknown as Server;
+    process.stderr.write(`[INFO] Git MCP Server ready. Allowed repositories: ${allowedRepos.join(', ')}\n`);
 
     const shutdown = async (): Promise<void> => {
-      for (const [sid, t] of transports) {
-        try { await t.close(); } catch (err) { process.stderr.write(`[ERROR] closing transport ${sid}: ${String(err)}\n`); }
+      try {
+        await httpServer.close();
+      } catch (err) {
+        process.stderr.write(`[ERROR] closing HTTP server: ${String(err)}\n`);
       }
-      transports.clear();
       process.exit(0);
     };
     process.on('SIGINT', () => { void shutdown(); });
     process.on('SIGTERM', () => { void shutdown(); });
   } else {
-    // Default: stdio
+    // Default: stdio, a single server
+    const server = newServer();
+    const logger = new McpLogger(server, 'git-server');
+    createGitServer(server, repoManager, logger);
+
     const transport = new StdioServerTransport();
     await server.connect(transport);
     logger.info(`Git MCP Server ready. Allowed repositories: ${allowedRepos.join(', ')}`);

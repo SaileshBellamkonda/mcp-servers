@@ -1,100 +1,66 @@
-import { McpServer, WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/server';
-import { createMcpHonoApp } from '@modelcontextprotocol/hono';
-import { serve } from '@hono/node-server';
+import { McpServer } from '@modelcontextprotocol/server';
+import { McpLogger } from '@mcp-servers/common';
+import { requireToken, startMcpHttpServer, type HttpHostLogger } from '@mcp-servers/http-host';
 import { createGitServer } from './server/git-server.js';
 import { RepositoryManager } from './core/repository-manager.js';
-import { McpLogger } from '@mcp-servers/common';
-import { randomUUID } from 'node:crypto';
-import type { Server } from 'node:http';
 
-interface GitServerInstance {
-  server: McpServer;
-  httpServer: Server;
-  transports: Map<string, WebStandardStreamableHTTPServerTransport>;
+export interface ActivateGitServerOptions {
+  /** Repositories the server may operate on. Must not be empty. */
+  workspaceFolders: string[];
+  /** TCP port on 127.0.0.1 (default 3000; 0 picks a free port). */
+  port?: number;
+  /** Bearer token clients must send (>= 32 characters). Required: embedded servers always authenticate. */
+  authToken: string;
+  /** Receives host-level diagnostics (defaults to stderr). */
+  logger?: HttpHostLogger;
 }
 
-export function activateGitServer(
-  workspaceFolders: string[],
-  port = 3000
-): GitServerInstance {
+export interface GitServerInstance {
+  /** The port actually bound. */
+  port: number;
+  /** The bound host (always the IPv4 loopback address). */
+  host: string;
+  /** Stops accepting connections and closes every session. */
+  close(): Promise<void>;
+  /** Replaces the repositories the running server may operate on. */
+  updateAllowedRepositories(workspaceFolders: string[]): void;
+}
+
+export async function activateGitServer(options: ActivateGitServerOptions): Promise<GitServerInstance> {
+  const { workspaceFolders } = options;
   if (workspaceFolders.length === 0) {
     throw new Error('No workspace folders provided for Git MCP Server');
   }
+  const token = requireToken(options.authToken);
 
+  // Created once; every session gets its own McpServer over the same repository manager.
   const repoManager = new RepositoryManager(workspaceFolders);
 
-  const server = new McpServer(
-    { name: 'git-server', version: '1.0.0' },
-    { capabilities: { tools: {}, logging: {} } }
-  );
-  const logger = new McpLogger(server, 'git-server');
-  createGitServer(server, repoManager, logger);
-
-  const transports = new Map<string, WebStandardStreamableHTTPServerTransport>();
-  const app = createMcpHonoApp({ host: '127.0.0.1' });
-
-  app.post('/mcp', async (c) => {
-    const sessionId = c.req.header('mcp-session-id');
-    try {
-      let transport: WebStandardStreamableHTTPServerTransport;
-      if (sessionId) {
-        const existing = transports.get(sessionId);
-        if (!existing) return c.text('Invalid session ID', 400);
-        transport = existing;
-      } else {
-        transport = new WebStandardStreamableHTTPServerTransport({
-          sessionIdGenerator: () => randomUUID(),
-          onsessioninitialized: (sid) => { transports.set(sid, transport); },
-        });
-        transport.onclose = () => {
-          const sid = transport.sessionId;
-          if (sid) transports.delete(sid);
-        };
-        await server.connect(transport);
-      }
-      return await transport.handleRequest(c.req.raw);
-    } catch (err) {
-      logger.error(`MCP request error: ${String(err)}`);
-      return c.text('Internal server error', 500);
-    }
+  const httpServer = await startMcpHttpServer({
+    createServer: () => {
+      const server = new McpServer(
+        { name: 'git-server', version: '1.0.0' },
+        { capabilities: { tools: {}, logging: {} } }
+      );
+      createGitServer(server, repoManager, new McpLogger(server, 'git-server'));
+      return server;
+    },
+    port: options.port ?? 3000,
+    host: '127.0.0.1',
+    token,
+    ...(options.logger !== undefined && { logger: options.logger }),
   });
 
-  app.get('/mcp', (c) => {
-    const sessionId = c.req.header('mcp-session-id');
-    const transport = sessionId ? transports.get(sessionId) : undefined;
-    if (!transport) return c.text('Invalid or missing session ID', 400);
-    return transport.handleRequest(c.req.raw);
-  });
-
-  app.delete('/mcp', (c) => {
-    const sessionId = c.req.header('mcp-session-id');
-    const transport = sessionId ? transports.get(sessionId) : undefined;
-    if (!transport) return c.text('Invalid or missing session ID', 400);
-    return transport.handleRequest(c.req.raw);
-  });
-
-  const httpServer = serve(
-    { fetch: app.fetch, port, hostname: '127.0.0.1' },
-    () => {
-      logger.info(`Git MCP Server running on port ${String(port)}. Allowed repositories: ${workspaceFolders.join(', ')}`);
-    }
-  ) as unknown as Server;
-
-  return { server, httpServer, transports };
+  return {
+    port: httpServer.port,
+    host: httpServer.host,
+    close: () => httpServer.close(),
+    updateAllowedRepositories: (folders) => { updateAllowedRepositories(repoManager, folders); },
+  };
 }
 
 export async function deactivateGitServer(instance: GitServerInstance): Promise<void> {
-  for (const [sid, transport] of instance.transports) {
-    try {
-      await transport.close();
-    } catch (err) {
-      process.stderr.write(`[ERROR] closing transport ${sid}: ${String(err)}\n`);
-    }
-  }
-  instance.transports.clear();
-  return new Promise((resolve, reject) => {
-    instance.httpServer.close((err) => { if (err) reject(err); else resolve(); });
-  });
+  await instance.close();
 }
 
 export function updateAllowedRepositories(

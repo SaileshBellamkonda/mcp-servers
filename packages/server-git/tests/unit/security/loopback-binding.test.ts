@@ -1,15 +1,15 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { once } from 'node:events';
 import { readFileSync } from 'node:fs';
 import { createConnection } from 'node:net';
 import { networkInterfaces } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { AddressInfo } from 'node:net';
-import { activateGitServer, deactivateGitServer } from '../../../src/embedded.js';
+import { activateGitServer, deactivateGitServer, type GitServerInstance } from '../../../src/embedded.js';
 import { TestRepository } from '../../fixtures/test-repo.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const TOKEN = `loopback-token-${'z'.repeat(32)}`;
+const silent = { info: () => undefined, warning: () => undefined, error: () => undefined };
 const srcDir = path.join(__dirname, '../../../src');
 
 function externalIPv4(): string | undefined {
@@ -30,22 +30,20 @@ function connectOutcome(host: string, port: number): Promise<'connected' | 'refu
   });
 }
 
-describe('every serve() call pins the bind address', () => {
+describe('entry points never open a listener themselves', () => {
   for (const file of ['standalone.ts', 'embedded.ts']) {
-    it(`${file} passes a hostname to serve()`, () => {
+    it(`${file} delegates HTTP to the secured host`, () => {
       const source = readFileSync(path.join(srcDir, file), 'utf8');
-      const calls = [...source.matchAll(/\bserve\(\s*\{([^}]*)\}/g)];
-      expect(calls.length).toBeGreaterThan(0);
-      for (const call of calls) {
-        expect(call[1]).toMatch(/\bhostname\b/);
-      }
+      expect(source).not.toMatch(/\bserve\(/);
+      expect(source).not.toContain('@hono/node-server');
+      expect(source).toContain('startMcpHttpServer');
     });
   }
 });
 
 describe('embedded git server network exposure', () => {
   let repo: TestRepository | undefined;
-  let instance: ReturnType<typeof activateGitServer> | undefined;
+  let instance: GitServerInstance | undefined;
 
   afterEach(async () => {
     if (instance) await deactivateGitServer(instance);
@@ -56,15 +54,13 @@ describe('embedded git server network exposure', () => {
 
   async function start(): Promise<number> {
     repo = await TestRepository.create();
-    instance = activateGitServer([repo.path], 0);
-    if (!instance.httpServer.listening) await once(instance.httpServer, 'listening');
-    return (instance.httpServer.address() as AddressInfo).port;
+    instance = await activateGitServer({ workspaceFolders: [repo.path], port: 0, authToken: TOKEN, logger: silent });
+    return instance.port;
   }
 
   it('listens on the IPv4 loopback address only', async () => {
     await start();
-    const address = instance?.httpServer.address() as AddressInfo;
-    expect(address.address).toBe('127.0.0.1');
+    expect(instance?.host).toBe('127.0.0.1');
   });
 
   it('refuses connections arriving on a non-loopback interface', async (ctx) => {

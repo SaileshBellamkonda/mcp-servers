@@ -35,7 +35,9 @@ import { activateGitServer } from '@mcp-servers/server-git/embedded';
 
 export async function activate(context: vscode.ExtensionContext) {
   const workspaceFolders = vscode.workspace.workspaceFolders?.map(f => f.uri.fsPath) || [];
-  await activateGitServer(workspaceFolders, 3000);
+  // authToken is required (>= 32 characters); clients send it as `Authorization: Bearer <token>`.
+  const instance = await activateGitServer({ workspaceFolders, port: 3000, authToken });
+  context.subscriptions.push({ dispose: () => { void instance.close(); } });
 }
 ```
 

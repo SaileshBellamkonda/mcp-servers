@@ -1,146 +1,135 @@
-import { McpServer, WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/server';
-import { createMcpHonoApp } from '@modelcontextprotocol/hono';
-import { serve } from '@hono/node-server';
-import { randomUUID } from 'node:crypto';
-import type { Server } from 'node:http';
+import { McpServer } from '@modelcontextprotocol/server';
+import { McpLogger } from '@mcp-servers/common';
+import { requireToken, startMcpHttpServer, type McpHttpServer } from '@mcp-servers/http-host';
 import { loadConfigFromVsCode, type VsCodeConfiguration } from './core/config.js';
+import { resolveDimensions } from './core/dimensions.js';
+import { createStderrLogger, type CodeRagLogger } from './core/logger.js';
 import { Embedder } from './embedder/embedder.js';
 import { VectorDB } from './vectordb/db.js';
 import { Indexer } from './indexer/indexer.js';
 import { GlobMatcher } from './core/glob-utils.js';
 import { PathGuard, computeAllowedRoots } from './core/path-guard.js';
-import { McpLogger } from '@mcp-servers/common';
 import { SyncManager } from './indexer/sync-manager.js';
 import { runStartupSync } from './indexer/sync.js';
 import { createCodeRagServer } from './server/coderag-server.js';
 
+export interface ActivateCodeRagServerOptions {
+  /** The extension's `coderag` configuration section. */
+  vsCodeConfig: VsCodeConfiguration;
+  /** Every workspace folder; all of them are indexed and confine the file tools. Must not be empty. */
+  workspaceFolders: string[];
+  /** TCP port on 127.0.0.1 (default 3100; 0 picks a free port). */
+  port?: number;
+  /** Bearer token clients must send (>= 32 characters). Required: embedded servers always authenticate. */
+  authToken: string;
+  /** Directory whose `node_modules` holds tree-sitter, the grammars and sqlite-vec (bundled builds). */
+  nativeModulesDir?: string;
+  /** Embedding API key; overrides the one in the configuration (e.g. read from SecretStorage). */
+  apiKey?: string;
+  /** Receives diagnostics from the long-lived services (defaults to stderr). */
+  logger?: CodeRagLogger;
+}
+
 export interface CodeRagServerInstance {
-  server: McpServer;
-  db: VectorDB;
-  indexer: Indexer;
-  httpServer: Server;
-  transports: Map<string, WebStandardStreamableHTTPServerTransport>;
-  syncManager: SyncManager;
+  /** The port actually bound. */
+  port: number;
+  /** The bound host (always the IPv4 loopback address). */
+  host: string;
+  /** Stops accepting connections, closes every session, the indexer and the database. */
+  close(): Promise<void>;
 }
 
-function resolveDimensions(config: ReturnType<typeof loadConfigFromVsCode>): number {
-  const stored = VectorDB.readStoredDimensions(config.dbPath);
-  if (stored !== null) {
-    process.stderr.write(`[INFO] Using stored embedding dimensions: ${String(stored)}\n`);
-    return stored;
+export async function activateCodeRagServer(options: ActivateCodeRagServerOptions): Promise<CodeRagServerInstance> {
+  const { workspaceFolders } = options;
+  const token = requireToken(options.authToken);
+  const [cwd] = workspaceFolders;
+  if (cwd === undefined) {
+    throw new Error('No workspace folders provided for CodeRAG MCP Server');
   }
-  process.stderr.write(`[INFO] Using configured embedding dimensions: ${String(config.embeddingDim)}\n`);
-  return config.embeddingDim;
-}
 
-export function activateCodeRagServer(
-  vsCodeConfig: VsCodeConfiguration,
-  workspaceFolders: string[],
-  port = 3100
-): Promise<CodeRagServerInstance> {
-  const config = loadConfigFromVsCode(vsCodeConfig, workspaceFolders);
-  const cwd = workspaceFolders[0] ?? process.cwd();
+  const loaded = loadConfigFromVsCode(options.vsCodeConfig, workspaceFolders);
+  const config = options.apiKey !== undefined && options.apiKey !== ''
+    ? { ...loaded, embedding: { ...loaded.embedding, apiKey: options.apiKey } }
+    : loaded;
+  const { nativeModulesDir } = options;
+  // Shared services outlive every session, so they never log through a session's server.
+  const logger = options.logger ?? createStderrLogger('coderag');
 
   const embedder = new Embedder(config.embedding);
-  const dimensions = resolveDimensions(config);
-  const db = VectorDB.open(config.dbPath, dimensions);
-
-  const server = new McpServer(
-    { name: 'coderag-server', version: '1.0.0' },
-    { capabilities: { tools: {}, logging: {} } }
-  );
-  const logger = new McpLogger(server, 'coderag');
+  const dimensions = resolveDimensions(config, logger);
+  const db = VectorDB.open(config.dbPath, dimensions, { nativeModulesDir });
   const syncManager = new SyncManager();
 
   const docsMatcher = new GlobMatcher(config.globs.docsInclude, config.globs.docsExclude, cwd, config.useGitignore);
   const codeMatcher = new GlobMatcher(config.globs.codeInclude, config.globs.codeExclude, cwd, config.useGitignore);
 
   const pathGuard = new PathGuard(computeAllowedRoots({
-    cwdOrFolders: workspaceFolders.length > 0 ? workspaceFolders : [cwd],
+    cwdOrFolders: workspaceFolders,
     globs: config.globs,
     extraRoots: config.allowedRoots,
   }));
 
-  const indexer = new Indexer(db, embedder, config.chunkSize, { docsMatcher, codeMatcher, logger, pathGuard });
+  const indexer = new Indexer(db, embedder, config.chunkSize, { docsMatcher, codeMatcher, logger, pathGuard, nativeModulesDir });
 
-  const includeDirs = config.globs.docsInclude.map((p) => {
+  const includeDirs = [...new Set(config.globs.docsInclude.map((p) => {
     const abs = p.startsWith('/') ? p : `${cwd}/${p}`;
     const base = abs.replace(/[*?{[!].*$/, '').replace(/\/+$/, '');
     return base || cwd;
-  });
+  }))];
 
-  createCodeRagServer(server, db, embedder, indexer, config.topK, [...new Set(includeDirs)], syncManager, logger, config.dbPath, config.embedding.model, pathGuard);
-
-  const transports = new Map<string, WebStandardStreamableHTTPServerTransport>();
-  const app = createMcpHonoApp({ host: '127.0.0.1' });
+  // Startup sync runs once, when the first session connects (not for every session).
   let startupSyncStarted = false;
 
-  app.post('/mcp', async (c) => {
-    const sessionId = c.req.header('mcp-session-id');
-    try {
-      let transport: WebStandardStreamableHTTPServerTransport;
-      if (sessionId) {
-        const existing = transports.get(sessionId);
-        if (!existing) return c.text('Invalid session ID', 400);
-        transport = existing;
-      } else {
-        transport = new WebStandardStreamableHTTPServerTransport({
-          sessionIdGenerator: () => randomUUID(),
-          onsessioninitialized: (sid) => { transports.set(sid, transport); },
-        });
-        transport.onclose = () => {
-          const sid = transport.sessionId;
-          if (sid) transports.delete(sid);
-        };
-        await server.connect(transport);
-
-        // Startup sync once, on the first session connect (not on every session)
-        if (!startupSyncStarted) {
-          startupSyncStarted = true;
-          setImmediate(() => {
-            void runStartupSync(db, indexer, syncManager, config, cwd, logger).catch((err: unknown) => {
-              logger.error(`Startup sync failed: ${String(err)}`);
-            });
+  let httpServer: McpHttpServer;
+  try {
+    httpServer = await startMcpHttpServer({
+      createServer: () => {
+        const server = new McpServer(
+          { name: 'coderag-server', version: '1.0.0' },
+          { capabilities: { tools: {}, logging: {} } }
+        );
+        createCodeRagServer(
+          server, db, embedder, indexer, config.topK, includeDirs, syncManager,
+          options.logger ?? new McpLogger(server, 'coderag'),
+          config.dbPath, config.embedding.model, pathGuard,
+        );
+        return server;
+      },
+      port: options.port ?? 3100,
+      host: '127.0.0.1',
+      token,
+      logger,
+      onSessionCreated: () => {
+        if (startupSyncStarted) return;
+        startupSyncStarted = true;
+        setImmediate(() => {
+          void runStartupSync(db, indexer, syncManager, config, cwd, logger).catch((err: unknown) => {
+            logger.error(`Startup sync failed: ${String(err)}`);
           });
-        }
-      }
-      return await transport.handleRequest(c.req.raw);
-    } catch (err) {
-      logger.error(`MCP request error: ${String(err)}`);
-      return c.text('Internal server error', 500);
-    }
-  });
+        });
+      },
+    });
+  } catch (err) {
+    indexer.close();
+    db.close();
+    throw err;
+  }
 
-  app.get('/mcp', (c) => {
-    const sessionId = c.req.header('mcp-session-id');
-    const transport = sessionId ? transports.get(sessionId) : undefined;
-    if (!transport) return c.text('Invalid or missing session ID', 400);
-    return transport.handleRequest(c.req.raw);
-  });
-
-  app.delete('/mcp', (c) => {
-    const sessionId = c.req.header('mcp-session-id');
-    const transport = sessionId ? transports.get(sessionId) : undefined;
-    if (!transport) return c.text('Invalid or missing session ID', 400);
-    return transport.handleRequest(c.req.raw);
-  });
-
-  const httpServer = serve(
-    { fetch: app.fetch, port, hostname: '127.0.0.1' },
-    () => { logger.info(`CodeRAG MCP Server running on port ${String(port)}`); }
-  ) as unknown as Server;
-
-  return Promise.resolve({ server, db, indexer, httpServer, transports, syncManager });
+  let closing: Promise<void> | undefined;
+  return {
+    port: httpServer.port,
+    host: httpServer.host,
+    close: () => {
+      closing ??= (async () => {
+        await httpServer.close();
+        indexer.close();
+        db.close();
+      })();
+      return closing;
+    },
+  };
 }
 
 export async function deactivateCodeRagServer(instance: CodeRagServerInstance): Promise<void> {
-  for (const [sid, transport] of instance.transports) {
-    try { await transport.close(); } catch (err) { process.stderr.write(`[ERROR] closing transport ${sid}: ${String(err)}\n`); }
-  }
-  instance.transports.clear();
-  instance.indexer.close();
-  instance.db.close();
-  return new Promise((resolve, reject) => {
-    instance.httpServer.close((err) => { if (err) reject(err); else resolve(); });
-  });
+  await instance.close();
 }
