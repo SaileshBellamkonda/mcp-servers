@@ -1,7 +1,7 @@
 # MCP Servers for VS Code
 
 Runs [Model Context Protocol](https://modelcontextprotocol.io/) servers inside the VS Code extension host, so
-MCP clients can use them without a separate process.
+MCP clients can use them without a separate process. Part of the [mcp-servers monorepo](../../README.md); the same servers also run standalone.
 
 - **Git** - safe, controlled Git operations on the repositories of your workspace folders.
 - **CodeRAG** - semantic search over code and Markdown through an OpenAI-compatible embeddings endpoint. It runs inside
@@ -53,7 +53,7 @@ From the palette with several candidates you pick the server; with exactly one i
 | `mcpServers.coderag.port` | `3100` | Port of the CodeRAG server (`0` picks a free port) |
 | `mcpServers.coderag.embeddingUrl` | *(required)* | Base URL of the OpenAI-compatible embeddings endpoint, e.g. `http://localhost:11434/v1`. **Machine scoped** |
 | `mcpServers.coderag.embeddingModel` | *(required)* | Embedding model name, e.g. `nomic-embed-text` |
-| `mcpServers.coderag.embeddingDim` | `768` | Vector dimensions; must match the model (a different value resets the vectors and re-indexes) |
+| `mcpServers.coderag.embeddingDim` | `768` | Vector dimensions; must match the model. Used only when the workspace database is created: an existing database keeps its stored dimensions (a different value only logs a warning) |
 | `mcpServers.coderag.chunkSize` | `500` | Target chunk size in characters |
 | `mcpServers.coderag.topK` | `5` | Default number of search results |
 | `mcpServers.coderag.docsInclude` / `codeInclude` | `[]` | Glob patterns to index; empty = Markdown / the supported languages in the workspace folders. **Machine scoped** |
