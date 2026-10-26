@@ -36,7 +36,12 @@
     "vscode-git": {
       "type": "http",
       "url": "http://127.0.0.1:3000/mcp",
-      "headersHelper": "node '/path/to/globalStorage/bin/mcp-headers.js' '<scope>' --dir '/path/to/globalStorage/tokens'"
+      "headersHelper": "node '/path/to/globalStorage/bin/mcp-headers.js' '<scope>' 'git' --dir '/path/to/globalStorage/tokens'"
+    },
+    "vscode-coderag": {
+      "type": "http",
+      "url": "http://127.0.0.1:3100/mcp",
+      "headersHelper": "node '/path/to/globalStorage/bin/mcp-headers.js' '<scope>' 'coderag' --dir '/path/to/globalStorage/tokens'"
     }
   }
 }
