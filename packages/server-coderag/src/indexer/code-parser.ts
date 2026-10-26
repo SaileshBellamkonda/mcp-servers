@@ -11,8 +11,10 @@ import { extractRelations, NO_RELATIONS, type ChunkNode, type ExtractedRelations
  * 2: signatures come from the tree-sitter `body` field instead of the first `=>` or `{` in the text.
  * 3: `.tsx` files are parsed with the tsx grammar (language `tsx`) instead of the TypeScript grammar.
  * 4: a class, struct, interface or impl is stored as a skeleton (header and member list) instead of its whole body.
+ * 5: the parent symbol of a method is its Go receiver type, the type of a Rust `impl` (not the trait), and the enum,
+ *    record, interface, struct or trait that declares it; a C# type whose header holds a `#if` keeps its real name.
  */
-export const CODE_PARSER_VERSION = 4;
+export const CODE_PARSER_VERSION = 5;
 
 let defaultRequire: NodeJS.Require | undefined;
 
@@ -225,6 +227,7 @@ export class CodeParser {
       }
 
       if (!symbolNode || !symbolName) continue;
+      if (PARENT_TYPES.has(symbolNode.type)) symbolName = declarationName(symbolNode) ?? symbolName;
 
       const key = rangeKey(symbolNode);
       if (seen.has(key)) continue;
@@ -246,7 +249,7 @@ export class CodeParser {
         language: lang,
         startLine: node.startPosition.row + 1,
         endLine: node.endPosition.row + 1,
-        parentSymbol: findParentSymbol(node, source, lang),
+        parentSymbol: findParentSymbol(node),
         signature: symbol.signature,
       };
     });
@@ -463,28 +466,84 @@ function buildSkeleton(symbol: Symbol, lang: string, source: string, byRange: Ma
   return lines.join('\n');
 }
 
-function findParentSymbol(node: TSNode, source: string, _lang: string): string {
-  let current = node.parent;
-  while (current) {
-    const type = current.type;
-    const isClass =
-      type === 'class_declaration' ||
-      type === 'class_definition' ||
-      type === 'class_specifier' ||
-      type === 'impl_item';
-    if (isClass) {
-      // find name child
-      for (let i = 0; i < current.childCount; i++) {
-        const child = current.child(i);
-        if (
-          child &&
-          (child.type === 'identifier' || child.type === 'type_identifier' || child.type === 'constant')
-        ) {
-          return source.slice(child.startIndex, child.endIndex);
-        }
+/** Declarations whose body holds methods; the symbol around a method is named by their `name` field (Rust `impl`: `type`). */
+const PARENT_TYPES = new Set([
+  'class_declaration',
+  'abstract_class_declaration',
+  'class_definition',
+  'class_specifier',
+  'struct_specifier',
+  'interface_declaration',
+  'enum_declaration',
+  'record_declaration',
+  'record_struct_declaration',
+  'struct_declaration',
+  'annotation_type_declaration',
+  'trait_item',
+  'impl_item',
+]);
+
+/** Simple name of a type as written in a Rust `impl` header or a Go receiver: `Foo<T>`, `&Foo`, `*Foo`, `a::b::Foo` give `Foo`. */
+function typeName(node: TSNode | null, depth = 0): string | null {
+  if (!node || depth > 5) return null;
+  switch (node.type) {
+    case 'type_identifier':
+      return node.text;
+    case 'scoped_type_identifier':
+      return typeName(node.childForFieldName('name'), depth + 1);
+    case 'generic_type':
+    case 'reference_type':
+      return typeName(node.childForFieldName('type'), depth + 1);
+    case 'pointer_type':
+    case 'parenthesized_type': {
+      for (let i = 0; i < node.childCount; i++) {
+        const name = node.child(i)?.isNamed === true ? typeName(node.child(i), depth + 1) : null;
+        if (name !== null) return name;
       }
+      return null;
     }
-    current = current.parent;
+    default:
+      return null;
+  }
+}
+
+/** Go: the receiver type of `func (s *Server) Start()`. */
+function goReceiverType(method: TSNode): string | null {
+  const receiver = method.childForFieldName('receiver');
+  for (let i = 0; receiver && i < receiver.childCount; i++) {
+    const parameter = receiver.child(i);
+    if (parameter?.type === 'parameter_declaration') return typeName(parameter.childForFieldName('type'));
+  }
+  return null;
+}
+
+/**
+ * The name a type declaration was written with. A preprocessor line in the header (`class Writer` then `#if X`) makes
+ * the C# grammar swallow the real name into an ERROR node and report the condition (`X`) as the `name` field.
+ */
+function declarationName(node: TSNode): string | null {
+  const name = node.childForFieldName('name');
+  if (!name) return null;
+  for (let i = 0; i < node.childCount; i++) {
+    const child = node.child(i);
+    if (!child || child.startIndex >= name.startIndex) break;
+    if (child.type !== 'ERROR') continue;
+    const swallowed = /^\s*([\p{L}_][\p{L}\p{N}_]*)\s*#/u.exec(child.text);
+    if (swallowed?.[1]) return swallowed[1];
+  }
+  return name.text;
+}
+
+/** Name of the class, struct, interface, enum, record, trait or impl type around a symbol, or '' at the top level. */
+function findParentSymbol(node: TSNode): string {
+  if (node.type === 'method_declaration') {
+    const receiver = goReceiverType(node);
+    if (receiver !== null) return receiver;
+  }
+  for (let current = node.parent; current; current = current.parent) {
+    if (!PARENT_TYPES.has(current.type)) continue;
+    const name = current.type === 'impl_item' ? typeName(current.childForFieldName('type')) : declarationName(current);
+    if (name !== null && name !== '') return name;
   }
   return '';
 }
