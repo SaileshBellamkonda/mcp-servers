@@ -33,6 +33,12 @@ export interface RawRelation {
    * if the index has a symbol of that name, so it stays hidden until one resolves it.
    */
   weak?: boolean | undefined;
+  /**
+   * The name written before the callee or base type: `GsonTypes` in `GsonTypes.getRawType(x)`, `views` in
+   * `flask.views.View`, `y` in `x.y.z()`. Not set for `this`, `self`, `super`, calls and plain names. The resolver
+   * prefers a symbol of that class or module when there is one.
+   */
+  qualifier?: string | undefined;
 }
 
 export interface RelationTruncation {
@@ -51,7 +57,7 @@ export interface ExtractedRelations {
  * parses the indexed code files again and rewrites their relations only (chunks and vectors are not touched, nothing is
  * embedded again).
  */
-export const RELATIONS_VERSION = 5;
+export const RELATIONS_VERSION = 6;
 
 export const NO_RELATIONS: ExtractedRelations = { relations: [], truncated: [] };
 
@@ -137,6 +143,7 @@ const NAME_VIA_FIELD: Record<string, string> = {
   selector_expression: 'field',
   field_expression: 'field',
   member_access_expression: 'name',
+  field_access: 'field',
   member_binding_expression: 'name',
   generic_function: 'function',
 };
@@ -164,6 +171,42 @@ function nameOf(node: TSNode | null, depth = 0): string | null {
   if (NAME_IS_LAST_CHILD.has(node.type)) return nameOf(namedChildren(node).at(-1) ?? null, depth + 1);
   if (NAME_IS_FIRST_CHILD.has(node.type)) return nameOf(namedChildren(node)[0] ?? null, depth + 1);
   return null;
+}
+
+const SELF_NAMES = new Set(['this', 'self', 'Self', 'super', 'base', 'cls']);
+
+/** The name before a qualified callee or base type (see `RawRelation.qualifier`), or undefined. */
+function qualifierOf(node: TSNode): string | undefined {
+  let object: TSNode | null = null;
+  switch (node.type) {
+    case 'member_expression':
+    case 'attribute':
+      object = node.childForFieldName('object');
+      break;
+    case 'selector_expression':
+      object = node.childForFieldName('operand');
+      break;
+    case 'field_expression':
+      object = node.childForFieldName('value');
+      break;
+    case 'scoped_identifier':
+    case 'scoped_type_identifier':
+      object = node.childForFieldName('path');
+      break;
+    case 'member_access_expression':
+      object = node.childForFieldName('expression');
+      break;
+    case 'qualified_name':
+      object = node.childForFieldName('qualifier');
+      break;
+    case 'identifier':
+      // Java: the `name` of `Type.method(...)` sits next to its `object`.
+      if (node.parent?.type === 'method_invocation' && node.parent.childForFieldName('name')?.startIndex === node.startIndex) object = node.parent.childForFieldName('object');
+      break;
+    default:
+  }
+  const name = object ? nameOf(object) : null;
+  return name === null || SELF_NAMES.has(name) ? undefined : name;
 }
 
 function stripQuotes(text: string): string {
@@ -536,7 +579,16 @@ export function extractRelations(root: TSNode, lang: string, chunks: readonly Ch
       return;
     }
     counts.set(countKey, count + 1);
-    const relation: RawRelation = { type, sourcePosition: position, targetName: name, line: type === 'calls' ? callLineOf(node) : lineOf(node), ...(type === 'imports' ? { names: [...(names ?? [])] } : {}), ...(weak ? { weak: true } : {}) };
+    const qualifier = type === 'imports' ? undefined : qualifierOf(node);
+    const relation: RawRelation = {
+      type,
+      sourcePosition: position,
+      targetName: name,
+      line: type === 'calls' ? callLineOf(node) : lineOf(node),
+      ...(type === 'imports' ? { names: [...(names ?? [])] } : {}),
+      ...(weak ? { weak: true } : {}),
+      ...(qualifier === undefined ? {} : { qualifier }),
+    };
     relations.push(relation);
     if (type === 'imports') importIndex.set(name, relation);
   };
