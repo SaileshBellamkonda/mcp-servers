@@ -59,7 +59,7 @@ watches the include directories for changes.
 | `CODERAG_EMBEDDING_URL` | required | Base URL of the embeddings API; `/embeddings` is appended |
 | `CODERAG_EMBEDDING_MODEL` | required | Embedding model name |
 | `CODERAG_DB_PATH` | required | Path of the SQLite database file |
-| `CODERAG_EMBEDDING_API_KEY` | unset | Sent as `Authorization: Bearer <key>` to the embeddings endpoint; omit for Ollama |
+| `CODERAG_EMBEDDING_API_KEY` | unset | Sent as `Authorization: Bearer <key>` to the embeddings endpoint; omit for Ollama. With a key, the URL must be `https:` or `http:` to localhost |
 | `CODERAG_EMBEDDING_DIM` | `768` | Vector dimensions; must match the model. Only used for a new database, see [Storage](#storage) |
 | `CODERAG_CHUNK_SIZE` | `500` | Target size of a text chunk in characters (not related to the vec0 `chunk_size` below) |
 | `CODERAG_TOP_K` | `5` | Default number of search results |

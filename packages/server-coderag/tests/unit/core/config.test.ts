@@ -448,7 +448,7 @@ describe('loadConfigFromEnv(env) is a pure function of its argument', () => {
   });
 
   it('never mutates the supplied env or process.env', () => {
-    const env = { ...REQUIRED, CODERAG_ALLOWED_ROOTS: '/a; /b ', CODERAG_EMBEDDING_API_KEY: 'k' };
+    const env = { ...REQUIRED, CODERAG_EMBEDDING_URL: 'https://explicit/v1', CODERAG_ALLOWED_ROOTS: '/a; /b ', CODERAG_EMBEDDING_API_KEY: 'k' };
     const frozen = Object.freeze({ ...env });
     const before = { ...process.env };
     const config = loadConfigFromEnv(frozen);

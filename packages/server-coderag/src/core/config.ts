@@ -15,6 +15,36 @@ const DEFAULT_EMBEDDING_DIM = 768;
 /** Environment variables as read by {@link loadConfigFromEnv}; `process.env` satisfies it. */
 export type Env = Readonly<Record<string, string | undefined>>;
 
+function isLoopbackHost(hostname: string): boolean {
+  const host = hostname.toLowerCase();
+  return host === 'localhost' || host === '[::1]' || /^127(?:\.\d{1,3}){3}$/.test(host);
+}
+
+/**
+ * Refuses to send an API key in clear text: with a key configured the embedding URL must be `https:`, or
+ * `http:` to the local machine. Unparseable URLs are left for the embedder to reject. The message names the
+ * settings and never includes the key.
+ */
+export function assertSecureEmbeddingUrl(
+  url: string,
+  apiKey: string | undefined,
+  urlSetting: string,
+  keySetting: string,
+): void {
+  if (apiKey === undefined || apiKey === '') return;
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return;
+  }
+  if (parsed.protocol !== 'http:' || isLoopbackHost(parsed.hostname)) return;
+  throw new ConfigError(
+    `${urlSetting} uses plain http:// to ${parsed.hostname}, so the API key (${keySetting}) would be sent unencrypted. ` +
+      'Use an https:// URL, point at localhost, or remove the API key.',
+  );
+}
+
 /** Builds the configuration from `env` only; it never reads or writes `process.env` itself. */
 export function loadConfigFromEnv(env: Env = process.env): CodeRagConfig {
   const url = env['CODERAG_EMBEDDING_URL'];
@@ -37,6 +67,8 @@ export function loadConfigFromEnv(env: Env = process.env): CodeRagConfig {
       'CODERAG_DB_PATH is required. Set it to the path where CodeRAG should store its SQLite database (e.g. /data/coderag.db).'
     );
   }
+
+  assertSecureEmbeddingUrl(url, env['CODERAG_EMBEDDING_API_KEY'], 'CODERAG_EMBEDDING_URL', 'CODERAG_EMBEDDING_API_KEY');
 
   const chunkSizeRaw = env['CODERAG_CHUNK_SIZE'];
   const topKRaw = env['CODERAG_TOP_K'];
@@ -110,6 +142,12 @@ export function loadConfigFromVsCode(
   }
 
   const apiKey = vsConfig.get('embeddingApiKey');
+  assertSecureEmbeddingUrl(
+    url.trim(),
+    typeof apiKey === 'string' ? apiKey.trim() : undefined,
+    'mcpServers.coderag.embeddingUrl',
+    'the embedding API key',
+  );
   const chunkSize = vsConfig.get('chunkSize');
   const topK = vsConfig.get('topK');
   const embeddingDim = vsConfig.get('embeddingDim');

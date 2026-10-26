@@ -1,7 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/server';
 import { McpLogger } from '@mcp-servers/common';
 import { requireToken, startMcpHttpServer, type McpHttpServer } from '@mcp-servers/http-host';
-import { loadConfigFromVsCode, type VsCodeConfiguration } from './core/config.js';
+import { assertSecureEmbeddingUrl, loadConfigFromVsCode, type VsCodeConfiguration } from './core/config.js';
 import { resolveDimensions } from './core/dimensions.js';
 import { createStderrLogger, type CodeRagLogger } from './core/logger.js';
 import { Embedder } from './embedder/embedder.js';
@@ -53,6 +53,7 @@ export async function activateCodeRagServer(options: ActivateCodeRagServerOption
   const config = options.apiKey !== undefined && options.apiKey !== ''
     ? { ...loaded, embedding: { ...loaded.embedding, apiKey: options.apiKey } }
     : loaded;
+  assertSecureEmbeddingUrl(config.embedding.url, config.embedding.apiKey, 'mcpServers.coderag.embeddingUrl', 'the embedding API key');
   const { nativeModulesDir } = options;
   // Shared services outlive every session, so they never log through a session's server.
   const logger = options.logger ?? createStderrLogger('coderag');
