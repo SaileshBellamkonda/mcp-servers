@@ -9,24 +9,14 @@
  * Env: BENCH_REF (git ref of the corpus, default bdb73d5), BENCH_DIM (vector size, default 768), BENCH_MODES
  * (comma list, default hybrid,keyword,semantic), BENCH_SHOW=1 (also print every response).
  */
-import { execFileSync } from 'node:child_process';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { McpServer } from '@modelcontextprotocol/server';
-import { Embedder } from '../src/embedder/embedder.js';
-import { VectorDB } from '../src/vectordb/db.js';
-import { Indexer } from '../src/indexer/indexer.js';
 import { SyncManager } from '../src/indexer/sync-manager.js';
-import { GlobMatcher } from '../src/core/glob-utils.js';
-import { PathGuard } from '../src/core/path-guard.js';
 import { createCodeRagServer } from '../src/server/coderag-server.js';
+import { DEFAULT_DIM, DEFAULT_REF, indexPinnedCorpus } from './lib/corpus.js';
 
-const REF = process.env['BENCH_REF'] ?? 'bdb73d5';
-const DIM = Number(process.env['BENCH_DIM'] ?? '768');
+const REF = process.env['BENCH_REF'] ?? DEFAULT_REF;
+const DIM = Number(process.env['BENCH_DIM'] ?? String(DEFAULT_DIM));
 const MODES = (process.env['BENCH_MODES'] ?? 'hybrid,keyword,semantic').split(',');
-const CORPUS_PATHS = ['packages/server-coderag/src', 'packages/shared', 'packages/server-coderag/README.md', 'docs'];
 
 const QUERIES = [
   'how are embeddings requested from the API',
@@ -43,34 +33,6 @@ const QUERIES = [
   'redact api key from error messages',
 ];
 
-/** FNV-1a, 32 bit. */
-function fnv1a(text: string): number {
-  let hash = 0x811c9dc5;
-  for (let i = 0; i < text.length; i++) {
-    hash ^= text.charCodeAt(i);
-    hash = Math.imul(hash, 0x01000193) >>> 0;
-  }
-  return hash;
-}
-
-/** Deterministic embedding: hashed lowercase word pieces (camelCase and snake_case split) into DIM buckets. */
-function hashEmbedding(text: string): number[] {
-  const vec = new Array<number>(DIM).fill(0);
-  const words = text.replace(/([a-z0-9])([A-Z])/g, '$1 $2').toLowerCase().match(/[a-z0-9]+/g) ?? [];
-  for (const word of words) {
-    const h = fnv1a(word);
-    vec[h % DIM] = (vec[h % DIM] ?? 0) + ((h >>> 16) % 2 === 0 ? 1 : -1);
-  }
-  const norm = Math.sqrt(vec.reduce((sum, v) => sum + v * v, 0)) || 1;
-  return vec.map((v) => v / norm);
-}
-
-const fakeFetch = ((_url: string, init?: RequestInit) => {
-  const body = JSON.parse((init?.body as string | undefined) ?? '{}') as { input: string[] };
-  const data = body.input.map((text, index) => ({ index, embedding: hashEmbedding(text) }));
-  return Promise.resolve(new Response(JSON.stringify({ data }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
-}) as unknown as typeof fetch;
-
 /** Number of hits in a response: `count` of the JSON format, or the entry headers of the concise text format. */
 function countResults(text: string): number {
   if (text.startsWith('{')) return (JSON.parse(text) as { count: number }).count;
@@ -83,27 +45,10 @@ function percentile90(values: number[]): number {
 }
 
 async function main(): Promise<void> {
-  const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
-  const root = mkdtempSync(path.join(process.env['BENCH_TMP'] ?? tmpdir(), 'coderag-bench-'));
+  const corpus = await indexPinnedCorpus(REF, DIM);
+  const { root, db, embedder, indexer, guard } = corpus;
   try {
-    const archive = execFileSync('git', ['archive', REF, ...CORPUS_PATHS], { cwd: repoRoot, maxBuffer: 256 * 1024 * 1024 });
-    execFileSync('tar', ['-x', '-C', root], { input: archive });
-
-    const embedder = new Embedder({ url: 'http://bench.invalid/v1', model: 'hash', batchSize: 64 }, fakeFetch);
-    const db = VectorDB.open(':memory:', DIM);
-    const guard = new PathGuard([root]);
-    const quiet = { warn: () => undefined, pathGuard: guard };
-    const docsMatcher = new GlobMatcher(['**/*.md'], [], root, false, quiet);
-    const codeMatcher = new GlobMatcher(['**/*.ts'], [], root, false, quiet);
-    const indexer = new Indexer(db, embedder, 500, {
-      docsMatcher,
-      codeMatcher,
-      pathGuard: guard,
-      logger: { debug: () => undefined, info: () => undefined, warning: () => undefined, error: () => undefined },
-    });
-    const docs = await indexer.scanDocs();
-    const code = await indexer.scanCode();
-    console.log(`corpus ${REF}: ${String(docs.indexed)} docs, ${String(code.indexed)} code files, ${String(db.getDocumentCount())} indexed, dim ${String(DIM)}`);
+    console.log(`corpus ${REF}: ${String(corpus.docsIndexed)} docs, ${String(corpus.codeIndexed)} code files, ${String(db.getDocumentCount())} indexed, dim ${String(DIM)}`);
 
     const server = new McpServer({ name: 'bench', version: '0.0.0' }, { capabilities: { tools: {} } });
     createCodeRagServer(server, db, embedder, indexer, 5, [root], new SyncManager(), undefined, ':memory:', 'hash', guard);
@@ -127,10 +72,8 @@ async function main(): Promise<void> {
       const mean = tokens.reduce((a, b) => a + b, 0) / tokens.length;
       console.log(`SUMMARY mode=${mode} mean_tokens=${mean.toFixed(0)} p90_tokens=${String(percentile90(tokens))} empty=${String(empties)}/${String(QUERIES.length)}`);
     }
-    indexer.close();
-    db.close();
   } finally {
-    rmSync(root, { recursive: true, force: true });
+    corpus.dispose();
   }
 }
 
