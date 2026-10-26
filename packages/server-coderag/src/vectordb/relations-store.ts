@@ -116,6 +116,20 @@ interface QueryRow {
 }
 
 /**
+ * The files the imports of one document (`?`) resolve to. CROSS JOIN fixes the order: SQLite would otherwise start from
+ * every `imports` row of the index (idx_rel_type) and look the chunk of each one up, which made resolving the calls of an
+ * index quadratic (30 s of a 65 s run over 1,500 files); starting from the chunks of the document it takes 0.03 ms.
+ */
+export const IMPORTED_FILES_SQL = `SELECT DISTINCT cr.target_file FROM chunks c CROSS JOIN code_relations cr ON cr.source_chunk_id = c.id
+  WHERE c.document_id = ? AND cr.relation_type = 'imports' AND cr.target_file != ''`;
+
+/** Imports (`?` 1: highest relation id to consider, 2: LIKE pattern) of modules that no indexed file satisfied so far. */
+export const UNRESOLVED_IMPORTS_BY_STEM_SQL = `SELECT cr.id, cr.target_name, cr.names, cr.target_file, cr.confidence, d.filename AS src_file, cm.language
+  FROM code_relations cr JOIN chunks c ON c.id = cr.source_chunk_id JOIN documents d ON d.id = c.document_id
+  LEFT JOIN code_metadata cm ON cm.chunk_id = c.id
+  WHERE cr.relation_type = 'imports' AND cr.target_file = '' AND cr.id <= ? AND cr.target_name LIKE ? ESCAPE '!'`;
+
+/**
  * Candidates that are one symbol to a reader: the overloads of a method in one class, a struct and its `impl` blocks,
  * and a class together with its constructors (which are indexed under the class name). Each group keeps its first
  * chunk, so a name that only has several such chunks resolves instead of staying ambiguous.
@@ -295,10 +309,7 @@ export class RelationStore {
       let files = imported.get(document);
       if (!files) {
         files = this.db
-          .prepare<{ target_file: string }>(
-            `SELECT DISTINCT cr.target_file FROM code_relations cr JOIN chunks c ON c.id = cr.source_chunk_id
-             WHERE c.document_id = ? AND cr.relation_type = 'imports' AND cr.target_file != ''`,
-          )
+          .prepare<{ target_file: string }>(IMPORTED_FILES_SQL)
           .all(document)
           .map((r) => r.target_file.replaceAll('\\', '/'));
         imported.set(document, files);
@@ -411,7 +422,7 @@ export class RelationStore {
     for (const change of changes) {
       const rows =
         change.kind === 'stem'
-          ? this.db.prepare<ImportRow>(select("cr.target_file = '' AND cr.id <= ? AND cr.target_name LIKE ? ESCAPE '!'")).all(change.watermark, `%${likeEscape(change.value)}%`)
+          ? this.db.prepare<ImportRow>(UNRESOLVED_IMPORTS_BY_STEM_SQL).all(change.watermark, `%${likeEscape(change.value)}%`)
           : this.db.prepare<ImportRow>(select('(cr.target_file = ? OR cr.target_file = ?)')).all(change.value, dirname(change.value));
       changed += this.resolveImportRows(rows.filter((r) => {
         if (seen.has(r.id)) return false;

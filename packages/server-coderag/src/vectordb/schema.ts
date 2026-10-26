@@ -97,6 +97,7 @@ CREATE INDEX IF NOT EXISTS idx_rel_target ON code_relations(target_chunk_id);
 CREATE INDEX IF NOT EXISTS idx_rel_type   ON code_relations(relation_type);
 CREATE INDEX IF NOT EXISTS idx_rel_name   ON code_relations(target_name);
 CREATE INDEX IF NOT EXISTS idx_rel_file   ON code_relations(target_file);
+CREATE INDEX IF NOT EXISTS idx_rel_type_file ON code_relations(relation_type, target_file);
 
 CREATE TABLE IF NOT EXISTS relation_caps (
   source_chunk_id INTEGER NOT NULL,
