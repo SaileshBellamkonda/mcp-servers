@@ -100,17 +100,19 @@ function snippetOf(result: SearchResult): string[] {
 function headerOf(result: SearchResult, roots: readonly string[]): string {
   const file = relativePath(result.document, roots);
   const score = `(${result.similarity.toFixed(2)})`;
+  // The file changed after it was indexed: its lines may have moved. A background refresh is already under way.
+  const staleMark = result.stale === true ? '(stale)' : '';
   const code = result.metadata;
   if (code) {
     const lines = code.startLine > 0 && code.endLine > 0 ? `:${String(code.startLine)}-${String(code.endLine)}` : '';
     const name = `${code.parentSymbol ? `${code.parentSymbol}.` : ''}${code.symbolName}`;
-    return [`${file}${lines}`, code.symbolType, name, score].filter((part) => part !== '').join(' ');
+    return [`${file}${lines}`, code.symbolType, name, score, staleMark].filter((part) => part !== '').join(' ');
   }
   const lines = result.startLine === undefined
     ? ''
     : `:${String(result.startLine)}${result.endLine === undefined ? '' : `-${String(result.endLine)}`}`;
   const heading = result.headingPath && result.headingPath.length > 0 ? result.headingPath.join(' > ') : '';
-  return [`${file}${lines}`, heading, score].filter((part) => part !== '').join(' ');
+  return [`${file}${lines}`, heading, score, staleMark].filter((part) => part !== '').join(' ');
 }
 
 function renderEntry(result: SearchResult, roots: readonly string[], withSnippet: boolean): string {
@@ -152,7 +154,7 @@ export function formatConcise(all: readonly SearchResult[], options: ConciseOpti
   const { roots, offset, limit, maxTokens, mode } = options;
   const page = all.slice(offset, offset + limit);
   if (page.length === 0) {
-    return mode === 'keyword' ? 'No results. Keyword mode needs every word to match; try fewer words or mode=hybrid.' : 'No results.';
+    return mode === 'keyword' ? 'No results. Try other or fewer words, or mode=hybrid.' : 'No results.';
   }
   const budget = maxTokens * CHARS_PER_TOKEN;
   const blocks: string[] = [];

@@ -84,6 +84,8 @@ export interface SearchResult {
   startLine?: number | undefined;
   endLine?: number | undefined;
   docMetadata?: DocMetadataResult | undefined;
+  /** True when the file changed after it was indexed: the lines and text may no longer match the file. */
+  stale?: boolean | undefined;
 }
 
 export interface SearchFilter {

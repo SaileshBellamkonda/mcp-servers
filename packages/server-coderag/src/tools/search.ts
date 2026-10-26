@@ -5,6 +5,7 @@ import type { Embedder } from '../embedder/embedder.js';
 import type { SearchFilter } from '../core/types.js';
 import { PathGuard } from '../core/path-guard.js';
 import { dropContainersOfMatches, formatConcise } from './search-format.js';
+import { applyFreshness, type SearchFreshness } from './search-freshness.js';
 
 const DEFAULT_MAX_TOKENS = 1500;
 
@@ -33,11 +34,12 @@ export function registerSearch(
   embedder: Embedder,
   defaultTopK: number,
   pathGuard: PathGuard = new PathGuard([process.cwd()]),
+  freshness?: SearchFreshness,
 ): void {
   server.registerTool(
     'search',
     {
-      description: 'Search indexed code and documents (semantic, keyword or hybrid). Returns compact text: one entry per hit with path:lines, symbol, signature and a short snippet; read the file for the full code. Limit output with max_tokens and page with offset; response_format "detailed" returns full JSON. tags, doc_type, domain and project filter on frontmatter (documents only).',
+      description: 'Search indexed code and documents (semantic, keyword or hybrid). Returns compact text: per hit path:lines, symbol, signature, short snippet and a 0-1 score (hybrid: 1 = ranked first by both searches); read the file for full code. Limit with max_tokens, page with offset; response_format "detailed" returns full JSON. tags, doc_type, domain, project filter on frontmatter (documents only).',
       inputSchema: fromJsonSchema({
         type: 'object',
         properties: {
@@ -48,7 +50,7 @@ export function registerSearch(
           mode: {
             type: 'string',
             enum: ['semantic', 'keyword', 'hybrid'],
-            description: 'Search mode: semantic (vector similarity, default), keyword (FTS5 BM25 full-text), or hybrid (merged results)',
+            description: 'Search mode: semantic (vector similarity, default), keyword (BM25 full-text: splits camelCase/snake_case, matches the last word as a prefix, falls back to any-word matches), or hybrid (merged results)',
           },
           tags: {
             type: 'array',
@@ -104,6 +106,8 @@ export function registerSearch(
         const queryVector = await embedder.embed(query);
         found = db.searchWithFilter(queryVector, fetchCount, filter);
       }
+
+      found = applyFreshness(found, freshness);
 
       if (!concise) {
         const results = found.slice(skip, skip + topK);
