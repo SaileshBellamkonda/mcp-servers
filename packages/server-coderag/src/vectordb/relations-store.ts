@@ -81,6 +81,9 @@ interface Candidate {
   document_id: number;
   filename: string;
   symbol_type: string;
+  symbol_name: string;
+  parent_symbol: string | null;
+  start_line: number | null;
 }
 
 interface ImportRow {
@@ -110,6 +113,23 @@ interface QueryRow {
   tgt_name: string | null;
   tgt_parent: string | null;
   tgt_start: number | null;
+}
+
+/**
+ * Candidates that are one symbol to a reader: the overloads of a method in one class, a struct and its `impl` blocks,
+ * and a class together with its constructors (which are indexed under the class name). Each group keeps its first
+ * chunk, so a name that only has several such chunks resolves instead of staying ambiguous.
+ */
+function collapseSymbols(candidates: readonly Candidate[]): Candidate[] {
+  const first = new Map<string, Candidate>();
+  for (const c of candidates) {
+    const key = `${String(c.document_id)}\u0000${c.parent_symbol ?? ''}\u0000${c.symbol_type}`;
+    const known = first.get(key);
+    if (!known || (c.start_line ?? 0) < (known.start_line ?? 0)) first.set(key, c);
+  }
+  const grouped = [...first.values()];
+  const classLike = new Set(grouped.filter((c) => c.symbol_type === 'class' || c.symbol_type === 'struct').map((c) => `${String(c.document_id)}\u0000${c.symbol_name}`));
+  return grouped.filter((c) => !(c.symbol_type === 'function' && c.parent_symbol === c.symbol_name && classLike.has(`${String(c.document_id)}\u0000${c.symbol_name}`)));
 }
 
 function placeholders(n: number): string {
@@ -263,7 +283,7 @@ export class RelationStore {
       if (!found) {
         found = this.db
           .prepare<Candidate>(
-            `SELECT cm.chunk_id, c.document_id, d.filename, cm.symbol_type FROM code_metadata cm
+            `SELECT cm.chunk_id, c.document_id, d.filename, cm.symbol_type, cm.symbol_name, cm.parent_symbol, cm.start_line FROM code_metadata cm
              JOIN chunks c ON c.id = cm.chunk_id JOIN documents d ON d.id = c.document_id WHERE cm.symbol_name = ? LIMIT ${String(MAX_CANDIDATE_CHUNKS)}`,
           )
           .all(name);
@@ -288,7 +308,10 @@ export class RelationStore {
 
     for (const edge of edges) {
       const document = docId > 0 ? docId : edge.doc_id;
-      const all = candidatesFor(edge.target_name).filter((c) => TARGET_TYPES[edge.relation_type].has(c.symbol_type));
+      // A class never inherits from itself: `class Config(lib.Config)` names another class that happens to share the name.
+      const all = collapseSymbols(
+        candidatesFor(edge.target_name).filter((c) => TARGET_TYPES[edge.relation_type].has(c.symbol_type) && !(edge.relation_type === 'inherits' && c.chunk_id === edge.source_chunk_id)),
+      );
       let resolved: { chunk: number | null; confidence: number };
       if (all.length === 0) {
         resolved = { chunk: null, confidence: CONFIDENCE.unresolved };

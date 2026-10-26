@@ -51,7 +51,7 @@ export interface ExtractedRelations {
  * parses the indexed code files again and rewrites their relations only (chunks and vectors are not touched, nothing is
  * embedded again).
  */
-export const RELATIONS_VERSION = 2;
+export const RELATIONS_VERSION = 3;
 
 export const NO_RELATIONS: ExtractedRelations = { relations: [], truncated: [] };
 
