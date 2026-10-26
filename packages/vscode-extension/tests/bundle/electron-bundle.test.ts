@@ -53,10 +53,22 @@ async function run(version: string, args: string[]): Promise<SmokeResult> {
 function describeRun(version: string): void {
   const reason = skipReason(version);
   describe(`bundle under ELECTRON_RUN_AS_NODE with VS Code ${version}${reason ? ` (skipped: ${reason})` : ''}`, () => {
-    it.skipIf(reason !== undefined)('the extension activates with a stub vscode module and starts/stops git', async () => {
+    it.skipIf(reason !== undefined)('the extension activates with a stub vscode module, runs git, and starts or reports CodeRAG as the runtime allows', async () => {
       const result = await run(version, ['--mode', 'extension', '--bundle', bundle.extensionJs]);
       expect(result.runtime.electron, 'must really run inside Electron').not.toBeNull();
       expect(failures(result), failures(result)).toBe('');
+      const start = result.steps['extension.coderag_start']?.detail as { contextValue: string; description: string };
+      if (version === '1.101.2') {
+        // Electron 35: no FTS5. CodeRAG is unavailable with the reason, nothing crashes, git keeps working.
+        expect(start).toMatchObject({ contextValue: 'server.unavailable', description: "Needs VS Code 1.103 or newer (this build's SQLite lacks FTS5)" });
+        expect(result.steps['extension.coderag_works']).toBeUndefined();
+      } else {
+        expect(start).toMatchObject({ contextValue: 'server.running' });
+        expect(result.steps['extension.coderag_works']).toMatchObject({ ok: true });
+      }
+      for (const name of ['extension.token', 'extension.git_token', 'extension.mcp_provider', 'extension.add_to_claude_code', 'extension.rotate', 'extension.deactivate']) {
+        expect(result.steps[name], name).toMatchObject({ ok: true });
+      }
     }, 150_000);
 
     it.skipIf(reason !== undefined || bundle.nativeDir === undefined)('the git server works from the bundle', async () => {

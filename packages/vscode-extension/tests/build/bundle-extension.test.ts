@@ -25,8 +25,10 @@ describe('bundle-extension: dist/extension.js', () => {
     expect(externalImports).toContain('vscode');
   });
 
-  it('inlines the git server and the shared packages (coderag joins the extension later)', () => {
+  it('inlines the git and CodeRAG servers and the shared packages', () => {
     expect(code).toContain('git-server');
+    expect(code).toContain('coderag-server');
+    expect(code).toContain('probeCodeRagSupport');
     expect(code).toContain('startMcpHttpServer');
     expect(code).not.toMatch(/require\(["']@mcp-servers\//);
     expect(code).not.toMatch(/\bimport\(["']@mcp-servers\//);

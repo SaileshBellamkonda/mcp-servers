@@ -75,21 +75,21 @@ const INITIALIZE = {
 };
 
 /** initialize without / with a wrong / with the right token, then notifications/initialized. Returns the session. */
-async function handshake(port) {
+async function handshake(port, token = TOKEN) {
   const none = await rpc(port, INITIALIZE);
   assert(none.status === 401, `initialize without a token returned ${String(none.status)}, expected 401`);
-  const wrong = await rpc(port, INITIALIZE, { token: `${TOKEN}x` });
+  const wrong = await rpc(port, INITIALIZE, { token: `${token}x` });
   assert(wrong.status === 401, `initialize with a wrong token returned ${String(wrong.status)}, expected 401`);
-  const ok = await rpc(port, INITIALIZE, { token: TOKEN });
+  const ok = await rpc(port, INITIALIZE, { token });
   assert(ok.status === 200, `initialize with the token returned ${String(ok.status)}: ${ok.text.slice(0, 200)}`);
   assert(ok.session, 'initialize returned no mcp-session-id');
-  await rpc(port, { jsonrpc: '2.0', method: 'notifications/initialized' }, { token: TOKEN, session: ok.session });
+  await rpc(port, { jsonrpc: '2.0', method: 'notifications/initialized' }, { token, session: ok.session });
   return ok.session;
 }
 
 let nextId = 10;
-async function callTool(port, session, name, args) {
-  const response = await rpc(port, { jsonrpc: '2.0', id: nextId++, method: 'tools/call', params: { name, arguments: args } }, { token: TOKEN, session });
+async function callTool(port, session, name, args, token = TOKEN) {
+  const response = await rpc(port, { jsonrpc: '2.0', id: nextId++, method: 'tools/call', params: { name, arguments: args } }, { token, session });
   assert(response.status === 200 && response.message, `tools/call ${name} returned ${String(response.status)}: ${response.text.slice(0, 300)}`);
   assert(!response.message.error, `tools/call ${name} failed: ${JSON.stringify(response.message.error)}`);
   const text = response.message.result?.content?.map((c) => c.text ?? '').join('') ?? '';
@@ -242,6 +242,16 @@ function createVscodeStub(state) {
     fire(data) { for (const listener of [...this.listeners]) listener(data); }
     dispose() { this.listeners = []; }
   }
+  class Uri {
+    constructor(scheme, p) { this.scheme = scheme; this.path = p; }
+    static file(p) { return new Uri('file', p.replaceAll('\\', '/')); }
+    static parse(value) { const m = /^([a-z][a-z0-9+.-]*):(?:\/\/)?(.*)$/i.exec(value); return new Uri(m[1], m[2]); }
+    get fsPath() { return this.path; }
+    toString() { return `${this.scheme}://${this.path}`; }
+  }
+  class McpHttpServerDefinition {
+    constructor(label, uri, headers = {}, version) { this.label = label; this.uri = uri; this.headers = headers; this.version = version; }
+  }
   const settings = state.settings;
   const listenerList = () => {
     const listeners = [];
@@ -249,6 +259,8 @@ function createVscodeStub(state) {
   };
   return {
     EventEmitter,
+    Uri,
+    McpHttpServerDefinition,
     StatusBarAlignment: { Left: 1, Right: 2 },
     TreeItemCollapsibleState: { None: 0, Collapsed: 1, Expanded: 2 },
     TreeItem: class { constructor(label, collapsibleState) { this.label = label; this.collapsibleState = collapsibleState; } },
@@ -257,9 +269,10 @@ function createVscodeStub(state) {
     window: {
       createOutputChannel: () => ({ appendLine: (line) => { state.output.push(line); }, dispose() {} }),
       showErrorMessage: (message) => { state.errors.push(message); return Promise.resolve(undefined); },
-      showWarningMessage: (message) => { state.warnings.push(message); return Promise.resolve(undefined); },
+      showWarningMessage: (message, ...rest) => { state.warnings.push(message); return Promise.resolve(state.warningAnswers.shift?.() ?? undefined); },
       showInformationMessage: () => Promise.resolve(undefined),
-      showQuickPick: () => Promise.resolve(undefined),
+      showQuickPick: (items) => Promise.resolve(state.quickPicks.shift()?.(items)),
+      showInputBox: () => Promise.resolve(undefined),
       createStatusBarItem: () => ({ text: '', tooltip: '', command: undefined, show() {}, hide() {}, dispose() {} }),
       createTreeView: (_id, options) => { state.tree = options.treeDataProvider; return { dispose() {} }; },
     },
@@ -273,7 +286,10 @@ function createVscodeStub(state) {
       registerCommand: (id, handler) => { state.commands.set(id, handler); return { dispose() { state.commands.delete(id); } }; },
       executeCommand: (id, ...args) => state.commands.get(id)?.(...args),
     },
-    env: { clipboard: { writeText: (text) => { state.clipboard.push(text); return Promise.resolve(); } } },
+    lm: {
+      registerMcpServerDefinitionProvider: (id, provider) => { state.mcpProviders.set(id, provider); return { dispose() { state.mcpProviders.delete(id); } }; },
+    },
+    env: { clipboard: { writeText: (text) => { state.clipboard.push(text); return Promise.resolve(); } }, remoteName: undefined },
   };
 }
 
@@ -310,16 +326,49 @@ async function runExtension() {
   const repo = path.join(work, 'repo');
   fs.mkdirSync(repo);
   childProcess.execFileSync('git', ['init', '-q'], { cwd: repo, stdio: 'ignore' });
-  const port = await freePort();
+  const gitPort = await freePort();
+  const ragPort = await freePort();
+  const embeddings = await startFakeEmbeddings();
+  const globalStorage = path.join(work, 'globalStorage');
   const state = {
-    settings: { 'mcpServers.git.port': port, 'mcpServers.git.autoStart': true },
-    folders: [{ uri: { fsPath: repo, scheme: 'file' }, name: 'repo', index: 0 }],
-    output: [], errors: [], warnings: [], commands: new Map(), clipboard: [], tree: undefined,
+    settings: {
+      'mcpServers.git.port': gitPort,
+      'mcpServers.git.autoStart': true,
+      'mcpServers.coderag.port': ragPort,
+      'mcpServers.coderag.embeddingUrl': `http://127.0.0.1:${String(embeddings.port)}/v1`,
+      'mcpServers.coderag.embeddingModel': 'fake-embedding',
+      'mcpServers.coderag.embeddingDim': 8,
+    },
+    folders: [],
+    output: [], errors: [], warnings: [], warningAnswers: [], quickPicks: [], commands: new Map(), clipboard: [], tree: undefined,
+    mcpProviders: new Map(),
   };
   const stub = createVscodeStub(state);
-  const treeState = () => {
-    const [element] = state.tree.getChildren();
-    return element ? state.tree.getTreeItem(element) : undefined;
+  state.folders.push({ uri: stub.Uri.file(repo), name: 'repo', index: 0 });
+  const secrets = new Map();
+  const secretListeners = [];
+  const context = {
+    subscriptions: [],
+    globalStorageUri: stub.Uri.file(globalStorage),
+    storageUri: stub.Uri.file(path.join(work, 'workspaceStorage')),
+    secrets: {
+      get: (key) => Promise.resolve(secrets.get(key)),
+      store: (key, value) => { secrets.set(key, value); secretListeners.forEach((l) => l({ key })); return Promise.resolve(); },
+      delete: (key) => { secrets.delete(key); secretListeners.forEach((l) => l({ key })); return Promise.resolve(); },
+      onDidChange: (listener) => { secretListeners.push(listener); return { dispose() { secretListeners.splice(secretListeners.indexOf(listener), 1); } }; },
+    },
+  };
+  const tree = () => state.tree.getChildren().map((element) => ({ id: element.id, item: state.tree.getTreeItem(element) }));
+  const item = (id) => tree().find((entry) => entry.id === id)?.item;
+  const tokensDir = path.join(globalStorage, 'tokens');
+  const helperPath = path.join(globalStorage, 'bin', 'mcp-headers.js');
+  /** The token as a client sees it: through the installed headers helper, run like Claude Code runs it. */
+  const tokenFromHelper = () => {
+    const scope = fs.readdirSync(tokensDir).find((name) => /^[0-9a-f]{16}\.json$/.test(name)).replace('.json', '');
+    const out = childProcess.execFileSync(process.execPath, [helperPath, scope, '--dir', tokensDir], { encoding: 'utf8' });
+    const authorization = JSON.parse(out).Authorization;
+    assert(authorization.startsWith('Bearer '), `helper printed ${out}`);
+    return { scope, token: authorization.slice('Bearer '.length) };
   };
 
   // Resolve `vscode` to the stub for any module the bundle loads.
@@ -335,59 +384,151 @@ async function runExtension() {
       assert(typeof extension.deactivate === 'function', 'bundle does not export deactivate');
     });
     if (!extension) return;
-    const context = { subscriptions: [] };
     await step('extension.activate', () => {
       extension.activate(context);
       const commands = [...state.commands.keys()].sort();
       assert(commands.includes('mcpServers.startServer') && commands.includes('mcpServers.stopServer'), `commands registered: ${commands.join(', ')}`);
       assert(state.tree, 'no tree view was created');
+      assert(state.mcpProviders.has('mcpServers.servers'), 'the MCP server definition provider was not registered');
       return { commands };
     });
     // autoStart is on and the workspace folder is a real git repository: the git server must come up by itself on
-    // the configured port and refuse unauthenticated requests.
+    // the configured port and refuse unauthenticated requests. CodeRAG stays stopped (its autoStart default is off).
     await step('extension.autostart', async () => {
-      const item = await waitFor('the git server to run', () => {
-        const current = treeState();
-        assert(current?.contextValue !== 'server.error', `git server failed: ${state.errors.join(' | ')} ${state.output.join(' | ')}`);
-        return current?.contextValue === 'server.running' ? current : undefined;
+      const current = await waitFor('the git server to run', () => {
+        const git = item('git');
+        assert(git?.contextValue !== 'server.error', `git server failed: ${state.errors.join(' | ')} ${state.output.join(' | ')}`);
+        return git?.contextValue === 'server.running' ? git : undefined;
       });
-      assert(item.description === `running on port ${String(port)}`, `unexpected description: ${item.description}`);
-      const unauthenticated = await rpc(port, INITIALIZE);
+      assert(current.description === `running on port ${String(gitPort)}`, `unexpected description: ${current.description}`);
+      const unauthenticated = await rpc(gitPort, INITIALIZE);
       assert(unauthenticated.status === 401, `unauthenticated initialize returned ${String(unauthenticated.status)}`);
       assert(state.errors.length === 0, `unexpected error messages: ${state.errors.join(' | ')}`);
+      assert(item('coderag')?.contextValue === 'server.stopped', `coderag should wait for the user: ${String(item('coderag')?.contextValue)}`);
     });
     await step('extension.copy_url', async () => {
-      await state.commands.get('mcpServers.copyServerUrl')();
-      assert(state.clipboard.at(-1) === `http://127.0.0.1:${String(port)}/mcp`, `clipboard: ${state.clipboard.join(' | ')}`);
+      await state.commands.get('mcpServers.copyServerUrl')('git');
+      assert(state.clipboard.at(-1) === `http://127.0.0.1:${String(gitPort)}/mcp`, `clipboard: ${state.clipboard.join(' | ')}`);
     });
     // A port held by someone else must surface as one clear error from the awaited activation, and the server must
     // start once the port is free again.
     await step('extension.port_in_use', async () => {
-      await state.commands.get('mcpServers.stopServer')();
-      await assertClosed(port, 'after stopServer');
+      await state.commands.get('mcpServers.stopServer')('git');
+      await assertClosed(gitPort, 'after stopServer');
       const squatter = require('node:net').createServer();
-      await new Promise((resolve, reject) => { squatter.once('error', reject); squatter.listen(port, '127.0.0.1', resolve); });
+      await new Promise((resolve, reject) => { squatter.once('error', reject); squatter.listen(gitPort, '127.0.0.1', resolve); });
       try {
-        await state.commands.get('mcpServers.startServer')();
-        assert(treeState()?.contextValue === 'server.error', `expected server.error, got ${String(treeState()?.contextValue)}`);
-        assert(state.errors.length === 1 && state.errors[0].includes(`Port ${String(port)} is already in use`), `error messages: ${state.errors.join(' | ')}`);
+        await state.commands.get('mcpServers.startServer')('git');
+        assert(item('git')?.contextValue === 'server.error', `expected server.error, got ${String(item('git')?.contextValue)}`);
+        assert(state.errors.length === 1 && state.errors[0].includes(`Port ${String(gitPort)} is already in use`), `error messages: ${state.errors.join(' | ')}`);
       } finally {
         await new Promise((resolve) => { squatter.close(resolve); });
       }
-      await state.commands.get('mcpServers.startServer')();
-      assert(treeState()?.contextValue === 'server.running', `expected server.running after retry, got ${String(treeState()?.contextValue)}`);
+      state.errors.length = 0;
+      await state.commands.get('mcpServers.startServer')('git');
+      assert(item('git')?.contextValue === 'server.running', `expected server.running after retry, got ${String(item('git')?.contextValue)}`);
+    });
+
+    // CodeRAG: started by the user. Where the runtime lacks FTS5 (VS Code 1.101-1.102) it must be reported as
+    // unavailable with the reason and must not crash anything; elsewhere it must run end to end.
+    let ragRunning = false;
+    await step('extension.coderag_start', async () => {
+      await state.commands.get('mcpServers.startServer')('coderag');
+      const entry = item('coderag');
+      const info = { contextValue: entry?.contextValue, description: entry?.description };
+      assert(entry?.contextValue !== 'server.error', `coderag failed to start: ${state.errors.join(' | ')} ${state.output.join(' | ')}`);
+      ragRunning = entry?.contextValue === 'server.running';
+      assert(item('git')?.contextValue === 'server.running', 'git must keep running whatever coderag does');
+      return info;
+    });
+    let token;
+    await step('extension.token', () => {
+      // One token per workspace, mirrored to a file that only the helper script reads.
+      const found = tokenFromHelper();
+      token = found.token;
+      assert(/^[0-9a-f]{64}$/.test(token), 'unexpected token shape');
+      if (process.platform !== 'win32') {
+        const fileMode = fs.statSync(path.join(tokensDir, `${found.scope}.json`)).mode & 0o777;
+        const dirMode = fs.statSync(tokensDir).mode & 0o777;
+        assert(fileMode === 0o600 && dirMode === 0o700, `modes: file ${fileMode.toString(8)}, directory ${dirMode.toString(8)}`);
+      }
+      assert(!state.output.join('\n').includes(token), 'the token was written to the output channel');
+      return { scope: found.scope };
+    });
+    await step('extension.git_token', async () => {
+      const session = await handshake(gitPort, token);
+      assert(session, 'git did not accept the helper token');
+    });
+    if (ragRunning) {
+      await step('extension.coderag_works', async () => {
+        const session = await handshake(ragPort, token);
+        const status = JSON.parse(await callTool(ragPort, session, 'get_index_status', {}, token));
+        assert(status.embedding_dim === 8, `unexpected index status ${JSON.stringify(status)}`);
+        assert(fs.existsSync(path.join(work, 'workspaceStorage', 'coderag.db')), 'the database is not in the workspace storage');
+      });
+    }
+    // VS Code's MCP integration: definitions list the servers; resolving injects the same token as a header.
+    await step('extension.mcp_provider', async () => {
+      const provider = state.mcpProviders.get('mcpServers.servers');
+      const definitions = provider.provideMcpServerDefinitions({});
+      const labels = definitions.map((d) => d.label);
+      assert(labels.includes('MCP Servers: Git'), `definitions: ${labels.join(', ')}`);
+      // CodeRAG is offered only where it can run (an unavailable server is omitted).
+      assert(labels.includes('MCP Servers: CodeRAG') === ragRunning, `definitions: ${labels.join(', ')}`);
+      assert(!JSON.stringify(definitions).includes(token), 'a listed definition contains the token');
+      const git = await provider.resolveMcpServerDefinition(definitions.find((d) => d.label === 'MCP Servers: Git'), {});
+      assert(git.headers.Authorization === `Bearer ${token}`, 'resolve did not inject the stored token');
+      assert(git.uri.toString() === `http://127.0.0.1:${String(gitPort)}/mcp`, `unexpected uri ${git.uri.toString()}`);
+      return { labels };
+    });
+    // Claude Code: write .mcp.json, then run its headersHelper command line through a shell like Claude Code does.
+    await step('extension.add_to_claude_code', async () => {
+      const wanted = ['git', ...(ragRunning ? ['coderag'] : [])];
+      state.quickPicks.push((items) => items.filter((entry) => wanted.includes(entry.id)));
+      state.quickPicks.push((items) => items.find((entry) => entry.action === 'write'));
+      state.warningAnswers.push('Write .mcp.json');
+      await state.commands.get('mcpServers.addToClaudeCode')();
+      const file = path.join(repo, '.mcp.json');
+      assert(fs.existsSync(file), `no .mcp.json was written: ${state.errors.join(' | ')}`);
+      const text = fs.readFileSync(file, 'utf8');
+      assert(!text.includes(token), '.mcp.json contains the token');
+      const parsed = JSON.parse(text);
+      const entry = parsed.mcpServers['vscode-git'];
+      assert(entry.type === 'http' && entry.url === `http://127.0.0.1:${String(gitPort)}/mcp`, `unexpected entry ${JSON.stringify(entry)}`);
+      if (process.platform !== 'win32') {
+        // headersHelper runs through a shell; `node` stands for the runtime under test.
+        const command = entry.headersHelper.replace(/^node /, `${JSON.stringify(process.execPath)} `);
+        const out = childProcess.execFileSync('/bin/sh', ['-c', command], { encoding: 'utf8' });
+        assert(JSON.parse(out).Authorization === `Bearer ${token}`, 'the headersHelper command line did not print the token header');
+      }
+      return { entries: Object.keys(parsed.mcpServers) };
+    });
+    // Rotation: the old token stops working, the new one is picked up by the helper and by the restarted servers.
+    await step('extension.rotate', async () => {
+      state.warningAnswers.push('Rotate');
+      await state.commands.get('mcpServers.rotateToken')();
+      const rotated = tokenFromHelper().token;
+      assert(rotated !== token, 'the token did not change');
+      assert(item('git')?.contextValue === 'server.running', 'git did not come back after the rotation');
+      const old = await rpc(gitPort, INITIALIZE, { token });
+      assert(old.status === 401, `the old token still works (${String(old.status)})`);
+      await handshake(gitPort, rotated);
+      if (ragRunning) await handshake(ragPort, rotated);
+      token = rotated;
     });
     // VS Code calls deactivate(), then disposes the subscriptions.
     await step('extension.deactivate', async () => {
       await extension.deactivate();
-      await assertClosed(port, 'after deactivate()');
-      assert(treeState()?.contextValue === 'server.stopped', `expected server.stopped, got ${String(treeState()?.contextValue)}`);
+      await assertClosed(gitPort, 'after deactivate()');
+      if (ragRunning) await assertClosed(ragPort, 'after deactivate()');
+      assert(item('git')?.contextValue === 'server.stopped', `expected server.stopped, got ${String(item('git')?.contextValue)}`);
     });
     await step('extension.dispose', () => {
       for (const disposable of context.subscriptions) disposable.dispose();
     });
   } finally {
     Module._load = originalLoad;
+    embeddings.server.close();
     fs.rmSync(work, { recursive: true, force: true });
   }
 }
