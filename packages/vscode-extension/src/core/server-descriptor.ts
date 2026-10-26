@@ -53,6 +53,8 @@ export interface ServerDescriptor {
   /** Settings section holding `port` and `autoStart`, e.g. `mcpServers.git`. */
   settingsSection: string;
   defaultPort: number;
+  /** The `autoStart` default (it must equal the one contributed in package.json); defaults to true. */
+  autoStartDefault?: boolean;
   /**
    * Further keys of `settingsSection` (besides `port`) whose change requires a restart of the running server; the
    * adapter compares their values with the ones the server was started with.

@@ -45,9 +45,94 @@
           "description": "Port of the Git MCP server on 127.0.0.1. Changing it restarts a running server. 0 picks a free port (the URL then changes on every start).",
           "minimum": 0,
           "maximum": 65535
+        },
+        "mcpServers.coderag.autoStart": {
+          "type": "boolean",
+          "default": false,
+          "description": "Start the CodeRAG MCP server automatically when VS Code opens with a workspace folder. Off by default: starting it indexes the workspace, which costs CPU, disk space and embedding requests (the first start of a large repository takes a while)."
+        },
+        "mcpServers.coderag.port": {
+          "type": "integer",
+          "default": 3100,
+          "description": "Port of the CodeRAG MCP server on 127.0.0.1. Changing it restarts a running server. 0 picks a free port (the URL then changes on every start). Workspace settings may override it; a taken port only makes the server fail to start.",
+          "minimum": 0,
+          "maximum": 65535
+        },
+        "mcpServers.coderag.embeddingUrl": {
+          "type": "string",
+          "default": "",
+          "scope": "machine",
+          "description": "Base URL of the OpenAI-compatible embeddings endpoint, for example http://localhost:11434/v1 for Ollama. Required to start CodeRAG. Machine scoped: a repository's .vscode/settings.json cannot redirect your code to another endpoint. The API key is not a setting; use the command \"MCP Servers: Set CodeRAG API Key\"."
+        },
+        "mcpServers.coderag.embeddingModel": {
+          "type": "string",
+          "default": "",
+          "description": "Name of the embedding model, for example nomic-embed-text. Required to start CodeRAG."
+        },
+        "mcpServers.coderag.embeddingDim": {
+          "type": "integer",
+          "default": 768,
+          "minimum": 1,
+          "description": "Number of dimensions of the embedding vectors; must match the model. If the existing index uses another dimension, its vectors are reset and the workspace is re-indexed."
+        },
+        "mcpServers.coderag.chunkSize": {
+          "type": "integer",
+          "default": 500,
+          "minimum": 1,
+          "description": "Target size of a text chunk, in characters, when indexing documents."
+        },
+        "mcpServers.coderag.topK": {
+          "type": "integer",
+          "default": 5,
+          "minimum": 1,
+          "description": "Number of results a search returns by default."
+        },
+        "mcpServers.coderag.docsInclude": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": [],
+          "scope": "machine",
+          "description": "Glob patterns of the documents to index. Empty means all Markdown and MDX files (*.md, *.mdx) in the workspace folders. Machine scoped because the patterns decide which files are read and sent to the embeddings endpoint."
+        },
+        "mcpServers.coderag.docsExclude": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": [],
+          "description": "Glob patterns of documents to leave out of the index."
+        },
+        "mcpServers.coderag.codeInclude": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": [],
+          "scope": "machine",
+          "description": "Glob patterns of the source files to index. Empty means the supported languages in the workspace folders. Machine scoped because the patterns decide which files are read and sent to the embeddings endpoint."
+        },
+        "mcpServers.coderag.codeExclude": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": [],
+          "description": "Glob patterns of source files to leave out of the index."
+        },
+        "mcpServers.coderag.useGitignore": {
+          "type": "boolean",
+          "default": true,
+          "description": "Skip files ignored by .gitignore when indexing."
+        },
+        "mcpServers.coderag.allowedRoots": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": [],
+          "scope": "machine",
+          "description": "Absolute directories outside the workspace folders that CodeRAG tools may read and write. Empty means only the workspace folders and the base directories of the include patterns. Machine scoped: a repository's .vscode/settings.json cannot widen file access."
         }
       }
     },
+    "mcpServerDefinitionProviders": [
+      {
+        "id": "mcpServers.servers",
+        "label": "MCP Servers (this workspace)"
+      }
+    ],
     "commands": [
       {
         "command": "mcpServers.startServer",
@@ -72,9 +157,55 @@
         "title": "Copy Server URL",
         "category": "MCP Servers",
         "icon": "$(copy)"
+      },
+      {
+        "command": "mcpServers.addToClaudeCode",
+        "title": "Add to Claude Code...",
+        "category": "MCP Servers",
+        "icon": "$(terminal)"
+      },
+      {
+        "command": "mcpServers.rotateToken",
+        "title": "Rotate Server Token",
+        "category": "MCP Servers",
+        "icon": "$(sync)"
+      },
+      {
+        "command": "mcpServers.coderag.setApiKey",
+        "title": "Set CodeRAG API Key",
+        "category": "MCP Servers",
+        "icon": "$(key)"
+      },
+      {
+        "command": "mcpServers.coderag.clearApiKey",
+        "title": "Clear CodeRAG API Key",
+        "category": "MCP Servers",
+        "icon": "$(trash)"
       }
     ],
     "menus": {
+      "view/title": [
+        {
+          "command": "mcpServers.addToClaudeCode",
+          "when": "view == mcpServers",
+          "group": "navigation@1"
+        },
+        {
+          "command": "mcpServers.rotateToken",
+          "when": "view == mcpServers",
+          "group": "1_token@1"
+        },
+        {
+          "command": "mcpServers.coderag.setApiKey",
+          "when": "view == mcpServers",
+          "group": "2_coderag@1"
+        },
+        {
+          "command": "mcpServers.coderag.clearApiKey",
+          "when": "view == mcpServers",
+          "group": "2_coderag@2"
+        }
+      ],
       "commandPalette": [
         {
           "command": "mcpServers.startServer",

@@ -90,6 +90,7 @@ export function createCodeRagDescriptor(environment: CodeRagEnvironment): Server
     label: 'CodeRAG',
     settingsSection: SETTINGS_SECTION,
     defaultPort: 3100,
+    autoStartDefault: false,
     requiresWorkspace: true,
     restartSettings: RESTART_SETTINGS,
 

@@ -1,10 +1,14 @@
-import { readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
+import { MCP_PROVIDER_ID } from '../../src/mcp-provider';
 import { McpServersTreeProvider } from '../../src/tree-provider';
+import { createCodeRagDescriptor } from '../../src/servers/coderag-descriptor';
 import { gitDescriptor } from '../../src/servers/git-descriptor';
 import { makeRegistry } from './fake-servers';
+import { makeContext } from './test-context';
 
 vi.mock('../../src/servers/module-loader', () => ({ loadServerModule: vi.fn() }));
 import { activate, deactivate } from '../../src/extension';
@@ -20,8 +24,10 @@ interface Manifest {
     commands: { command: string; title: string; category?: string; icon?: string }[];
     menus: Record<string, MenuEntry[]>;
     views: Record<string, { id: string }[]>;
-    configuration: { properties: Record<string, { default?: unknown; description?: string; type?: string }> };
+    configuration: { properties: Record<string, { default?: unknown; description?: string; type?: string; scope?: string; minimum?: number; maximum?: number }> };
+    mcpServerDefinitionProviders?: { id: string; label: string }[];
   };
+  engines: { vscode: string };
 }
 const manifest = JSON.parse(readFileSync(path.resolve(import.meta.dirname, '../../package.json'), 'utf8')) as Manifest;
 
@@ -33,6 +39,16 @@ function evalWhen(when: string, context: Record<string, unknown>): boolean {
   return new Function('ctx', `return ${js};`)(context) as boolean;
 }
 
+const roots: string[] = [];
+function newContext(): ReturnType<typeof makeContext> {
+  const root = mkdtempSync(path.join(tmpdir(), 'manifest-test-'));
+  roots.push(root);
+  return makeContext(root);
+}
+afterEach(() => {
+  for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
+});
+
 const commandIds = manifest.contributes.commands.map((c) => c.command);
 const itemMenu = manifest.contributes.menus['view/item/context'] ?? [];
 const paletteMenu = manifest.contributes.menus['commandPalette'] ?? [];
@@ -40,7 +56,7 @@ const STATES = ['stopped', 'starting', 'running', 'error', 'unavailable'] as con
 
 describe('package.json contributes', () => {
   it('declares exactly the commands the extension registers', () => {
-    const ctx = { subscriptions: [] as { dispose(): void }[] };
+    const ctx = newContext();
     activate(ctx as never);
     const registered = vi.mocked(vscode.commands.registerCommand).mock.calls.map(([id]) => id);
     void deactivate();
@@ -94,7 +110,7 @@ describe('package.json contributes', () => {
   });
 
   it('hides the palette entries whose context keys the extension never sets, and only uses keys it sets', async () => {
-    const ctx = { subscriptions: [] as { dispose(): void }[] };
+    const ctx = newContext();
     activate(ctx as never);
     await Promise.resolve();
     const keys = new Set(
@@ -116,6 +132,62 @@ describe('package.json contributes', () => {
     expect(props['mcpServers.git.port']).toMatchObject({ type: 'integer', default: gitDescriptor.defaultPort });
     expect(props['mcpServers.git.autoStart']).toMatchObject({ type: 'boolean', default: true });
     expect(props['mcpServers.git.autoStart']?.description).toMatch(/workspace folder/i);
+  });
+
+  describe('CodeRAG settings', () => {
+    const props = manifest.contributes.configuration.properties;
+    const coderag = createCodeRagDescriptor({ nativeModulesDir: '/x', storageDir: () => '/s', readApiKey: () => Promise.resolve(undefined), isRemote: () => false });
+    const keys = Object.keys(props).filter((key) => key.startsWith('mcpServers.coderag.'));
+
+    it('contributes autoStart (off: indexing costs), port and one setting per key the server reads', () => {
+      expect(props['mcpServers.coderag.autoStart']).toMatchObject({ type: 'boolean', default: false });
+      expect(props['mcpServers.coderag.autoStart']?.description).toMatch(/cost/i);
+      expect(coderag.autoStartDefault).toBe(false);
+      expect(props['mcpServers.coderag.port']).toMatchObject({ type: 'integer', default: coderag.defaultPort, minimum: 0, maximum: 65535 });
+      expect(keys.map((key) => key.replace('mcpServers.coderag.', '')).sort()).toEqual(
+        ['autoStart', 'port', ...(coderag.restartSettings ?? [])].sort()
+      );
+    });
+
+    it('uses the key names loadConfigFromVsCode reads', () => {
+      expect([...(coderag.restartSettings ?? [])].sort()).toEqual(
+        ['allowedRoots', 'chunkSize', 'codeExclude', 'codeInclude', 'docsExclude', 'docsInclude', 'embeddingDim', 'embeddingModel', 'embeddingUrl', 'topK', 'useGitignore'].sort()
+      );
+    });
+
+    it('scopes every setting that widens file access or redirects data to the machine (a repository settings file cannot set them)', () => {
+      for (const key of ['allowedRoots', 'docsInclude', 'codeInclude', 'embeddingUrl']) {
+        expect(props[`mcpServers.coderag.${key}`]?.scope, key).toBe('machine');
+      }
+    });
+
+    it('keeps ports in the default (window) scope', () => {
+      expect(props['mcpServers.git.port']?.scope).toBeUndefined();
+      expect(props['mcpServers.coderag.port']?.scope).toBeUndefined();
+    });
+
+    it('has no setting for secrets: the API key lives in SecretStorage only', () => {
+      expect(Object.keys(props).filter((key) => /api.?key|token|secret|password/i.test(key))).toEqual([]);
+      expect(props['mcpServers.coderag.embeddingUrl']?.description).toMatch(/Set CodeRAG API Key/);
+    });
+
+    it('defaults empty glob lists so the server defaults apply', () => {
+      for (const key of ['docsInclude', 'docsExclude', 'codeInclude', 'codeExclude', 'allowedRoots']) {
+        expect(props[`mcpServers.coderag.${key}`], key).toMatchObject({ type: 'array', default: [] });
+      }
+    });
+  });
+
+  it('declares the MCP server definition provider the extension registers, on an engine that has the API', () => {
+    expect(manifest.contributes.mcpServerDefinitionProviders).toEqual([{ id: MCP_PROVIDER_ID, label: expect.any(String) as string }]);
+    expect(manifest.engines.vscode).toBe('^1.101.0');
+  });
+
+  it('offers the integration commands in the view title menu', () => {
+    const titleMenu = manifest.contributes.menus['view/title'] ?? [];
+    expect(titleMenu.map((entry) => entry.command)).toEqual(
+      expect.arrayContaining(['mcpServers.addToClaudeCode', 'mcpServers.rotateToken', 'mcpServers.coderag.setApiKey', 'mcpServers.coderag.clearApiKey'])
+    );
   });
 
   it('still activates on startup so auto-start works', () => {

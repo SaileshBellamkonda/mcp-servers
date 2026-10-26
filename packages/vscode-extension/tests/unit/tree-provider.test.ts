@@ -17,7 +17,7 @@ describe('McpServersTreeProvider', () => {
       ['starting', 'server.starting', 'loading~spin', 'starting...'],
       ['running', 'server.running', 'circle-filled', 'running on port 4000'],
       ['error', 'server.error', 'error', 'error'],
-      ['unavailable', 'server.unavailable', 'warning', 'unavailable'],
+      ['unavailable', 'server.unavailable', 'warning', 'GIT cannot run here'],
     ] as const;
 
     it.each(cases)('%s: contextValue %s, icon %s, description "%s"', async (state, contextValue, icon, description) => {
@@ -29,6 +29,13 @@ describe('McpServersTreeProvider', () => {
       expect(item.description).toBe(description);
       expect(item.collapsibleState).toBe(vscode.TreeItemCollapsibleState.None);
       expect(item.id).toBe('git');
+    });
+
+    it('shows an unavailable server\'s reason as its description, falling back to the state name', async () => {
+      const { registry, servers } = await makeRegistry([['coderag', 'unavailable']]);
+      const adapter = servers['coderag']!.adapter;
+      vi.spyOn(adapter, 'getInfo').mockReturnValueOnce({ id: 'coderag', label: 'CodeRAG', state: 'unavailable' });
+      expect(new McpServersTreeProvider(registry).getTreeItem(adapter).description).toBe('unavailable');
     });
 
     it('colours the state icons', async () => {

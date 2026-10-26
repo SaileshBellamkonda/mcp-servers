@@ -22,6 +22,8 @@ function describeState(info: ServerInfo): string {
       return `running on port ${String(info.port)}`;
     case 'starting':
       return 'starting...';
+    case 'unavailable':
+      return info.reason ?? info.state;
     default:
       return info.state;
   }
