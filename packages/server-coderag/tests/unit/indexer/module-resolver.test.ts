@@ -119,6 +119,31 @@ describe('CodeFileIndex: Rust', () => {
   });
 });
 
+describe('CodeFileIndex: Rust paths stay inside their crate', () => {
+  const idx = index([
+    '/w/crates/ignore/src/lib.rs',
+    '/w/crates/ignore/src/walk.rs',
+    '/w/crates/ignore/src/util.rs',
+    '/w/crates/matcher/tests/tests.rs',
+    '/w/crates/matcher/tests/util.rs',
+    '/w/crates/printer/src/lib.rs',
+  ]);
+
+  it('does not resolve `crate::tests` (an inline test module) to the tests of another crate', () => {
+    expect(idx.resolveImport('rust', 'crate::tests', ['TempDir'], '/w/crates/ignore/src/walk.rs')).toBeNull();
+  });
+
+  it('does not resolve `crate::util` to another crate when its own crate has no such module', () => {
+    expect(idx.resolveImport('rust', 'crate::util', ['Replacer'], '/w/crates/printer/src/lib.rs')).toBeNull();
+    expect(idx.resolveImport('rust', 'crate::util', ['Replacer'], '/w/crates/ignore/src/walk.rs')).toBe('/w/crates/ignore/src/util.rs');
+  });
+
+  it('still resolves `self::` and plain module paths of files without a recognisable crate directory', () => {
+    const flat = index(['/w/app/main.rs', '/w/app/flags/mod.rs']);
+    expect(flat.resolveImport('rust', 'crate::flags', ['x'], '/w/app/main.rs')).toBe('/w/app/flags/mod.rs');
+  });
+});
+
 describe('CodeFileIndex: Java and C#', () => {
   it('resolves Java imports to the class file and wildcards to the package directory', () => {
     const idx = index(['/j/src/com/foo/Bar.java', '/j/src/com/foo/Util.java', '/j/src/com/baz/X.java']);

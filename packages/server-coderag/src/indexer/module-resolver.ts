@@ -36,6 +36,15 @@ export function isGenericStem(stem: string): boolean {
   return SKIPPED_STEMS.has(stem);
 }
 
+/** The directory of the Cargo package a source file belongs to (the part before its last `src`, `tests`, `benches` or `examples` folder), or null. */
+function rustCrateRoot(file: string): string | null {
+  const parts = file.split('/');
+  for (let i = parts.length - 2; i > 0; i--) {
+    if (['src', 'tests', 'benches', 'examples'].includes(parts[i] ?? '')) return parts.slice(0, i).join('/');
+  }
+  return null;
+}
+
 export class CodeFileIndex {
   /** normalized path -> path as stored */
   private readonly files = new Map<string, string>();
@@ -167,9 +176,13 @@ export class CodeFileIndex {
 
   private resolveRust(module: string, source: string): string | null {
     const segments = module.split('::').filter((s) => s !== '' && s !== 'crate' && s !== 'self' && s !== 'super');
+    // `crate::`, `self::` and `super::` stay inside the crate of the importing file.
+    const local = /^(?:crate|self|super)(?:::|$)/.test(module);
+    const crate = local ? rustCrateRoot(source) : null;
+    const insideCrate = (file: string): boolean => crate === null || file.startsWith(`${crate}/`);
     for (let length = segments.length; length > 0; length--) {
       const rel = segments.slice(0, length).join('/');
-      const found = this.closest([...this.withSuffix(`${rel}.rs`), ...this.withSuffix(`${rel}/mod.rs`)], source);
+      const found = this.closest([...this.withSuffix(`${rel}.rs`), ...this.withSuffix(`${rel}/mod.rs`)].filter(insideCrate), source);
       if (found !== null) return found;
     }
     return null;
