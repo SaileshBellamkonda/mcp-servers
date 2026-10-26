@@ -85,7 +85,7 @@ beforeEach(() => {
   db = VectorDB.open(':memory:', DIMS);
   indexer = new Indexer(db, embedder, 512);
   server = new McpServer({ name: 'test-coderag', version: '1.0.0' }, { capabilities: { tools: {} } });
-  createCodeRagServer(server, db, embedder, indexer, 5, [tmpDir], new SyncManager());
+  createCodeRagServer(server, db, embedder, indexer, 5, [tmpDir], new SyncManager(), undefined, undefined, undefined, undefined, { toolset: 'all' });
 });
 
 afterEach(() => {

@@ -101,7 +101,7 @@ describe('tool results', () => {
     const warnings: string[] = [];
     const logger = { info: vi.fn(), warning: (m: unknown) => { warnings.push(String(m)); }, error: vi.fn(), debug: vi.fn() };
     const indexer = new Indexer(db, embedder, 500, { pathGuard: guard, logger });
-    createCodeRagServer(fakeServer(), db, embedder, indexer, 5, [dir], new SyncManager(), undefined, undefined, undefined, guard);
+    createCodeRagServer(fakeServer(), db, embedder, indexer, 5, [dir], new SyncManager(), undefined, undefined, undefined, guard, { toolset: 'all' });
 
     const indexed = (await Promise.resolve(handlers.get('index_markdown')?.({ filepath: path.join(dir, 'doc.md') }))) as { content: { text: string }[] };
     const indexedText = indexed.content[0]?.text ?? '';

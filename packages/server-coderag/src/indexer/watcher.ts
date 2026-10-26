@@ -6,6 +6,14 @@ import type { CodeRagLogger } from '../core/logger.js';
 import type { SyncManager } from './sync-manager.js';
 import type { GlobMatcher } from '../core/glob-utils.js';
 import { FileRefresher } from './refresher.js';
+import { extractGlobBase, resolveToAbsolute } from '../core/glob-utils.js';
+import type { GlobConfig } from '../core/types.js';
+
+/** The directories to watch: the base directory of every document and code include pattern, each listed once. */
+export function computeWatchDirs(globs: Pick<GlobConfig, 'docsInclude' | 'codeInclude'>, cwd: string): string[] {
+  const patterns = [...globs.docsInclude, ...globs.codeInclude];
+  return [...new Set(patterns.map((pattern) => extractGlobBase(resolveToAbsolute(pattern, cwd)).replace(/\/+$/, '') || cwd))];
+}
 
 export class CodeRagWatcher {
   private readonly refresher: FileRefresher;

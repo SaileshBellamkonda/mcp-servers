@@ -13,6 +13,7 @@ vi.mock('../../../src/indexer/sync.js', async (importOriginal) => {
 import { activateCodeRagServer, deactivateCodeRagServer, type CodeRagServerInstance } from '../../../src/embedded.js';
 import { VectorDB } from '../../../src/vectordb/db.js';
 import { Indexer } from '../../../src/indexer/indexer.js';
+import { CodeRagWatcher } from '../../../src/indexer/watcher.js';
 
 const TOKEN = `embedded-token-${'e'.repeat(32)}`;
 const silent = { debug: () => undefined, info: () => undefined, warning: () => undefined, error: () => undefined };
@@ -113,7 +114,7 @@ describe('activateCodeRagServer', () => {
     try {
       writeFileSync(path.join(second, 'note.md'), '# Note\n\nbody\n');
       writeFileSync(path.join(outside, 'secret.md'), '# Secret\n');
-      instance = await activateCodeRagServer({ ...base(), workspaceFolders: [workspace, second] });
+      instance = await activateCodeRagServer({ ...base(), workspaceFolders: [workspace, second], toolset: 'all' });
       const url = urlOf(instance);
       const { sessionId } = await initializeSession(url, { token: TOKEN });
       const sid = sessionId ?? '';
@@ -183,4 +184,134 @@ describe('activateCodeRagServer', () => {
     await expect(activateCodeRagServer({ ...base(), nativeModulesDir: path.join(workspace, 'native') }))
       .rejects.toThrow(/stub-sqlite-vec-used/);
   });
+});
+
+async function listToolNames(url: string): Promise<string[]> {
+  const { sessionId } = await initializeSession(url, { token: TOKEN });
+  const reply = await postJsonRpc(
+    url,
+    { jsonrpc: '2.0', id: 3, method: 'tools/list', params: {} },
+    { headers: { Authorization: `Bearer ${TOKEN}`, 'mcp-session-id': sessionId ?? '' } },
+  );
+  return (reply.message as { result: { tools: { name: string }[] } }).result.tools.map((t) => t.name).sort();
+}
+
+describe('activateCodeRagServer toolset and watch options', () => {
+  let workspace: string;
+  let instance: CodeRagServerInstance | undefined;
+
+  beforeEach(() => {
+    workspace = mkdtempSync(path.join(tmpdir(), 'coderag-embedded-opts-'));
+  });
+
+  afterEach(async () => {
+    if (instance) await deactivateCodeRagServer(instance);
+    instance = undefined;
+    vi.restoreAllMocks();
+    rmSync(workspace, { recursive: true, force: true });
+  });
+
+  const options = (extra: Record<string, unknown> = {}): Parameters<typeof activateCodeRagServer>[0] =>
+    ({ vsCodeConfig: vsConfig(), workspaceFolders: [workspace], port: 0, authToken: TOKEN, logger: silent, ...extra }) as Parameters<typeof activateCodeRagServer>[0];
+
+  it('offers the standard toolset by default and every tool for toolset "all"', async () => {
+    instance = await activateCodeRagServer(options());
+    expect(await listToolNames(urlOf(instance))).toEqual(['get_index_status', 'search', 'sync_documents']);
+    await instance.close();
+    instance = await activateCodeRagServer(options({ toolset: 'all' }));
+    expect(await listToolNames(urlOf(instance))).toHaveLength(11);
+    await instance.close();
+    instance = await activateCodeRagServer(options({ toolset: 'search' }));
+    expect(await listToolNames(urlOf(instance))).toEqual(['search']);
+  });
+
+  it('rejects an unknown toolset before opening the database', async () => {
+    const open = vi.spyOn(VectorDB, 'open');
+    await expect(activateCodeRagServer(options({ toolset: 'everything' }))).rejects.toThrow(/toolset.*search.*standard.*all/s);
+    expect(open).not.toHaveBeenCalled();
+  });
+
+  it('starts no file watcher unless asked to', async () => {
+    const start = vi.spyOn(CodeRagWatcher.prototype, 'start').mockImplementation(() => undefined);
+    instance = await activateCodeRagServer(options());
+    expect(start).not.toHaveBeenCalled();
+    await instance.close();
+    instance = await activateCodeRagServer(options({ watch: false }));
+    expect(start).not.toHaveBeenCalled();
+  });
+
+  it('watch: true watches the include directories of every workspace folder and close() stops the watcher', async () => {
+    const second = mkdtempSync(path.join(tmpdir(), 'coderag-embedded-opts-b-'));
+    const start = vi.spyOn(CodeRagWatcher.prototype, 'start').mockImplementation(() => undefined);
+    const close = vi.spyOn(CodeRagWatcher.prototype, 'close');
+    try {
+      instance = await activateCodeRagServer(options({ watch: true, workspaceFolders: [workspace, second] }));
+      expect(start).toHaveBeenCalledTimes(1);
+      expect((start.mock.calls[0]?.[0] ?? []).slice().sort()).toEqual([workspace, second].sort());
+      expect(close).not.toHaveBeenCalled();
+      await instance.close();
+      instance = undefined;
+      expect(close).toHaveBeenCalledTimes(1);
+    } finally {
+      rmSync(second, { recursive: true, force: true });
+    }
+  });
+
+  it('closes the watcher when the server cannot start', async () => {
+    vi.spyOn(CodeRagWatcher.prototype, 'start').mockImplementation(() => undefined);
+    const close = vi.spyOn(CodeRagWatcher.prototype, 'close');
+    const first = await activateCodeRagServer(options({ watch: true, port: 0 }));
+    try {
+      await expect(activateCodeRagServer(options({ watch: true, port: first.port }))).rejects.toThrow();
+      expect(close).toHaveBeenCalledTimes(1);
+    } finally {
+      await first.close();
+    }
+  });
+});
+
+describe('activateCodeRagServer with a real file watcher', () => {
+  let workspace: string;
+  let instance: CodeRagServerInstance | undefined;
+  let embeddingServer: Server | undefined;
+
+  beforeEach(() => {
+    workspace = mkdtempSync(path.join(tmpdir(), 'coderag-embedded-watch-'));
+  });
+
+  afterEach(async () => {
+    if (instance) await deactivateCodeRagServer(instance);
+    instance = undefined;
+    if (embeddingServer) await new Promise<void>((resolve) => { embeddingServer?.close(() => { resolve(); }); });
+    embeddingServer = undefined;
+    rmSync(workspace, { recursive: true, force: true });
+  });
+
+  it('indexes a file created after start-up, so a keyword search finds it', async () => {
+    embeddingServer = createServer((req, res) => {
+      const chunks: Buffer[] = [];
+      req.on('data', (c: Buffer) => chunks.push(c));
+      req.on('end', () => {
+        const input = (JSON.parse(Buffer.concat(chunks).toString('utf8')) as { input: string | string[] }).input;
+        const texts = Array.isArray(input) ? input : [input];
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify({ data: texts.map((_t, index) => ({ index, embedding: [0.1, 0.2, 0.3, 0.4] })) }));
+      });
+    });
+    await new Promise<void>((resolve) => { embeddingServer?.listen(0, '127.0.0.1', resolve); });
+    const { port: embeddingPort } = (embeddingServer.address() as { port: number });
+    instance = await activateCodeRagServer({
+      vsCodeConfig: vsConfig({ embeddingUrl: `http://127.0.0.1:${String(embeddingPort)}/v1` }),
+      workspaceFolders: [workspace], port: 0, authToken: TOKEN, logger: silent, watch: true,
+    });
+    const url = urlOf(instance);
+    const { sessionId } = await initializeSession(url, { token: TOKEN });
+
+    writeFileSync(path.join(workspace, 'late.ts'), 'export function zebracrossing(): number { return 1; }\n');
+
+    await vi.waitFor(async () => {
+      const out = await callTool(url, sessionId ?? '', 'search', { query: 'zebracrossing', mode: 'keyword' });
+      expect(out).toContain('late.ts');
+    }, { timeout: 10000, interval: 200 });
+  }, 20000);
 });

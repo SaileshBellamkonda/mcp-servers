@@ -66,7 +66,7 @@ beforeEach(() => {
   const embedder = makeEmbedder();
   const guard = new PathGuard([allowed]);
   const indexer = new Indexer(db, embedder, 500, { pathGuard: guard, logger: { info: vi.fn(), warning: vi.fn(), error: vi.fn() } as never });
-  createCodeRagServer(fakeServer(), db, embedder, indexer, 5, [allowed], new SyncManager(), undefined, undefined, undefined, guard);
+  createCodeRagServer(fakeServer(), db, embedder, indexer, 5, [allowed], new SyncManager(), undefined, undefined, undefined, guard, { toolset: 'all' });
 });
 
 afterEach(() => {
@@ -190,7 +190,7 @@ describe('path confinement: default guard', () => {
   it('createCodeRagServer defaults to a guard rooted at the working directory', async () => {
     const embedder = makeEmbedder();
     const indexer = new Indexer(db, embedder, 500);
-    createCodeRagServer(fakeServer(), db, embedder, indexer, 5, [], new SyncManager());
+    createCodeRagServer(fakeServer(), db, embedder, indexer, 5, [], new SyncManager(), undefined, undefined, undefined, undefined, { toolset: 'all' });
     await expect(call('add_frontmatter', { filepath: path.join(outside, 'secret.md'), domain: 'x' })).rejects.toBeInstanceOf(PathNotAllowedError);
     expect(readFileSync(path.join(outside, 'secret.md'), 'utf8')).toBe(SECRET_MD);
   });

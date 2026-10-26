@@ -15,6 +15,7 @@ const tmpDir = path.join(__dirname, '../../.tmp-integration-test');
 
 // 4-dim vectors for fast tests
 const DIMS = 4;
+const ALL_TOOLS = { toolset: 'all' } as const;
 function makeVec(v: number): number[] {
   return [v, v, v, v];
 }
@@ -60,7 +61,7 @@ beforeEach(() => {
     { name: 'test-coderag', version: '1.0.0' },
     { capabilities: { tools: {} } }
   );
-  createCodeRagServer(server, db, embedder, indexer, 5, [tmpDir], new SyncManager());
+  createCodeRagServer(server, db, embedder, indexer, 5, [tmpDir], new SyncManager(), undefined, undefined, undefined, undefined, ALL_TOOLS);
 });
 
 afterEach(() => {
@@ -436,7 +437,7 @@ describe('sync lock behavior', () => {
       { capabilities: { tools: {} } }
     );
     const lockIndexer = new Indexer(lockDb, embedder, 512);
-    createCodeRagServer(lockServer, lockDb, embedder, lockIndexer, 5, [tmpDir], lockSyncManager);
+    createCodeRagServer(lockServer, lockDb, embedder, lockIndexer, 5, [tmpDir], lockSyncManager, undefined, undefined, undefined, undefined, ALL_TOOLS);
   });
 
   afterEach(() => {
@@ -530,7 +531,7 @@ describe('exclusion responses', () => {
       docsMatcher: new GlobMatcher([`${tmpFwd}/**/*.md`], ['**/*.draft.md'], tmpDir),
       codeMatcher: new GlobMatcher([`${tmpFwd}/**/*.ts`], ['**/*.test.ts'], tmpDir),
     });
-    createCodeRagServer(exclServer, exclDb, embedder, exclIndexer, 5, [tmpDir], new SyncManager());
+    createCodeRagServer(exclServer, exclDb, embedder, exclIndexer, 5, [tmpDir], new SyncManager(), undefined, undefined, undefined, undefined, ALL_TOOLS);
   });
 
   afterEach(() => {

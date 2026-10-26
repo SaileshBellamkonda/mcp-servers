@@ -12,6 +12,10 @@ import { Indexer } from './indexer/indexer.js';
 import { GlobMatcher } from './core/glob-utils.js';
 import { PathGuard, computeAllowedRoots } from './core/path-guard.js';
 import { SyncManager } from './indexer/sync-manager.js';
+import { CodeRagWatcher, computeWatchDirs } from './indexer/watcher.js';
+import { FileRefresher } from './indexer/refresher.js';
+import { IndexFreshness } from './indexer/freshness.js';
+import { parseToolset } from './core/toolset.js';
 import { runStartupSync } from './indexer/sync.js';
 import { createCodeRagServer } from './server/coderag-server.js';
 
@@ -30,6 +34,10 @@ export interface ActivateCodeRagServerOptions {
   apiKey?: string;
   /** Receives diagnostics from the long-lived services (defaults to stderr). */
   logger?: CodeRagLogger;
+  /** Re-index files as they change in the workspace folders (default false; the VS Code extension passes its setting). */
+  watch?: boolean;
+  /** Which tools to offer: `search`, `standard` (default) or `all`. */
+  toolset?: string;
 }
 
 export interface CodeRagServerInstance {
@@ -49,6 +57,7 @@ export async function activateCodeRagServer(options: ActivateCodeRagServerOption
     throw new Error('No workspace folders provided for CodeRAG MCP Server');
   }
 
+  const toolset = parseToolset(options.toolset, 'toolset');
   const loaded = loadConfigFromVsCode(options.vsCodeConfig, workspaceFolders);
   const config = options.apiKey !== undefined && options.apiKey !== ''
     ? { ...loaded, embedding: { ...loaded.embedding, apiKey: options.apiKey } }
@@ -80,6 +89,13 @@ export async function activateCodeRagServer(options: ActivateCodeRagServerOption
     return base || cwd;
   }))];
 
+  const freshness = new IndexFreshness(db, new FileRefresher(db, indexer, docsMatcher, codeMatcher, logger), syncManager, logger);
+  let watcher: CodeRagWatcher | undefined;
+  if (options.watch === true) {
+    watcher = new CodeRagWatcher(db, indexer, syncManager, docsMatcher, codeMatcher, logger);
+    watcher.start(computeWatchDirs(config.globs, cwd));
+  }
+
   // Startup sync runs once, when the first session connects (not for every session).
   let startupSyncStarted = false;
 
@@ -94,7 +110,7 @@ export async function activateCodeRagServer(options: ActivateCodeRagServerOption
         createCodeRagServer(
           server, db, embedder, indexer, config.topK, includeDirs, syncManager,
           options.logger ?? new McpLogger(server, 'coderag'),
-          config.dbPath, config.embedding.model, pathGuard,
+          config.dbPath, config.embedding.model, pathGuard, { toolset, freshness },
         );
         return server;
       },
@@ -113,6 +129,8 @@ export async function activateCodeRagServer(options: ActivateCodeRagServerOption
       },
     });
   } catch (err) {
+    watcher?.close();
+    freshness.close();
     indexer.close();
     db.close();
     throw err;
@@ -124,6 +142,8 @@ export async function activateCodeRagServer(options: ActivateCodeRagServerOption
     host: httpServer.host,
     close: () => {
       closing ??= (async () => {
+        watcher?.close();
+        freshness.close();
         await httpServer.close();
         indexer.close();
         db.close();

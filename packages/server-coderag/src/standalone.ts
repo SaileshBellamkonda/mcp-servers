@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { McpServer, StdioServerTransport } from '@modelcontextprotocol/server';
-import { McpLogger, parseBool, parsePort } from '@mcp-servers/common';
+import { McpLogger, parsePort } from '@mcp-servers/common';
 import { resolveHttpSecurity, startMcpHttpServer, type McpHttpServer } from '@mcp-servers/http-host';
 import { loadConfigFromEnv } from './core/config.js';
 import { resolveDimensions } from './core/dimensions.js';
@@ -13,7 +13,10 @@ import { PathGuard, computeAllowedRoots } from './core/path-guard.js';
 import { SyncManager } from './indexer/sync-manager.js';
 import { runStartupSync } from './indexer/sync.js';
 import { createCodeRagServer } from './server/coderag-server.js';
-import { CodeRagWatcher } from './indexer/watcher.js';
+import { CodeRagWatcher, computeWatchDirs } from './indexer/watcher.js';
+import { FileRefresher } from './indexer/refresher.js';
+import { IndexFreshness } from './indexer/freshness.js';
+import { loadRuntimeOptionsFromEnv } from './core/toolset.js';
 
 function newServer(): McpServer {
   return new McpServer(
@@ -29,6 +32,7 @@ async function main(): Promise<void> {
   const port = parsePort(process.env['MCP_HTTP_PORT'], 3100);
 
   const config = loadConfigFromEnv(process.env);
+  const runtime = loadRuntimeOptionsFromEnv(process.env);
   const embedder = new Embedder(config.embedding);
   const cwd = process.cwd();
 
@@ -55,8 +59,10 @@ async function main(): Promise<void> {
     return base || cwd;
   }))];
 
+  const freshness = new IndexFreshness(db, new FileRefresher(db, indexer, docsMatcher, codeMatcher, logger), syncManager, logger);
+
   const registerTools = (server: McpServer, toolLogger: CodeRagLogger): void => {
-    createCodeRagServer(server, db, embedder, indexer, config.topK, includeDirs, syncManager, toolLogger, config.dbPath, config.embedding.model, pathGuard);
+    createCodeRagServer(server, db, embedder, indexer, config.topK, includeDirs, syncManager, toolLogger, config.dbPath, config.embedding.model, pathGuard, { toolset: runtime.toolset, freshness });
   };
 
   const scheduleStartupSync = (): void => {
@@ -67,16 +73,11 @@ async function main(): Promise<void> {
     });
   };
 
-  // Optional real-time file watcher (CODERAG_WATCH=true)
+  // Real-time file watcher: on unless CODERAG_WATCH=0 (or false/no/off)
   let watcher: CodeRagWatcher | undefined;
-  if (parseBool(process.env['CODERAG_WATCH'], false)) {
-    const codeWatchDirs = config.globs.codeInclude.map((p) => {
-      const abs = p.startsWith('/') ? p : `${cwd}/${p}`;
-      return abs.replace(/[*?{[!].*$/, '').replace(/\/+$/, '') || cwd;
-    });
-    const watchDirs = [...new Set([...includeDirs, ...codeWatchDirs])];
+  if (runtime.watch) {
     watcher = new CodeRagWatcher(db, indexer, syncManager, docsMatcher, codeMatcher, logger);
-    watcher.start(watchDirs);
+    watcher.start(computeWatchDirs(config.globs, cwd));
   }
 
   if (security) {
@@ -95,6 +96,7 @@ async function main(): Promise<void> {
       });
     } catch (err) {
       watcher?.close();
+      freshness.close();
       indexer.close();
       db.close();
       throw err;
@@ -105,6 +107,7 @@ async function main(): Promise<void> {
 
     const shutdown = async (): Promise<void> => {
       watcher?.close();
+      freshness.close();
       try {
         await httpServer.close();
       } catch (err) {
@@ -126,6 +129,7 @@ async function main(): Promise<void> {
 
     const shutdown = async (): Promise<void> => {
       watcher?.close();
+      freshness.close();
       await stdioServer.close();
       indexer.close();
       db.close();

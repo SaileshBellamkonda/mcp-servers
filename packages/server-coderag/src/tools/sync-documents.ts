@@ -2,7 +2,7 @@ import { type McpServer, fromJsonSchema } from '@modelcontextprotocol/server';
 import { z } from 'zod';
 import type { VectorDB } from '../vectordb/db.js';
 import type { Indexer } from '../indexer/indexer.js';
-import { syncDocuments, type SyncResult } from '../indexer/sync.js';
+import { syncCode, syncDocuments, type SyncResult } from '../indexer/sync.js';
 import type { CodeRagLogger } from '../core/logger.js';
 import type { SyncManager } from '../indexer/sync-manager.js';
 import { syncLockedResponse, SyncInProgressError } from '../indexer/sync-manager.js';
@@ -26,7 +26,8 @@ export function registerSyncDocuments(
     {
       description:
         'Scan configured include directories for new or changed markdown and MDX documents, index them, and remove stale index entries. ' +
-        'Pass an optional directory to sync only that path. Returns { locked: true } if a sync is in progress.',
+        'Without a directory it also rescans the configured source files. ' +
+        'Pass an optional directory to sync only the documents under that path. Returns { locked: true } if a sync is in progress.',
       inputSchema: fromJsonSchema({
         type: 'object',
         properties: {
@@ -44,9 +45,11 @@ export function registerSyncDocuments(
       const targetDirs = directory?.trim() ? [pathGuard.assertAllowed(directory.trim())] : defaultIncludeDirs;
 
       let syncResult: SyncResult | undefined;
+      let codeResult: SyncResult | undefined;
       try {
         await syncManager.run('sync_documents', async () => {
           syncResult = await syncDocuments(targetDirs, db, indexer, logger);
+          if (!directory?.trim()) codeResult = await syncCode(db, indexer, logger);
         });
       } catch (err) {
         if (err instanceof SyncInProgressError) return syncLockedResponse(syncManager.status);
@@ -55,7 +58,7 @@ export function registerSyncDocuments(
 
       const r = syncResult ?? { indexed: 0, skipped: 0, failed: 0, removed: 0 };
       logger?.info({ tool: 'sync_documents', directories: targetDirs, ...r });
-      return { content: [{ type: 'text' as const, text: JSON.stringify({ success: true, directories: targetDirs, ...r }) }] };
+      return { content: [{ type: 'text' as const, text: JSON.stringify({ success: true, directories: targetDirs, ...r, ...(codeResult && { code: codeResult }) }) }] };
     }
   );
 }

@@ -71,6 +71,23 @@ export async function syncDocuments(
   return { indexed, skipped, failed, removed };
 }
 
+/** Incremental rescan of the configured source files: new and changed files are indexed, deleted ones are removed. */
+export async function syncCode(db: VectorDB, indexer: Indexer, logger?: CodeRagLogger): Promise<SyncResult> {
+  const scan = await indexer.scanCode(false);
+  let removed = 0;
+  for (const [filename] of db.listDocumentsByType('code')) {
+    if (existsSync(filename)) continue;
+    try {
+      db.deleteDocument(filename);
+      removed++;
+      logger?.info(`Removed stale code: ${filename}`);
+    } catch {
+      // ignore
+    }
+  }
+  return { indexed: scan.indexed, skipped: scan.skipped, failed: scan.failed, removed };
+}
+
 export async function runStartupSync(
   db: VectorDB,
   indexer: Indexer,

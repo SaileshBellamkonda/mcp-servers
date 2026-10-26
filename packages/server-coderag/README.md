@@ -4,7 +4,10 @@ Search over your code and Markdown/MDX documents for MCP clients: semantic (vect
 Embeddings come from any OpenAI-compatible `/embeddings` endpoint (Ollama, OpenAI, ...); everything else runs locally in
 one SQLite file. Part of the [mcp-servers](../../README.md) monorepo.
 
-- **11 tools** for searching, indexing, syncing and editing document frontmatter.
+- **A small default tool surface:** by default only `search`, `get_index_status` and `sync_documents` are offered; the
+  other 8 tools (11 in total) are opt-in, see [Tools](#tools).
+- **An index that follows your files:** incremental re-scan at every start, a file watcher and a refresh of changed
+  files after each search, see [Freshness](#freshness).
 - **Two modes from one code base:** standalone (stdio or Streamable HTTP) and embedded in the
   [VS Code extension](../vscode-extension/README.md) (HTTP on `127.0.0.1`, bearer token required).
 - **Confined file access:** every tool that reads or writes a path is limited to a set of root directories, with
@@ -46,9 +49,9 @@ MCP_TRANSPORT=http node dist/standalone.js   # with the CODERAG_* variables abov
 The endpoint is `http://127.0.0.1:3100/mcp`; clients send `Authorization: Bearer <token>`. See
 [HTTP security](../../README.md#http-security-model).
 
-After start-up the server indexes in the background (once per process): it scans everything when the database is empty
-or the include/exclude rules changed, and otherwise removes entries of deleted files. `CODERAG_WATCH=true` additionally
-watches the include directories for changes.
+After start-up the server scans in the background (once per process): files whose modification time matches the index
+cost one `stat`, changed and new files are re-indexed and entries of deleted files are removed. The include directories
+are watched for changes unless `CODERAG_WATCH=0`. See [Freshness](#freshness).
 
 [`mcp.example.json`](mcp.example.json) in this package has Ollama, OpenAI and full-configuration client entries.
 
@@ -69,7 +72,8 @@ watches the include directories for changes.
 | `CODERAG_CODE_INCLUDE` | the supported languages | `;`-separated glob patterns of source files to index |
 | `CODERAG_CODE_EXCLUDE` | none | `;`-separated glob patterns to leave out |
 | `CODERAG_ALLOWED_ROOTS` | none | `;`-separated extra directories the file tools may use (see [Security](#security)) |
-| `CODERAG_WATCH` | `false` | Watch the include directories and re-index changed files |
+| `CODERAG_WATCH` | `true` | Watch the include directories and re-index changed files; `0`, `false`, `no` or `off` disables it |
+| `CODERAG_TOOLSET` | `standard` | Which tools to offer: `search`, `standard` or `all`, see [Tools](#tools) |
 | `MCP_TRANSPORT` | `stdio` | `http` selects the HTTP transport |
 | `MCP_HTTP_HOST` | `127.0.0.1` | Interface to bind. A non-loopback value requires `MCP_AUTH_TOKEN` |
 | `MCP_HTTP_PORT` | `3100` | TCP port (`0` picks a free port) |
@@ -93,6 +97,8 @@ if (support.ok) {
     authToken,           // required, >= 32 characters
     nativeModulesDir,    // directory whose node_modules holds tree-sitter, the grammars and sqlite-vec
     apiKey,              // optional, e.g. from SecretStorage
+    watch: true,         // optional, default false here: watch the workspace folders (the extension passes its setting)
+    toolset: 'standard', // optional: 'search' | 'standard' (default) | 'all'
   });
   // instance: { port, host, close() }
 }
@@ -103,12 +109,41 @@ if (support.ok) {
 
 ## Tools
 
-- Search: `search` (modes `semantic` default, `keyword`, `hybrid`), `search_relations`. `search` returns compact text,
-  see [Search output](#search-output)
-- Indexing: `index_markdown`, `index_code`, `reindex_document`, `sync_documents`, `delete_document` (removes the index
-  entry only, never the file)
-- Inspection: `list_documents`, `get_index_status`
+Every tool definition is sent to the model in every session, so the server offers only a few by default. Choose the
+set with `CODERAG_TOOLSET` (embedded: the `toolset` option, the extension setting `mcpServers.coderag.toolset`):
+
+| Toolset | Tools | Tool definitions (tokens*) |
+|---|---|---|
+| `search` | `search` | 536 |
+| `standard` (default) | `search`, `get_index_status`, `sync_documents` | 718 |
+| `all` | all 11 tools | 2000 |
+
+\* The serialised `tools/list` result divided by 4 (the characters / 4 estimate used elsewhere in this README).
+
+`standard` is what an agent needs: find code, see whether the index is healthy, and force a rescan. `sync_documents`
+without a directory rescans the configured documents and source files; the index otherwise follows your files by itself.
+**Behaviour change:** earlier versions offered all tools. Set `CODERAG_TOOLSET=all` to get them back:
+
+- Search: `search` (modes `semantic` default, `keyword`, `hybrid`), `search_relations` (`all` only: the indexer does not
+  record symbol relations yet, so it returns nothing; its paths are relative like `search`). `search` returns compact
+  text, see [Search output](#search-output)
+- Indexing: `index_markdown`, `index_code`, `reindex_document`, `sync_documents` (`standard`), `delete_document` (removes
+  the index entry only, never the file)
+- Inspection: `list_documents`, `get_index_status` (`standard`)
 - Frontmatter: `add_frontmatter`, `update_frontmatter`
+
+## Freshness
+
+- **At start:** both documents and code are scanned incrementally. A file is re-read, parsed and embedded only when its
+  modification time (compared to the millisecond) differs from the indexed one; entries of deleted files are removed. The
+  scan hands control back to the event loop every 5 files.
+- **While running:** the include directories are watched (`CODERAG_WATCH`, default on) and changed files are re-indexed
+  after a short delay. The watcher honours the include/exclude globs, `.gitignore` and the allowed roots. Watching a very
+  large tree uses one OS watch per directory; if your system limit is too low, set `CODERAG_WATCH=0`.
+- **At search:** the files of the returned hits are checked with one `stat` each. Hits of files that no longer exist are
+  left out; hits of files changed since they were indexed are kept and marked `(stale)` at the end of the header line
+  (detailed format: `"stale": true`), because their line numbers may have moved. Such files are re-indexed (or removed) in
+  the background, so the response never waits for the embedder and the next search is current.
 
 ## Search output
 
