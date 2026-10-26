@@ -291,6 +291,7 @@ pnpm lint                                                    # ESLint for the wh
 pnpm --filter @mcp-servers/server-coderag run bench          # search response size benchmark (see below)
 pnpm --filter @mcp-servers/server-coderag run eval           # retrieval eval: recall@5, recall@10, MRR
 pnpm --filter @mcp-servers/server-coderag run eval:relations # relation eval: precision and recall of search_relations
+pnpm --filter @mcp-servers/server-coderag run bench:repo -- --repo <dir> --lang <language> --queries scripts/bench-data/<language>.json
 ```
 
 `bench` needs no network: it indexes a pinned git snapshot of this repository (`BENCH_REF`, default `bdb73d5`) with a
@@ -301,6 +302,14 @@ semantic mode. It prints per-query characters, estimated tokens (chars / 4) and 
 fragments, snake/kebab names, concepts, docs) against the same snapshot for keyword, semantic and hybrid search. Its
 semantic leg is a hashed bag of words, so the hybrid row only shows what the keyword leg contributes; real semantic
 quality needs a real embedder. `tests/unit/vectordb/retrieval-eval.test.ts` fails when the keyword numbers drop.
+
+`bench:repo` indexes a checkout of any repository (read only, nothing in it is run) with the same hashed embedder and
+prints files, parse problems, chunks, symbols, relation rows, index time, database size and peak memory, then scores the
+labelled queries of a query file (`scripts/bench-data/<language>.json`: repository URL, commit, include globs,
+queries with expected files and symbols, and edges established by grep) and the size of the `search` answers.
+`--sample-out <file>` writes a seeded sample of call, import and inheritance rows with their source lines for checking by
+hand. The six query files refer to public repositories (Flask, cobra, ripgrep, gson, Newtonsoft.Json, got) by URL and
+commit only; clone them yourself with `git fetch --depth 1`.
 
 The build inlines the private `@mcp-servers/common` and `@mcp-servers/http-host` packages; third-party dependencies,
 including the native modules, stay external.
