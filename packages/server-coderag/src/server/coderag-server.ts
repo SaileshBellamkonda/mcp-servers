@@ -30,7 +30,7 @@ export function createCodeRagServer(
   embeddingModel?: string,
   pathGuard: PathGuard = new PathGuard([process.cwd()]),
 ): void {
-  registerSearch(server, db, embedder, defaultTopK);
+  registerSearch(server, db, embedder, defaultTopK, pathGuard);
   registerIndexMarkdown(server, indexer, syncManager, pathGuard);
   registerListDocuments(server, db);
   registerDeleteDocument(server, db, syncManager, pathGuard);

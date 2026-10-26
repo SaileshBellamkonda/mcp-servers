@@ -103,11 +103,39 @@ if (support.ok) {
 
 ## Tools
 
-- Search: `search` (modes `semantic` default, `keyword`, `hybrid`), `search_relations`
+- Search: `search` (modes `semantic` default, `keyword`, `hybrid`), `search_relations`. `search` returns compact text,
+  see [Search output](#search-output)
 - Indexing: `index_markdown`, `index_code`, `reindex_document`, `sync_documents`, `delete_document` (removes the index
   entry only, never the file)
 - Inspection: `list_documents`, `get_index_status`
 - Frontmatter: `add_frontmatter`, `update_frontmatter`
+
+## Search output
+
+`search` answers in compact text by default, because every token of a result stays in the client's context for the rest
+of the session. Each hit is a header line, then indented lines: for code the signature and up to 5 lines of the body
+after it, for documents up to 3 lines under the heading path.
+
+```
+src/indexer/indexer.ts:115-137 method Indexer.indexFile (0.81)
+  async indexFile(filePath: string): Promise<void>
+  const readPath = this.pathGuard?.assertAllowedReal(filePath) ?? filePath;
+  this.log('info', `Indexing markdown: ${filePath}`);
+docs/DESIGN.md:12-30 Design > Search modes (0.74)
+  Semantic search embeds the query ...
++3 more results; narrow the query or pass offset=2
+```
+
+- Paths are relative to the first allowed root (the working directory or first workspace folder); a path under another
+  root starts with that root's folder name. The score is rounded to 2 decimals (hybrid scores are small reciprocal-rank
+  values, so use their order, not their size).
+- A class (struct, interface) hit is left out when one of its own members is also a hit.
+- `max_tokens` (default 1500, estimated as characters / 4) caps the output. The first hit is always returned; if more
+  were left out, the last line says how many and which `offset` continues. `offset` skips hits for paging.
+- `response_format: "detailed"` returns the previous JSON (`results`, `count`, `mode`) with whole chunks, absolute
+  paths and metadata; it ignores `max_tokens` and does not drop classes.
+- Signatures are the declaration text up to the start of the body. After an upgrade that changes how signatures are
+  built, the next start re-parses all indexed code files once (the version is stored in the database).
 
 ## Security
 

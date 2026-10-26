@@ -119,13 +119,21 @@ describe('search', () => {
     await getHandler('index_markdown')({ filepath: mdPath });
 
     const result = await getHandler('search')({ query: 'authentication flow', top_k: 3 }) as { content: Array<{ text: string }> };
-    const data = JSON.parse(result.content[0]!.text) as { results: unknown[]; count: number };
+    const text = result.content[0]!.text;
+    expect(text).toMatch(/^\.tmp-integration-test\/search-test\.md:\d+-\d+ Authentication/);
+    expect(text).not.toContain(tmpDir);
+
+    const detailed = await getHandler('search')({ query: 'authentication flow', top_k: 3, response_format: 'detailed' }) as { content: Array<{ text: string }> };
+    const data = JSON.parse(detailed.content[0]!.text) as { results: unknown[]; count: number };
     expect(data.count).toBeGreaterThanOrEqual(1);
   });
 
   it('returns empty results when DB is empty', async () => {
     const result = await getHandler('search')({ query: 'nothing here' }) as { content: Array<{ text: string }> };
-    const data = JSON.parse(result.content[0]!.text) as { results: unknown[]; count: number };
+    expect(result.content[0]!.text).toBe('No results.');
+
+    const detailed = await getHandler('search')({ query: 'nothing here', response_format: 'detailed' }) as { content: Array<{ text: string }> };
+    const data = JSON.parse(detailed.content[0]!.text) as { results: unknown[]; count: number };
     expect(data.count).toBe(0);
   });
 });
@@ -308,8 +316,7 @@ describe('search with filter', () => {
       query: 'filtered document',
       directory: subDir,
     }) as { content: Array<{ text: string }> };
-    const data = JSON.parse(result.content[0]!.text) as { results: unknown[]; count: number };
-    expect(data.count).toBeGreaterThanOrEqual(0); // may be 0 on path mismatch, but filter path is exercised
+    expect(result.content[0]!.text).toContain('subdir/filtered.md');
   });
 
   it('returns results filtered by file_pattern', async () => {
@@ -321,8 +328,7 @@ describe('search with filter', () => {
       query: 'pattern search',
       file_pattern: '*.md',
     }) as { content: Array<{ text: string }> };
-    const data = JSON.parse(result.content[0]!.text) as { results: unknown[]; count: number };
-    expect(data.count).toBeGreaterThanOrEqual(0); // filter path is exercised
+    expect(result.content[0]!.text).toContain('pattern-test.md');
   });
 });
 

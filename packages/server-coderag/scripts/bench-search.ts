@@ -7,7 +7,7 @@
  * empty results. Run: `pnpm --filter @mcp-servers/server-coderag run bench`.
  *
  * Env: BENCH_REF (git ref of the corpus, default bdb73d5), BENCH_DIM (vector size, default 768), BENCH_MODES
- * (comma list, default hybrid,keyword,semantic).
+ * (comma list, default hybrid,keyword,semantic), BENCH_SHOW=1 (also print every response).
  */
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -71,9 +71,10 @@ const fakeFetch = ((_url: string, init?: RequestInit) => {
   return Promise.resolve(new Response(JSON.stringify({ data }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
 }) as unknown as typeof fetch;
 
+/** Number of hits in a response: `count` of the JSON format, or the entry headers of the concise text format. */
 function countResults(text: string): number {
   if (text.startsWith('{')) return (JSON.parse(text) as { count: number }).count;
-  return 0;
+  return text.split('\n').filter((l) => /^\S+ .*\(\d+\.\d\d\)$/.test(l)).length;
 }
 
 function percentile90(values: number[]): number {
@@ -116,6 +117,7 @@ async function main(): Promise<void> {
       let empties = 0;
       for (const query of QUERIES) {
         const text = (await search({ query, mode })).content[0]?.text ?? '';
+        if (process.env['BENCH_SHOW']) console.log(`--- ${mode}: ${query}\n${text}\n---`);
         const results = countResults(text);
         const est = Math.ceil(text.length / 4);
         tokens.push(est);

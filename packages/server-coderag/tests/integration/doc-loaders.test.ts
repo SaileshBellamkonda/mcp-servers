@@ -38,6 +38,16 @@ async function call<T>(toolName: string, input: unknown): Promise<T> {
   return JSON.parse(result.content[0]!.text) as T;
 }
 
+async function searchText(input: Record<string, unknown>): Promise<string> {
+  const result = (await getHandler('search')(input)) as { content: { text: string }[] };
+  return result.content[0]!.text;
+}
+
+/** Concise search output: the path of every entry header (column 0, before the first `:` or space). */
+function hitPaths(output: string): string[] {
+  return output.split('\n').filter((l) => l !== '' && !l.startsWith(' ') && !l.startsWith('No results')).map((l) => l.split(/[: ]/)[0]!);
+}
+
 interface SearchResponse {
   count: number;
   results: {
@@ -94,7 +104,13 @@ describe('mdx documents through the MCP tools', () => {
     const indexed = await call<{ results: { success: boolean }[] }>('index_markdown', { filepaths: `${authPath},${uiPath}` });
     expect(indexed.results.every((r) => r.success)).toBe(true);
 
-    const data = await call<SearchResponse>('search', { query: 'token', mode: 'keyword', tags: ['auth'] });
+    const concise = await searchText({ query: 'token', mode: 'keyword', tags: ['auth'] });
+    expect(hitPaths(concise)).toEqual([path.relative(process.cwd(), authPath).split(path.sep).join('/')]);
+    expect(concise).toMatch(/:10-\d+ Authentication > OAuth2 flow \(\d\.\d\d\)\n {2}Exchange the code for a token\./);
+    expect(concise).not.toContain('<Note');
+    expect(concise).not.toContain('import');
+
+    const data = await call<SearchResponse>('search', { query: 'token', mode: 'keyword', tags: ['auth'], response_format: 'detailed' });
     expect(data.count).toBe(1);
     const hit = data.results[0]!;
     expect(hit.document).toBe(authPath);
@@ -111,11 +127,10 @@ describe('mdx documents through the MCP tools', () => {
     writeFileSync(path.join(tmpDir, 'ui.md'), UI_MD);
     await call('index_markdown', { directory: tmpDir });
 
-    const data = await call<SearchResponse>('search', { query: 'buttons', mode: 'keyword', tags: ['auth'] });
-    expect(data.count).toBe(0);
+    expect(await searchText({ query: 'buttons', mode: 'keyword', tags: ['auth'] })).toMatch(/^No results/);
 
-    const unfiltered = await call<SearchResponse>('search', { query: 'buttons', mode: 'keyword' });
-    expect(unfiltered.results.map((r) => path.basename(r.document))).toEqual(['ui.md']);
+    const unfiltered = await searchText({ query: 'buttons', mode: 'keyword' });
+    expect(hitPaths(unfiltered).map((p) => path.basename(p))).toEqual(['ui.md']);
   });
 
   it('sync_documents picks up .mdx files', async () => {
@@ -134,7 +149,7 @@ describe('mdx documents through the MCP tools', () => {
     const result = await call<{ success: boolean }>('reindex_document', { filename: authPath });
     expect(result.success).toBe(true);
 
-    const data = await call<SearchResponse>('search', { query: 'token', mode: 'keyword', tags: ['security'] });
-    expect(data.count).toBe(1);
+    const output = await searchText({ query: 'token', mode: 'keyword', tags: ['security'] });
+    expect(hitPaths(output).map((p) => path.basename(p))).toEqual(['auth.mdx']);
   });
 });

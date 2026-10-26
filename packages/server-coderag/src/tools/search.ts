@@ -3,6 +3,10 @@ import { z } from 'zod';
 import type { VectorDB } from '../vectordb/db.js';
 import type { Embedder } from '../embedder/embedder.js';
 import type { SearchFilter } from '../core/types.js';
+import { PathGuard } from '../core/path-guard.js';
+import { dropContainersOfMatches, formatConcise } from './search-format.js';
+
+const DEFAULT_MAX_TOKENS = 1500;
 
 const SearchSchema = z.object({
   query: z.string().min(1).describe('Natural language search query'),
@@ -14,17 +18,26 @@ const SearchSchema = z.object({
   doc_type: z.string().optional().describe('Only documents whose frontmatter doc_type matches (e.g. "guide", "spec")'),
   domain: z.string().optional().describe('Only documents whose frontmatter domain matches (e.g. "backend")'),
   project: z.string().optional().describe('Only documents whose frontmatter project matches'),
+  max_tokens: z.number().int().positive().optional().describe('Output budget in estimated tokens (chars / 4), default 1500'),
+  offset: z.number().int().nonnegative().optional().describe('Number of results to skip, for paging'),
+  response_format: z.enum(['concise', 'detailed']).optional().describe('concise (default) or detailed (full JSON)'),
 });
 
 function isSet(value: string | undefined): boolean {
   return value !== undefined && value !== '';
 }
 
-export function registerSearch(server: McpServer, db: VectorDB, embedder: Embedder, defaultTopK: number): void {
+export function registerSearch(
+  server: McpServer,
+  db: VectorDB,
+  embedder: Embedder,
+  defaultTopK: number,
+  pathGuard: PathGuard = new PathGuard([process.cwd()]),
+): void {
   server.registerTool(
     'search',
     {
-      description: 'Search over indexed documents and code. Supports semantic (vector), keyword (FTS5), and hybrid modes. Document results include heading path, line numbers and frontmatter metadata; tags, doc_type, domain and project filter on that metadata (code files have none, so those filters return documents only).',
+      description: 'Search indexed code and documents (semantic, keyword or hybrid). Returns compact text: one entry per hit with path:lines, symbol, signature and a short snippet; read the file for the full code. Limit output with max_tokens and page with offset; response_format "detailed" returns full JSON. tags, doc_type, domain and project filter on frontmatter (documents only).',
       inputSchema: fromJsonSchema({
         type: 'object',
         properties: {
@@ -45,12 +58,20 @@ export function registerSearch(server: McpServer, db: VectorDB, embedder: Embedd
           doc_type: { type: 'string', description: 'Only documents whose frontmatter doc_type matches (case-insensitive), e.g. "guide", "spec"' },
           domain: { type: 'string', description: 'Only documents whose frontmatter domain matches (case-insensitive), e.g. "backend"' },
           project: { type: 'string', description: 'Only documents whose frontmatter project matches (case-insensitive)' },
+          max_tokens: { type: 'integer', minimum: 1, description: 'Output budget in estimated tokens (chars / 4), default 1500. Extra hits are left out with a note.' },
+          offset: { type: 'integer', minimum: 0, description: 'Number of results to skip, for paging (default 0)' },
+          response_format: {
+            type: 'string',
+            enum: ['concise', 'detailed'],
+            description: 'concise (default): compact text. detailed: JSON with whole chunks, absolute paths and metadata',
+          },
         },
         required: ['query'],
       }),
     },
     async (input: unknown) => {
-      const { query, top_k, directory, file_pattern, mode, tags, doc_type, domain, project } = SearchSchema.parse(input);
+      const { query, top_k, directory, file_pattern, mode, tags, doc_type, domain, project, max_tokens, offset, response_format } =
+        SearchSchema.parse(input);
       const topK = top_k ?? defaultTopK;
       const searchMode = mode ?? 'semantic';
 
@@ -68,20 +89,37 @@ export function registerSearch(server: McpServer, db: VectorDB, embedder: Embedd
           }
         : null;
 
-      let results;
+      const skip = offset ?? 0;
+      const concise = response_format !== 'detailed';
+      // Concise output drops a class when its method matched too, so fetch extra hits to still fill the page.
+      const fetchCount = concise ? (skip + topK) * 2 : skip + topK;
+
+      let found;
       if (searchMode === 'keyword') {
-        results = db.searchByKeyword(query, topK, filter);
+        found = db.searchByKeyword(query, fetchCount, filter);
       } else if (searchMode === 'hybrid') {
         const queryVector = await embedder.embed(query);
-        results = db.searchHybrid(queryVector, query, topK, filter);
+        found = db.searchHybrid(queryVector, query, fetchCount, filter);
       } else {
         const queryVector = await embedder.embed(query);
-        results = db.searchWithFilter(queryVector, topK, filter);
+        found = db.searchWithFilter(queryVector, fetchCount, filter);
       }
 
-      return {
-        content: [{ type: 'text', text: JSON.stringify({ results, count: results.length, mode: searchMode }, null, 2) }],
-      };
+      if (!concise) {
+        const results = found.slice(skip, skip + topK);
+        return {
+          content: [{ type: 'text', text: JSON.stringify({ results, count: results.length, mode: searchMode }, null, 2) }],
+        };
+      }
+
+      const text = formatConcise(dropContainersOfMatches(found), {
+        roots: pathGuard.roots,
+        offset: skip,
+        limit: topK,
+        maxTokens: max_tokens ?? DEFAULT_MAX_TOKENS,
+        mode: searchMode,
+      });
+      return { content: [{ type: 'text', text }] };
     }
   );
 }
