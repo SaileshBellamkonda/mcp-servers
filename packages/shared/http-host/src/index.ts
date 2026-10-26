@@ -4,6 +4,7 @@ export {
   MIN_TOKEN_LENGTH,
   assertSafeBinding,
   bearerAuth,
+  requireToken,
   resolveHttpSecurity,
   tokensEqual,
   type HttpSecurity,

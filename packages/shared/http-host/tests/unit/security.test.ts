@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { Hono } from 'hono';
-import { HttpSecurityError, assertSafeBinding, bearerAuth, resolveHttpSecurity, tokensEqual } from '../../src/index.js';
+import { HttpSecurityError, assertSafeBinding, bearerAuth, requireToken, resolveHttpSecurity, tokensEqual } from '../../src/index.js';
 
 const TOKEN = `tok-${'x'.repeat(40)}`;
 
@@ -130,5 +130,24 @@ describe('bearerAuth middleware', () => {
   ])('rejects %s', async (_label, header) => {
     const res = await appWith(TOKEN).request('/ok', { headers: { Authorization: header } });
     expect(res.status).toBe(401);
+  });
+});
+
+describe('requireToken', () => {
+  it('returns a valid token unchanged', () => {
+    expect(requireToken(TOKEN)).toBe(TOKEN);
+  });
+
+  it('rejects a missing or empty token', () => {
+    expect(() => requireToken(undefined)).toThrow(HttpSecurityError);
+    expect(() => requireToken('')).toThrow(/token is required/);
+  });
+
+  it('rejects a token that is too short without echoing it', () => {
+    const short = 'abc123';
+    let message = '';
+    try { requireToken(short); } catch (err) { message = (err as Error).message; }
+    expect(message).toMatch(/at least 32/);
+    expect(message).not.toContain(short);
   });
 });

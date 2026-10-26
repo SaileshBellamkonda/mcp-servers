@@ -47,6 +47,20 @@ export function assertSafeBinding(binding: { host: string; token: string | undef
   }
 }
 
+/**
+ * For hosts that must always authenticate (embedded servers): the token is mandatory and at
+ * least {@link MIN_TOKEN_LENGTH} characters. Returns the token; errors never contain it.
+ */
+export function requireToken(token: string | undefined): string {
+  if (token === undefined || token === '') {
+    throw new HttpSecurityError(`an authentication token is required (at least ${String(MIN_TOKEN_LENGTH)} characters)`);
+  }
+  if (token.length < MIN_TOKEN_LENGTH) {
+    throw new HttpSecurityError(`the authentication token must be at least ${String(MIN_TOKEN_LENGTH)} characters long`);
+  }
+  return token;
+}
+
 /** Reads `MCP_HTTP_HOST` (default 127.0.0.1) and `MCP_AUTH_TOKEN` and validates the combination. */
 export function resolveHttpSecurity(env: Record<string, string | undefined>): HttpSecurity {
   const configuredHost = env['MCP_HTTP_HOST']?.trim();
