@@ -8,7 +8,7 @@ import { failures, runSmoke, type SmokeResult } from './helpers';
  * `@vscode/test-electron` downloads: `<VSCODE_TEST_BINARIES>/vscode-<platform>-<version>/<binary>`. Without the
  * variable (or without a build) the tests are skipped, with the reason in their name.
  *
- *   VSCODE_TEST_BINARIES=/path/to/cache pnpm --filter mcp-servers test
+ *   VSCODE_TEST_BINARIES=/path/to/cache pnpm --filter ./packages/vscode-extension test
  */
 const binariesDir = process.env['VSCODE_TEST_BINARIES'];
 const platform = `${process.platform === 'win32' ? 'win32' : process.platform}-${process.arch}`;
