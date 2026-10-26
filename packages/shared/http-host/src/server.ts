@@ -10,6 +10,7 @@ import {
 } from '@modelcontextprotocol/server';
 import { Hono, type Context } from 'hono';
 import { isLoopbackHost } from './loopback.js';
+import { bodyLimit, jsonContentType, jsonRpcError, originGuard } from './guards.js';
 import { assertSafeBinding, bearerAuth } from './security.js';
 
 /** Logger shape the host needs; `McpLogger` from `@mcp-servers/common` satisfies it. */
@@ -37,6 +38,18 @@ export interface StartMcpHttpServerOptions {
   logger?: HttpHostLogger;
   /** Allowed Host header names; defaults to the localhost names on a loopback bind. */
   allowedHosts?: string[];
+  /**
+   * Extra browser origins to accept, as a full origin (`https://app.example`) or a host name.
+   * Loopback origins are always accepted; any other `Origin` header is rejected with 403 in
+   * every mode. Requests without an Origin header are unaffected.
+   */
+  allowedOrigins?: string[];
+  /** Maximum concurrent sessions (default 64); further initializes get 429 + Retry-After. */
+  maxSessions?: number;
+  /** Close a session after this many ms without any request for it (default 30 minutes; 0 disables). */
+  sessionIdleTimeoutMs?: number;
+  /** Maximum request body size in bytes (default 4 MiB); larger bodies get 413 before parsing. */
+  maxBodyBytes?: number;
   /** Called after a session is initialised; errors are logged and ignored. */
   onSessionCreated?: (session: SessionInfo) => void;
 }
@@ -50,6 +63,10 @@ export interface McpHttpServer {
 }
 
 const DEFAULT_HOST = '127.0.0.1';
+const DEFAULT_MAX_SESSIONS = 64;
+const DEFAULT_SESSION_IDLE_TIMEOUT_MS = 30 * 60 * 1000;
+const DEFAULT_MAX_BODY_BYTES = 4 * 1024 * 1024;
+const SESSION_FULL_RETRY_AFTER_SECONDS = '5';
 
 const stderrLogger: HttpHostLogger = {
   info: (data) => process.stderr.write(`[INFO] [http-host] ${String(data)}\n`),
@@ -70,6 +87,11 @@ function hostHeaderConfig(host: string, allowedHosts: string[] | undefined): { h
   const bare = host.trim().toLowerCase();
   const own = bare.startsWith('[') ? bare : formatUrlHost(bare);
   return { host, allowedHosts: names.includes(own) ? names : [...names, own] };
+}
+
+function positiveInteger(name: string, value: number): number {
+  if (!Number.isInteger(value) || value < 1) throw new RangeError(`${name} must be a positive integer`);
+  return value;
 }
 
 function describe(err: unknown): string {
@@ -97,17 +119,50 @@ export async function startMcpHttpServer(options: StartMcpHttpServerOptions): Pr
   const token = options.token === '' ? undefined : options.token;
   const logger = options.logger ?? stderrLogger;
   assertSafeBinding({ host, token });
+  const maxSessions = positiveInteger('maxSessions', options.maxSessions ?? DEFAULT_MAX_SESSIONS);
+  const maxBodyBytes = positiveInteger('maxBodyBytes', options.maxBodyBytes ?? DEFAULT_MAX_BODY_BYTES);
+  const idleTimeoutMs = options.sessionIdleTimeoutMs ?? DEFAULT_SESSION_IDLE_TIMEOUT_MS;
+  if (!Number.isFinite(idleTimeoutMs) || idleTimeoutMs < 0) {
+    throw new RangeError('sessionIdleTimeoutMs must be a finite number >= 0 (0 disables idle expiry)');
+  }
 
   const sessions = new Map<string, WebStandardStreamableHTTPServerTransport>();
   const servers = new Map<string, McpServer>();
+  const idleTimers = new Map<string, NodeJS.Timeout>();
+  /** Sessions being created right now; counted against the cap before a server is built. */
+  let pending = 0;
+
+  const clearIdle = (sid: string): void => {
+    const timer = idleTimers.get(sid);
+    if (timer !== undefined) clearTimeout(timer);
+    idleTimers.delete(sid);
+  };
+  /** (Re)starts the idle countdown for a live session; any request for it calls this. */
+  const touch = (sid: string): void => {
+    if (idleTimeoutMs === 0) return;
+    const transport = sessions.get(sid);
+    if (!transport) return;
+    clearIdle(sid);
+    const timer = setTimeout(() => {
+      logger.info(`closing idle MCP session ${sid}`);
+      transport.close().catch((err: unknown) => { logger.error(`closing idle session failed: ${describe(err)}`); });
+    }, idleTimeoutMs);
+    timer.unref();
+    idleTimers.set(sid, timer);
+  };
 
   const app = new Hono();
+  // Order matters: cheap header checks first, the body is only read after all of them pass.
+  app.use('*', originGuard(options.allowedOrigins));
   app.use('*', bearerAuth(token));
+  app.use('*', jsonContentType());
+  app.use('*', bodyLimit(maxBodyBytes));
   const mcp = createMcpHonoApp(hostHeaderConfig(host, options.allowedHosts));
 
   const discard = async (transport: WebStandardStreamableHTTPServerTransport, server: McpServer): Promise<void> => {
     const sid = transport.sessionId;
     if (sid !== undefined) {
+      clearIdle(sid);
       sessions.delete(sid);
       servers.delete(sid);
     }
@@ -119,45 +174,63 @@ export async function startMcpHttpServer(options: StartMcpHttpServerOptions): Pr
     try {
       if (sessionId) {
         const existing = sessions.get(sessionId);
-        if (!existing) return c.text('Invalid session ID', 400);
+        if (!existing) return unknownSession(c);
+        touch(sessionId);
         return await existing.handleRequest(c.req.raw);
       }
-      const server = await options.createServer();
-      const transport: WebStandardStreamableHTTPServerTransport = new WebStandardStreamableHTTPServerTransport({
-        sessionIdGenerator: () => randomUUID(),
-        onsessioninitialized: (sid) => {
-          sessions.set(sid, transport);
-          servers.set(sid, server);
-          try {
-            options.onSessionCreated?.({ sessionId: sid, server, transport });
-          } catch (err) {
-            logger.error(`onSessionCreated hook failed: ${describe(err)}`);
-          }
-        },
-      });
-      let discarding = false;
-      transport.onclose = () => {
-        if (discarding) return;
-        discarding = true;
-        void discard(transport, server);
-      };
-      await server.connect(transport);
-      const response = await transport.handleRequest(c.req.raw);
-      if (transport.sessionId === undefined || !sessions.has(transport.sessionId)) {
-        // Not an initialize request (or it failed): no session was created, release the server.
-        await transport.close();
+      if (sessions.size + pending >= maxSessions) {
+        return jsonRpcError(c, 429, -32000, 'Too many sessions; retry later', { 'Retry-After': SESSION_FULL_RETRY_AFTER_SECONDS });
       }
-      return response;
+      pending += 1;
+      try {
+        return await createSession(c.req.raw);
+      } finally {
+        pending -= 1;
+      }
     } catch (err) {
       logger.error(`MCP request error: ${describe(err)}`);
       return c.text('Internal server error', 500);
     }
   });
 
+  const unknownSession = (c: Context): Response => jsonRpcError(c, 404, -32001, 'Session not found');
+
+  const createSession = async (request: Request): Promise<Response> => {
+    const server = await options.createServer();
+    const transport: WebStandardStreamableHTTPServerTransport = new WebStandardStreamableHTTPServerTransport({
+      sessionIdGenerator: () => randomUUID(),
+      onsessioninitialized: (sid) => {
+        sessions.set(sid, transport);
+        servers.set(sid, server);
+        touch(sid);
+        try {
+          options.onSessionCreated?.({ sessionId: sid, server, transport });
+        } catch (err) {
+          logger.error(`onSessionCreated hook failed: ${describe(err)}`);
+        }
+      },
+    });
+    let discarding = false;
+    transport.onclose = () => {
+      if (discarding) return;
+      discarding = true;
+      void discard(transport, server);
+    };
+    await server.connect(transport);
+    const response = await transport.handleRequest(request);
+    if (transport.sessionId === undefined || !sessions.has(transport.sessionId)) {
+      // Not an initialize request (or it failed): no session was created, release the server.
+      await transport.close();
+    }
+    return response;
+  };
+
   const forward = (c: Context): Promise<Response> | Response => {
     const sessionId = c.req.header('mcp-session-id');
-    const transport = sessionId ? sessions.get(sessionId) : undefined;
-    if (!transport) return c.text('Invalid or missing session ID', 400);
+    if (!sessionId) return c.text('Missing session ID', 400);
+    const transport = sessions.get(sessionId);
+    if (!transport) return unknownSession(c);
+    touch(sessionId);
     return transport.handleRequest(c.req.raw);
   };
   mcp.get('/mcp', (c) => forward(c));
@@ -195,6 +268,7 @@ export async function startMcpHttpServer(options: StartMcpHttpServerOptions): Pr
           await server?.close().catch(() => undefined);
         }),
       );
+      for (const sid of [...idleTimers.keys()]) clearIdle(sid);
       sessions.clear();
       servers.clear();
       httpServer.closeAllConnections();

@@ -283,13 +283,14 @@ describe('sessions', () => {
     expect(servers[1]?.isConnected()).toBe(true);
   });
 
-  it('answers 400 for an unknown or missing session id', async () => {
+  it('answers 404 for an unknown session id (so clients re-initialise) and 400 for a missing one', async () => {
     const server = await start();
     const unknown = { [SESSION_HEADER]: 'does-not-exist' };
     const post = await postJsonRpc(server.url, { jsonrpc: '2.0', id: 1, method: 'ping' }, { headers: unknown });
-    expect(post.status).toBe(400);
-    expect((await fetch(server.url, { headers: unknown })).status).toBe(400);
-    expect((await fetch(server.url, { method: 'DELETE', headers: unknown })).status).toBe(400);
+    expect(post.status).toBe(404);
+    expect(post.message).toMatchObject({ jsonrpc: '2.0', error: { code: -32001 } });
+    expect((await fetch(server.url, { headers: unknown })).status).toBe(404);
+    expect((await fetch(server.url, { method: 'DELETE', headers: unknown })).status).toBe(404);
     expect((await fetch(server.url)).status).toBe(400);
     expect((await fetch(server.url, { method: 'DELETE' })).status).toBe(400);
   });
