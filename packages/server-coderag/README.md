@@ -147,7 +147,12 @@ pnpm --filter @mcp-servers/server-coderag run test:coverage  # thresholds: 85 % 
 pnpm --filter @mcp-servers/server-coderag run typecheck
 pnpm --filter @mcp-servers/server-coderag run dev            # standalone entry from source (tsx)
 pnpm lint                                                    # ESLint for the whole repository
+pnpm --filter @mcp-servers/server-coderag run bench          # search response size benchmark (see below)
 ```
+
+`bench` needs no network: it indexes a pinned git snapshot of this repository (`BENCH_REF`, default `bdb73d5`) with a
+deterministic hash-based embedder and runs 12 fixed queries through the real `search` handler in hybrid, keyword and
+semantic mode. It prints per-query characters, estimated tokens (chars / 4) and result counts, plus mean and p90 per mode.
 
 The build inlines the private `@mcp-servers/common` and `@mcp-servers/http-host` packages; third-party dependencies,
 including the native modules, stay external.

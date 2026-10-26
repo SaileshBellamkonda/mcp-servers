@@ -30,6 +30,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
+    "bench": "tsx --conditions=@mcp-servers/source scripts/bench-search.ts",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist"
   },
