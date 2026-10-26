@@ -88,6 +88,24 @@ describe('GitExecutor branch coverage', () => {
     });
   });
 
+  it('prefixes every command with the hardening config and keeps the caller args after it', async () => {
+    whichMock.mockResolvedValueOnce('/usr/bin/git');
+    const proc = createFakeProcess();
+    execFileMock.mockImplementationOnce((_gitPath, _args, _options, callback) => {
+      queueMicrotask(() => callback(null, '', ''));
+      return proc;
+    });
+
+    await new GitExecutor().execute('/repo', ['status', '--porcelain']);
+
+    const args = execFileMock.mock.calls[0]![1] as string[];
+    expect(args.slice(-2)).toEqual(['status', '--porcelain']);
+    expect(args).toEqual(expect.arrayContaining(['-c', 'core.fsmonitor=false', '-c', 'core.pager=cat', '-c', 'diff.external=']));
+    // Must not neutralise settings legitimate use depends on.
+    const joined = args.join(' ');
+    expect(joined).not.toMatch(/sshCommand|hooksPath|credential/);
+  });
+
   it('writes stdin input to the spawned git process', async () => {
     whichMock.mockResolvedValueOnce('/usr/bin/git');
 

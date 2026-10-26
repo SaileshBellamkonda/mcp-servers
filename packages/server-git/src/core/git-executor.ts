@@ -43,6 +43,26 @@ export function buildGitEnvironment(
 }
 
 /**
+ * Config prefixed to every git invocation (`git -c k=v ... <args>`; command-line config outranks
+ * `.git/config`). A repository the server is pointed at is untrusted input: its local config could
+ * otherwise run commands on plain `git status` (`core.fsmonitor`), launch a pager, or run an external
+ * diff driver. Only settings that no legitimate use depends on are overridden.
+ *
+ * Deliberately NOT overridden: `core.sshCommand`, `core.hooksPath`, `credential.helper` and `url.*`.
+ * Operators legitimately configure them (private keys, corporate hooks, credential managers, mirrors)
+ * and forcing them off would break fetch/pull/push and commit hooks; hooks and helpers already run
+ * with the allow-listed environment from buildGitEnvironment, so server secrets cannot reach them.
+ * `core.askPass=` stops git from spawning an askpass program (prompting is already off via
+ * GIT_TERMINAL_PROMPT=0).
+ */
+export const HARDENING_CONFIG: readonly string[] = [
+  '-c', 'core.fsmonitor=false',
+  '-c', 'core.pager=cat',
+  '-c', 'diff.external=',
+  '-c', 'core.askPass=',
+];
+
+/**
  * Executes Git commands safely with timeout protection
  */
 export class GitExecutor {
@@ -109,7 +129,7 @@ export class GitExecutor {
       const env = buildGitEnvironment(process.env);
       
       // Use execFile which handles paths with spaces better than spawn
-      const proc = execFile(gitPath, args, {
+      const proc = execFile(gitPath, [...HARDENING_CONFIG, ...args], {
         cwd,
         env,
         maxBuffer: 10 * 1024 * 1024, // 10MB buffer
