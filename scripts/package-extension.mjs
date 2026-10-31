@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-// Builds a VSIX for one target: bundle -> stage the native modules for that target -> vsce's `createVSIX`.
+// Builds a VSIX for one target from an already built extension (`pnpm run build`): stage the native modules for that
+// target -> vsce's `createVSIX`.
 //
 // Usage (from the extension package): node ../../scripts/package-extension.mjs [--target <vsce-target>] [--out <file-or-dir>]
 // The VSIX is not committed (*.vsix is ignored). Staging another platform's natives needs its sqlite-vec platform
@@ -7,7 +8,6 @@
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { bundleExtension } from './bundle-extension.mjs';
 import { hostTarget, parseTarget, stageNative } from './stage-native.mjs';
 
 /**
@@ -49,7 +49,6 @@ export function vsceOptions({ target, out }, cwd) {
  */
 export async function packageExtension(extensionDir, options) {
   const root = path.resolve(extensionDir);
-  await bundleExtension(root);
   const staged = stageNative({ extensionDir: root, target: options.target, log: (message) => process.stdout.write(`${message}\n`) });
   process.stdout.write(`staged native modules for ${staged.target}\n`);
   // vsce is a devDependency of the extension, so it is resolved from there.

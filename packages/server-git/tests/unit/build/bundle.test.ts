@@ -1,12 +1,11 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { build, type Metafile } from 'esbuild';
+import type { Metafile } from 'esbuild';
+import { execFileSync } from 'node:child_process';
 import { readFileSync, rmSync, existsSync } from 'node:fs';
 import { builtinModules } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { initializeSession, postJsonRpc } from '@mcp-servers/http-host/testing';
-// @ts-expect-error -- plain ESM script without declarations
-import { bundleOptions } from '../../../../../scripts/bundle-server.mjs';
 import { TestRepository } from '../../fixtures/test-repo.js';
 import { TOKEN, freePort, spawnStandalone, type StandaloneProcess } from '../../fixtures/standalone-process.js';
 
@@ -28,11 +27,12 @@ function externalPackage(specifier: string): string | undefined {
 describe('server bundle (shared packages inlined at build time)', () => {
   let metafile: Metafile;
 
-  beforeAll(async () => {
+  beforeAll(() => {
     rmSync(outdir, { recursive: true, force: true });
-    const result = await build({ ...bundleOptions(packageRoot, { outdir }), write: true });
-    if (!result.metafile) throw new Error('esbuild returned no metafile');
-    metafile = result.metafile;
+    // The package's own `bundle` script, redirected to a temporary directory.
+    const metafilePath = path.join(outdir, 'meta.json');
+    execFileSync('pnpm', ['run', 'bundle', `--outdir=${outdir}`, `--metafile=${metafilePath}`], { cwd: packageRoot, stdio: 'pipe' });
+    metafile = JSON.parse(readFileSync(metafilePath, 'utf8')) as Metafile;
   }, 60000);
 
   afterAll(() => {

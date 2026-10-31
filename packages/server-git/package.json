@@ -28,7 +28,8 @@
     "git-mcp-server": "./dist/standalone.js"
   },
   "scripts": {
-    "build": "pnpm run clean && node ../../scripts/bundle-server.mjs . && tsc -b tsconfig.build.json",
+    "bundle": "esbuild standalone=src/standalone.ts embedded=src/embedded.ts --bundle --format=esm --platform=node --target=node24 --sourcemap --conditions=@mcp-servers/source --packages=external --alias:@mcp-servers/common=../shared/common/src/index.ts --alias:@mcp-servers/http-host=../shared/http-host/src/index.ts --outdir=dist --log-level=warning",
+    "build": "pnpm run clean && pnpm run bundle && tsc -b tsconfig.build.json",
     "dev": "tsx --conditions=@mcp-servers/source src/standalone.ts",
     "test": "vitest run",
     "test:watch": "vitest",
