@@ -90,7 +90,7 @@ MCP servers are the core components that implement the Model Context Protocol. E
 
 #### Key Features
 
-- **Dual Entry Points**: Separate entry points for standalone and embedded modes (both bundled by `scripts/bundle-server.mjs`)
+- **Dual Entry Points**: Separate entry points for standalone and embedded modes (both bundled by the package's `bundle` script, an esbuild command)
 - **Transport Abstraction**: stdio or HTTP for standalone, authenticated loopback HTTP for embedded; HTTP always goes through `@mcp-servers/http-host`
 - **One server per session**: the HTTP host calls a `createServer` factory for every session, so each session has its own `McpServer` while the domain services (repository manager, vector database) are shared
 - **Tool Registration**: each tool lives in `tools/` and is registered with `server.registerTool()`
