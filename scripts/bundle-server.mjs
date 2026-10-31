@@ -6,17 +6,14 @@
 // including native modules) and every Node built-in stays external and is resolved at runtime.
 //
 // Usage: node scripts/bundle-server.mjs <package-dir>
-import { createRequire } from 'node:module';
 import { readFileSync } from 'node:fs';
 import { chmod } from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { SOURCE_CONDITION, loadEsbuild } from './bundle-common.mjs';
 
 /** Packages that are private to this repository and therefore always inlined. */
 const INLINED_SCOPE = '@mcp-servers/';
-
-/** Export condition under which the shared packages expose their TypeScript source. */
-export const SOURCE_CONDITION = '@mcp-servers/source';
 
 /**
  * Names that must stay external for the package described by `manifest`: every declared dependency and
@@ -61,7 +58,7 @@ export function bundleOptions(packageDir, overrides = {}) {
  */
 export async function bundleServer(packageDir) {
   const root = path.resolve(packageDir);
-  const { build } = createRequire(path.join(root, 'package.json'))('esbuild');
+  const { build } = loadEsbuild(root);
   const options = bundleOptions(root);
   const result = await build(options);
   // npm sets the executable bit on `bin` files at install time; keep the local build runnable too.

@@ -9,12 +9,9 @@
 // located at run time through coderag's `nativeModulesDir` option; `node:sqlite` is a built-in loaded lazily.
 //
 // Usage: node scripts/bundle-extension.mjs <extension-dir>
-import { createRequire } from 'node:module';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-
-/** Export condition under which the workspace packages expose their TypeScript source. */
-export const SOURCE_CONDITION = '@mcp-servers/source';
+import { SOURCE_CONDITION, loadEsbuild } from './bundle-common.mjs';
 
 /**
  * esbuild options for the extension in `extensionDir`. `overrides` replace any option; passing `stdin` or
@@ -59,7 +56,7 @@ export function extensionBundleOptions(extensionDir, overrides = {}) {
  */
 export async function bundleExtension(extensionDir, overrides = {}) {
   const root = path.resolve(extensionDir);
-  const { build } = createRequire(path.join(root, 'package.json'))('esbuild');
+  const { build } = loadEsbuild(root);
   return build(extensionBundleOptions(root, overrides));
 }
 

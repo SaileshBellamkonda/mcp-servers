@@ -10,7 +10,7 @@
 //
 // Usage: node scripts/stage-native.mjs [--target <vsce-target>] [--extension-dir <dir>] [--out <dir>]
 import { createRequire } from 'node:module';
-import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
@@ -202,7 +202,7 @@ export function stageNative(options) {
       const destination = path.join(nodeModules, name, ...file.split('/'));
       mkdirSync(path.dirname(destination), { recursive: true });
       cpSync(path.join(dir, ...file.split('/')), destination, { dereference: true });
-      bytes += statSize(destination);
+      bytes += statSync(destination).size;
     }
     staged.push({ name, files: files.length, bytes });
     options.log?.(`staged ${name} (${String(files.length)} files)`);
@@ -212,10 +212,6 @@ export function stageNative(options) {
     '// Placeholder: the extension calls createRequire(<this file>) so bare specifiers resolve from ./node_modules.\n'
   );
   return { outDir, target: target.name, packages: staged };
-}
-
-function statSize(file) {
-  return readFileSync(file).byteLength;
 }
 
 /** @param {string[]} argv */
