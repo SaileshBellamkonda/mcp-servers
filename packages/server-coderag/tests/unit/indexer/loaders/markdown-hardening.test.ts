@@ -30,7 +30,7 @@ describe('frontmatter is YAML only', () => {
 
 describe('gray-matter cache', () => {
   it('does not retain loaded documents in the global cache', () => {
-    const cache = matter.cache as Record<string, unknown>;
+    const cache = (matter as unknown as { cache: Record<string, unknown> }).cache;
     const before = Object.keys(cache).length;
     for (let i = 0; i < 50; i++) {
       loader.load('/x/a.md', `---\ntitle: Doc ${String(i)}\n---\n# H\nbody ${String(i)}`);

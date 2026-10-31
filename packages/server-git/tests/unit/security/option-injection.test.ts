@@ -96,7 +96,7 @@ describe('option injection table', () => {
 
   for (const c of cases) {
     for (const evil of evilValues) {
-      it(`${c.tool}.${c.param} (${JSON.stringify(c.base.action ?? '')}) cannot smuggle ${evil.slice(0, 18)} as a git option`, async () => {
+      it(`${c.tool}.${c.param} (${JSON.stringify(c.base['action'] ?? '')}) cannot smuggle ${evil.slice(0, 18)} as a git option`, async () => {
         const handler = registered()[c.tool]?.handler;
         expect(handler, `${c.tool} not registered`).toBeDefined();
         await Promise.resolve(handler?.({ repository: '/repo', ...c.base, [c.param]: c.array ? [evil] : evil })).catch(() => undefined);

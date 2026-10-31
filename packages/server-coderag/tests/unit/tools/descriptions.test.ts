@@ -5,6 +5,7 @@ import type { Indexer } from '../../../src/indexer/indexer.js';
 import { SyncManager } from '../../../src/indexer/sync-manager.js';
 import { registerIndexMarkdown } from '../../../src/tools/index-markdown.js';
 import { registerSyncDocuments } from '../../../src/tools/sync-documents.js';
+import { PathGuard } from '../../../src/core/path-guard.js';
 
 interface ToolConfig {
   description: string;
@@ -26,7 +27,7 @@ function captureConfigs(): { server: McpServer; configs: Map<string, ToolConfig>
 describe('document tool descriptions', () => {
   it('index_markdown mentions MDX and its directory argument lists the extensions', () => {
     const { server, configs } = captureConfigs();
-    registerIndexMarkdown(server, {} as Indexer, new SyncManager());
+    registerIndexMarkdown(server, {} as Indexer, new SyncManager(), new PathGuard([process.cwd()]));
     const config = configs.get('index_markdown');
     expect(config?.description).toContain('MDX');
     const properties = config?.inputSchema['~standard'].jsonSchema.input({ target: 'draft-2020-12' }).properties;
@@ -35,7 +36,7 @@ describe('document tool descriptions', () => {
 
   it('sync_documents mentions MDX', () => {
     const { server, configs } = captureConfigs();
-    registerSyncDocuments(server, {} as VectorDB, {} as Indexer, [], new SyncManager());
+    registerSyncDocuments(server, {} as VectorDB, {} as Indexer, [], new SyncManager(), new PathGuard([process.cwd()]));
     expect(configs.get('sync_documents')?.description).toContain('MDX');
   });
 });

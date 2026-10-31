@@ -283,7 +283,7 @@ describe('EmbeddedServerAdapter', () => {
       const h = makeHarness();
       const original = new Error('kaboom');
       h.descriptor.activate.mockRejectedValueOnce(original);
-      const failure = await h.adapter.start().catch((e: unknown) => e as Error);
+      const failure = (await h.adapter.start().catch((e: unknown) => e)) as Error;
       expect(failure.cause).toBe(original);
       expect(h.logs.some((l) => l.level === 'error' && String(l.data).includes('kaboom'))).toBe(true);
     });

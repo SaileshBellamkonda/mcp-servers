@@ -12,7 +12,7 @@ function emitDeclarations(): Map<string, string> {
   const parsed = ts.parseJsonConfigFileContent(read.config, ts.sys, packageRoot);
   const program = ts.createProgram({
     rootNames: parsed.fileNames.filter((f) => /[\\/]src[\\/](embedded|standalone)\.ts$/.test(f)),
-    options: { ...parsed.options, customConditions: ['@mcp-servers/source'], composite: false, incremental: false, tsBuildInfoFile: undefined, declarationMap: false, noEmit: false },
+    options: { ...parsed.options, customConditions: ['@mcp-servers/source'], composite: false, incremental: false, declarationMap: false, noEmit: false },
   });
   const out = new Map<string, string>();
   program.emit(undefined, (fileName, text) => { out.set(path.basename(fileName), text); }, undefined, true);

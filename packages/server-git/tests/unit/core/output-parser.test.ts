@@ -145,13 +145,13 @@ describe('OutputParser', () => {
     it('should parse locked worktree', () => {
       const output = 'worktree /path\nHEAD abc123\nbranch refs/heads/main\nlocked';
       const result = parser.parseWorktrees(output);
-      expect(result[0].locked).toBe(true);
+      expect(result[0]?.locked).toBe(true);
     });
 
     it('should parse prunable worktree', () => {
       const output = 'worktree /path\nHEAD abc123\nbranch refs/heads/main\nprunable';
       const result = parser.parseWorktrees(output);
-      expect(result[0].prunable).toBe(true);
+      expect(result[0]?.prunable).toBe(true);
     });
   });
 });

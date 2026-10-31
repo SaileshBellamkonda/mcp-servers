@@ -1,7 +1,7 @@
 import { chmodSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import { deriveServerToken } from '../../src/core/server-token';
 import { computeScopeKey, SecretStorageTokenProvider, tokenSecretKey, type SecretStore } from '../../src/core/token-provider';
 
@@ -56,7 +56,7 @@ describe('SecretStorageTokenProvider', () => {
   let root: string;
   let dir: string;
   let secrets: MemorySecrets;
-  let onMirrorError: ReturnType<typeof vi.fn>;
+  let onMirrorError: Mock<(error: unknown) => void>;
 
   const make = (): SecretStorageTokenProvider => new SecretStorageTokenProvider(secrets, dir, { onMirrorError });
   const workspaceToken = (scope = SCOPE): string => secrets.values.get(tokenSecretKey(scope)) ?? '';

@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
+import { describe, it, expect, afterEach, beforeEach, vi, type Mock } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -6,7 +6,9 @@ import { resolveDimensions } from '../../../src/core/dimensions.js';
 import { VectorDB } from '../../../src/vectordb/db.js';
 import type { CodeRagConfig } from '../../../src/core/types.js';
 
-function logger(): { info: ReturnType<typeof vi.fn>; warning: ReturnType<typeof vi.fn>; error: ReturnType<typeof vi.fn>; debug: ReturnType<typeof vi.fn> } {
+type LogMock = Mock<(data: unknown) => void>;
+
+function logger(): { info: LogMock; warning: LogMock; error: LogMock; debug: LogMock } {
   return { info: vi.fn(), warning: vi.fn(), error: vi.fn(), debug: vi.fn() };
 }
 

@@ -19,5 +19,5 @@
     "resolveJsonModule": true,
     "tsBuildInfoFile": "${configDir}/dist/.tsbuildinfo"
   },
-  "include": ["${configDir}/src/**/*"]
+  "include": ["${configDir}/src/**/*", "${configDir}/tests/**/*"]
 }

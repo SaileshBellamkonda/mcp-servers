@@ -5,6 +5,7 @@ import { builtinModules } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { initializeSession, postJsonRpc } from '@mcp-servers/http-host/testing';
+// @ts-expect-error -- plain ESM script without declarations
 import { bundleOptions } from '../../../../../scripts/bundle-server.mjs';
 import { TestRepository } from '../../fixtures/test-repo.js';
 import { TOKEN, freePort, spawnStandalone, type StandaloneProcess } from '../../fixtures/standalone-process.js';
@@ -30,6 +31,7 @@ describe('server bundle (shared packages inlined at build time)', () => {
   beforeAll(async () => {
     rmSync(outdir, { recursive: true, force: true });
     const result = await build({ ...bundleOptions(packageRoot, { outdir }), write: true });
+    if (!result.metafile) throw new Error('esbuild returned no metafile');
     metafile = result.metafile;
   }, 60000);
 

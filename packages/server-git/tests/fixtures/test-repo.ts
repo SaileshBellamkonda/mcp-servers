@@ -7,7 +7,11 @@ import { promisify } from 'node:util';
 const execFileAsync = promisify(execFile);
 
 export class TestRepository {
-  constructor(public path: string) {}
+  public path: string;
+
+  constructor(path: string) {
+    this.path = path;
+  }
 
   static async create(): Promise<TestRepository> {
     const path = await mkdtemp(join(tmpdir(), 'git-test-'));

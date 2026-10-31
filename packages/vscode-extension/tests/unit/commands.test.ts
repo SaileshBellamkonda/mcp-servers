@@ -83,7 +83,7 @@ describe('commands', () => {
       const { run, servers } = await setup([['a', 'running'], ['b', 'running'], ['c', 'stopped']]);
       vi.mocked(vscode.window.showQuickPick).mockResolvedValueOnce({ id: 'b', label: 'B' } as never);
       await run(STOP);
-      const items = vi.mocked(vscode.window.showQuickPick).mock.calls[0]?.[0] as { id: string }[];
+      const items = vi.mocked(vscode.window.showQuickPick).mock.calls[0]?.[0] as unknown as { id: string }[];
       expect(items.map((i) => i.id)).toEqual(['a', 'b']);
       expect(servers['b']?.adapter.getInfo().state).toBe('stopped');
       expect(servers['a']?.adapter.getInfo().state).toBe('running');
