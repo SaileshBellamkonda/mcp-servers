@@ -41,7 +41,7 @@ describe('standalone coderag HTTP entry point', () => {
   it('serves authenticated MCP sessions on 127.0.0.1 and shuts down on SIGTERM', async () => {
     const port = await freePort();
     proc = spawnStandalone(env({ MCP_HTTP_PORT: String(port), MCP_AUTH_TOKEN: TOKEN }));
-    await proc.waitForStderr(/listening on http:\/\/127\.0\.0\.1:\d+\/mcp/);
+    await proc.waitForLog(/listening on http:\/\/127\.0\.0\.1:\d+\/mcp/);
     const url = `http://127.0.0.1:${String(port)}/mcp`;
 
     expect((await initializeSession(url)).status).toBe(401);
@@ -64,6 +64,7 @@ describe('standalone coderag HTTP entry point', () => {
     if (external) expect(await connectOutcome(external, port)).toBe('refused');
 
     expect(proc.stderr()).not.toContain(TOKEN);
+    expect(proc.log()).not.toContain(TOKEN);
 
     proc.child.kill('SIGTERM');
     const { code } = await proc.exited;

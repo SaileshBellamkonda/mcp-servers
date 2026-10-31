@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 import { McpServer, StdioServerTransport } from '@modelcontextprotocol/server';
-import { McpLogger, parsePort } from '@mcp-servers/common';
+import { McpLogger, createSinkFromEnv, createSinkLogger, parsePort, type LogSink } from '@mcp-servers/common';
 import { resolveHttpSecurity, startMcpHttpServer, type McpHttpServer } from '@mcp-servers/http-host';
 import { loadConfigFromEnv } from './core/config.ts';
 import { resolveDimensions } from './core/dimensions.ts';
-import { createStderrLogger, type CodeRagLogger } from './core/logger.ts';
+import type { CodeRagLogger } from './core/logger.ts';
 import { Embedder } from './embedder/embedder.ts';
 import { VectorDB } from './vectordb/db.ts';
 import { Indexer } from './indexer/indexer.ts';
@@ -25,7 +25,13 @@ function newServer(): McpServer {
   );
 }
 
+// The sink `main` logs to, kept so a crash can be recorded in the log file as well.
+let fatalSink: LogSink | undefined;
+
 async function main(): Promise<void> {
+  // Log entries go to LOG_FILE at LOG_LEVEL, or nowhere; an invalid LOG_LEVEL fails here, before anything starts.
+  const sink = createSinkFromEnv(process.env);
+  fatalSink = sink;
   const httpMode = process.env['MCP_TRANSPORT']?.toLowerCase() === 'http';
   // Validate the HTTP binding before any resource is opened.
   const security = httpMode ? resolveHttpSecurity(process.env) : undefined;
@@ -39,7 +45,7 @@ async function main(): Promise<void> {
   // stdio has exactly one server, so its logger can talk to the client. In HTTP mode the indexer,
   // watcher and startup sync outlive every session and must not be bound to one session's server.
   const stdioServer = httpMode ? undefined : newServer();
-  const logger: CodeRagLogger = stdioServer ? new McpLogger(stdioServer, 'coderag') : createStderrLogger('coderag');
+  const logger: CodeRagLogger = stdioServer ? new McpLogger(stdioServer, 'coderag', sink) : createSinkLogger('coderag', sink);
 
   const dimensions = resolveDimensions(config, logger);
   const db = VectorDB.open(config.dbPath, dimensions);
@@ -86,13 +92,13 @@ async function main(): Promise<void> {
       httpServer = await startMcpHttpServer({
         createServer: () => {
           const server = newServer();
-          registerTools(server, new McpLogger(server, 'coderag'));
+          registerTools(server, new McpLogger(server, 'coderag', sink));
           return server;
         },
         port,
         host: security.host,
         token: security.token,
-        logger,
+        logger: createSinkLogger('http-host', sink),
       });
     } catch (err) {
       watcher?.close();
@@ -142,6 +148,8 @@ async function main(): Promise<void> {
 }
 
 main().catch((err: unknown) => {
+  // A crash is reported on stderr even though servers never log there, and also recorded when a log file exists.
+  fatalSink?.('critical', 'coderag', `FATAL ${String(err)}`);
   process.stderr.write(`[FATAL] ${String(err)}\n`);
   process.exit(1);
 });

@@ -34,7 +34,7 @@ export async function syncDocuments(
   logger?: CodeRagLogger,
 ): Promise<SyncResult> {
   const log = (msg: string): void => {
-    if (logger) { logger.info(msg); } else { process.stderr.write(`[INFO] ${msg}\n`); }
+    logger?.info(msg);
   };
 
   log(`Syncing documents in: ${includeDirs.join(', ')}`);

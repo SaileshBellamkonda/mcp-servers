@@ -1,6 +1,6 @@
 import { describe, it, expect, afterEach, beforeEach } from 'vitest';
 import { spawn, type ChildProcess } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -36,6 +36,8 @@ describe('standalone coderag over stdio', () => {
   }
 
   it('does not start the startup sync until the client has completed the handshake', async () => {
+    const logFile = path.join(dir, 'server.log');
+    const log = (): string => (existsSync(logFile) ? readFileSync(logFile, 'utf8') : '');
     child = spawn(process.execPath, ['--conditions=@mcp-servers/source', 'src/standalone.ts'], {
       cwd: packageRoot,
       env: {
@@ -49,20 +51,18 @@ describe('standalone coderag over stdio', () => {
         CODERAG_DOCS_INCLUDE: path.join(dir, 'docs', '**', '*.md'),
         CODERAG_CODE_INCLUDE: path.join(dir, 'src', '**', '*.ts'),
         CODERAG_WATCH: '0',
+        LOG_FILE: logFile,
       },
       stdio: ['pipe', 'pipe', 'pipe'],
     });
     let stdout = '';
-    let stderr = '';
     child.stdout?.setEncoding('utf8');
-    child.stderr?.setEncoding('utf8');
     child.stdout?.on('data', (chunk: string) => { stdout += chunk; });
-    child.stderr?.on('data', (chunk: string) => { stderr += chunk; });
 
-    await waitFor(() => stderr, /CodeRAG MCP Server ready/);
+    await waitFor(log, /CodeRAG MCP Server ready/);
     // Give a sync that was scheduled right after connect the chance to start.
     await new Promise((resolve) => setTimeout(resolve, 500));
-    expect(stderr).not.toMatch(/Startup sync:/);
+    expect(log()).not.toMatch(/Startup sync:/);
 
     child.stdin?.write(`${JSON.stringify({
       jsonrpc: '2.0',
@@ -71,9 +71,9 @@ describe('standalone coderag over stdio', () => {
       params: { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'handshake-test', version: '1.0.0' } },
     })}\n`);
     await waitFor(() => stdout, /"id":1/);
-    expect(stderr).not.toMatch(/Startup sync:/);
+    expect(log()).not.toMatch(/Startup sync:/);
 
     child.stdin?.write(`${JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' })}\n`);
-    await waitFor(() => stderr, /Startup sync complete/);
+    await waitFor(log, /Startup sync complete/);
   });
 });

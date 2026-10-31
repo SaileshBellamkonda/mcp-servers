@@ -1,6 +1,6 @@
 import { VectorDB } from '../vectordb/db.ts';
 import type { CodeRagConfig } from './types.ts';
-import { createStderrLogger, type CodeRagLogger } from './logger.ts';
+import { silentLogger, type CodeRagLogger } from './logger.ts';
 
 /**
  * Picks the embedding dimensions to open the database with: the stored value when the database
@@ -8,7 +8,7 @@ import { createStderrLogger, type CodeRagLogger } from './logger.ts';
  */
 export function resolveDimensions(
   config: Pick<CodeRagConfig, 'dbPath' | 'embeddingDim'>,
-  logger: CodeRagLogger = createStderrLogger(),
+  logger: CodeRagLogger = silentLogger,
 ): number {
   const stored = VectorDB.readStoredDimensions(config.dbPath);
   if (stored !== null && stored !== config.embeddingDim) {

@@ -16,6 +16,8 @@ export interface DocumentSection {
 export interface LoadedDocument {
   metadata: DocumentMetadata;
   sections: DocumentSection[];
+  /** Problems found while loading that did not stop indexing (the Indexer logs them as warnings). */
+  warnings?: string[];
 }
 
 export interface DocumentLoader {

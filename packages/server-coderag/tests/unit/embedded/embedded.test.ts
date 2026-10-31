@@ -108,6 +108,32 @@ describe('activateCodeRagServer', () => {
     expect(JSON.parse(statusB)).toMatchObject({ embedding_model: 'test-model', embedding_dim: 4 });
   });
 
+  it('sends what the tools log to the host logger, never to stderr', async () => {
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    const logger = { debug: vi.fn(), info: vi.fn(), warning: vi.fn(), error: vi.fn() };
+    instance = await activateCodeRagServer({ ...base(), logger, toolset: 'all' });
+    const url = urlOf(instance);
+    const { sessionId } = await initializeSession(url, { token: TOKEN });
+
+    await callTool(url, sessionId ?? '', 'sync_documents', { directory: workspace });
+
+    expect(logger.info).toHaveBeenCalledWith(expect.stringContaining('Syncing documents in'));
+    expect(logger.info).toHaveBeenCalledWith(expect.objectContaining({ tool: 'sync_documents' }));
+    expect(stderr).not.toHaveBeenCalled();
+  });
+
+  it('logs nowhere when no logger is supplied', async () => {
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    const { logger: _omitted, ...withoutLogger } = base();
+    instance = await activateCodeRagServer({ ...withoutLogger, toolset: 'all' });
+    const url = urlOf(instance);
+    const { sessionId } = await initializeSession(url, { token: TOKEN });
+
+    await callTool(url, sessionId ?? '', 'sync_documents', { directory: workspace });
+
+    expect(stderr).not.toHaveBeenCalled();
+  });
+
   it('confines file tools to every workspace folder', async () => {
     const second = mkdtempSync(path.join(tmpdir(), 'coderag-embedded-b-'));
     const outside = mkdtempSync(path.join(tmpdir(), 'coderag-embedded-out-'));

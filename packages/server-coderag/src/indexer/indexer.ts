@@ -89,16 +89,12 @@ export class Indexer {
   }
 
   private log(level: 'info' | 'warning', msg: string): void {
-    if (this.logger) {
-      if (level === 'warning') this.logger.warning(msg);
-      else this.logger.info(msg);
-    } else {
-      process.stderr.write(`[${level === 'warning' ? 'WARN' : 'INFO'}] ${msg}\n`);
-    }
+    if (level === 'warning') this.logger?.warning(msg);
+    else this.logger?.info(msg);
   }
 
   private getCodeParser(): CodeParser {
-    this.codeParser ??= new CodeParser({ nativeModulesDir: this.nativeModulesDir });
+    this.codeParser ??= new CodeParser({ nativeModulesDir: this.nativeModulesDir, warn: (msg) => { this.log('warning', msg); } });
     return this.codeParser;
   }
 
@@ -130,6 +126,7 @@ export class Indexer {
 
     const stat = statSync(readPath);
     const doc = loader.load(filePath, readFileSync(readPath, 'utf8'));
+    for (const warning of doc.warnings ?? []) this.log('warning', `${filePath}: ${warning}`);
     const chunks = chunkSections(doc.sections, this.chunkSize);
 
     if (chunks.length === 0) {

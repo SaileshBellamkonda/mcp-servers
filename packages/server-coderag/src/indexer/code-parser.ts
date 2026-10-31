@@ -27,6 +27,8 @@ let defaultRequire: NodeJS.Require | undefined;
 export interface CodeParserOptions {
   /** Directory whose `node_modules` holds tree-sitter and the grammars (bundled builds); default: this package's own resolution. */
   nativeModulesDir?: string | undefined;
+  /** Receives a message for each grammar that fails to load; dropped when omitted. */
+  warn?: ((message: string) => void) | undefined;
 }
 
 // `import.meta.url` is only read when no `nativeModulesDir` is given, so a CommonJS bundle (where it is
@@ -158,10 +160,10 @@ export class CodeParser {
   constructor(options: CodeParserOptions = {}) {
     const require = requireFor(options.nativeModulesDir);
     this.ParserClass = require('tree-sitter') as TSParserConstructor;
-    this.initLanguages(require);
+    this.initLanguages(require, options.warn);
   }
 
-  private initLanguages(require: NodeJS.Require): void {
+  private initLanguages(require: NodeJS.Require, warn: ((message: string) => void) | undefined): void {
     for (const [key, config] of Object.entries(SUPPORTED_LANGUAGES)) {
       if (key === 'vue') continue; // Vue uses special handling
       try {
@@ -174,7 +176,7 @@ export class CodeParser {
         this.queries.set(key, query);
       } catch (err) {
         // Skip languages that failed to load (missing grammar package)
-        process.stderr.write(`[WARN] Failed to load tree-sitter grammar for ${key}: ${String(err)}\n`);
+        warn?.(`Failed to load tree-sitter grammar for ${key}: ${String(err)}`);
       }
     }
   }

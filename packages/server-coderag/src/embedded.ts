@@ -1,10 +1,10 @@
 import { McpServer } from '@modelcontextprotocol/server';
-import { McpLogger } from '@mcp-servers/common';
+import { McpLogger, createHostSink } from '@mcp-servers/common';
 import { requireToken, startMcpHttpServer, type McpHttpServer } from '@mcp-servers/http-host';
 import { assertSecureEmbeddingUrl, loadConfigFromVsCode, type VsCodeConfiguration } from './core/config.ts';
 import { ConfigError } from './core/types.ts';
 import { resolveDimensions } from './core/dimensions.ts';
-import { createStderrLogger, type CodeRagLogger } from './core/logger.ts';
+import { silentLogger, type CodeRagLogger } from './core/logger.ts';
 import { Embedder } from './embedder/embedder.ts';
 import { VectorDB } from './vectordb/db.ts';
 import { probeSqliteSupport, type SqliteProbeDeps, type SqliteProbeResult } from './vectordb/sqlite-probe.ts';
@@ -33,7 +33,7 @@ export interface ActivateCodeRagServerOptions {
   nativeModulesDir?: string;
   /** Embedding API key; overrides the one in the configuration (e.g. read from SecretStorage). */
   apiKey?: string;
-  /** Receives diagnostics from the long-lived services (defaults to stderr). */
+  /** Receives diagnostics from the long-lived services and what the tools log (defaults to nowhere). */
   logger?: CodeRagLogger;
   /** Re-index files as they change in the workspace folders (default false; the VS Code extension passes its setting). */
   watch?: boolean;
@@ -77,7 +77,8 @@ export async function activateCodeRagServer(options: ActivateCodeRagServerOption
   assertSecureEmbeddingUrl(config.embedding.url, config.embedding.apiKey, 'mcpServers.coderag.embeddingUrl', 'the embedding API key');
   const { nativeModulesDir } = options;
   // Shared services outlive every session, so they never log through a session's server.
-  const logger = options.logger ?? createStderrLogger('coderag');
+  const logger = options.logger ?? silentLogger;
+  const sink = createHostSink(options.logger);
 
   const embedder = new Embedder(config.embedding);
   const dimensions = resolveDimensions(config, logger);
@@ -121,7 +122,7 @@ export async function activateCodeRagServer(options: ActivateCodeRagServerOption
         );
         createCodeRagServer(
           server, db, embedder, indexer, config.topK, includeDirs, syncManager,
-          options.logger ?? new McpLogger(server, 'coderag'),
+          new McpLogger(server, 'coderag', sink),
           config.dbPath, config.embedding.model, pathGuard, { toolset, freshness },
         );
         return server;

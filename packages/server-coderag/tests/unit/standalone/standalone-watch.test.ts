@@ -52,8 +52,8 @@ describe('standalone coderag file watcher', () => {
       CODERAG_CODE_INCLUDE: path.join(dir, 'src', '**', '*.ts'),
       ...extra,
     });
-    await proc.waitForStderr(/listening on http:\/\/127\.0\.0\.1:\d+\/mcp/);
-    await proc.waitForStderr(/Startup sync complete/);
+    await proc.waitForLog(/listening on http:\/\/127\.0\.0\.1:\d+\/mcp/);
+    await proc.waitForLog(/Startup sync complete/);
     const url = `http://127.0.0.1:${String(port)}/mcp`;
     const session = (await initializeSession(url, { token: TOKEN })).sessionId ?? '';
     return { url, session };
@@ -70,7 +70,7 @@ describe('standalone coderag file watcher', () => {
 
   it('watches by default: a file created while the server runs becomes searchable', async () => {
     const { url, session } = await start({});
-    expect(proc?.stderr()).toMatch(/Watching directory: .*src/);
+    expect(proc?.log()).toMatch(/Watching directory: .*src/);
     writeFileSync(path.join(dir, 'src', 'fresh.ts'), 'export function quokkahandler(): number { return 1; }\n');
     const deadline = Date.now() + 15000;
     let out = '';
@@ -86,7 +86,7 @@ describe('standalone coderag file watcher', () => {
     const { url, session } = await start({ CODERAG_WATCH: '0' });
     writeFileSync(path.join(dir, 'src', 'fresh.ts'), 'export function quokkahandler(): number { return 1; }\n');
     await new Promise((resolve) => setTimeout(resolve, 2500));
-    expect(proc?.stderr()).not.toContain('Watching directory');
+    expect(proc?.log()).not.toContain('Watching directory');
     expect(await search(url, session, 'quokkahandler')).not.toContain('fresh.ts');
   }, 40000);
 });

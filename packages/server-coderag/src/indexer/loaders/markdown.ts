@@ -2,7 +2,6 @@ import path from 'node:path';
 import matter from 'gray-matter';
 import type { DocumentLoader, DocumentMetadata, DocumentSection, LoadedDocument } from './types.ts';
 import { isFenceClose, matchFenceOpen, type Fence } from './fence.ts';
-import { createStderrLogger } from '../../core/logger.ts';
 
 const ATX_OPEN = /^ {0,3}(#{1,6})[ \t]/;
 const SETEXT_UNDERLINE = /^ {0,3}(=+|-+)[ \t]*$/;
@@ -26,6 +25,8 @@ interface Frontmatter {
   data: Record<string, unknown>;
   body: string;
   lineOffset: number;
+  /** Set when the frontmatter was left unparsed; the loader reports it as a warning of the document. */
+  warning?: string;
 }
 
 interface OpenSection {
@@ -44,8 +45,6 @@ function disabledEngine(): never {
   throw new Error('Code frontmatter (---js / ---javascript) is not supported');
 }
 const MATTER_OPTIONS = { engines: { js: disabledEngine, javascript: disabledEngine } };
-
-const sizeLogger = createStderrLogger('coderag-markdown');
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -121,7 +120,7 @@ export function splitFrontmatter(source: string): Frontmatter {
   } catch (error) {
     if (error instanceof FrontmatterTooLargeError) {
       // Without the cap the document would stall the server; it is indexed as plain text instead.
-      sizeLogger.warning(error.message);
+      return { ...noFrontmatter(source), warning: error.message };
     }
     return noFrontmatter(source);
   }
@@ -305,10 +304,14 @@ export function loadMarkdownLike(
   source: string,
   transformBody: (body: string) => string,
 ): LoadedDocument {
-  const { data, body, lineOffset } = splitFrontmatter(source);
+  const { data, body, lineOffset, warning } = splitFrontmatter(source);
   const { sections, firstH1 } = parseMarkdownBody(transformBody(body), lineOffset);
   const fallbackTitle = firstH1 ?? path.basename(filePath, path.extname(filePath));
-  return { metadata: normalizeMetadata(data, fallbackTitle), sections };
+  return {
+    metadata: normalizeMetadata(data, fallbackTitle),
+    sections,
+    ...(warning !== undefined && { warnings: [warning] }),
+  };
 }
 
 export class MarkdownLoader implements DocumentLoader {
