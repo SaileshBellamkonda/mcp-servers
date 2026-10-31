@@ -62,6 +62,7 @@ export const DEFAULT_CODE_INCLUDE = [
   '**/*.vue',
 ];
 
+/** A trailing slash only restricts a gitignore pattern to directories; it is dropped so the pattern names the directory itself. */
 function loadGitignorePatterns(dir: string): string[] {
   const gitignorePath = path.join(dir, '.gitignore');
   if (!existsSync(gitignorePath)) return [];
@@ -70,10 +71,20 @@ function loadGitignorePatterns(dir: string): string[] {
       .split('\n')
       .map((l) => l.trim())
       .filter((l) => l !== '' && !l.startsWith('#') && !l.startsWith('!'))
+      .map((p) => p.replace(/\/+$/, ''))
+      .filter((p) => p !== '')
       .map((p) => (p.startsWith('/') ? p.slice(1) : `**/${p}`));
   } catch {
     return [];
   }
+}
+
+type PathMatcher = (p: string) => boolean;
+
+/** Compiles the patterns once, so matching a path does not parse every glob again. */
+function compileMatcher(patterns: string[], options?: micromatch.Options): PathMatcher {
+  const compiled = patterns.map((p) => micromatch.matcher(p, options));
+  return (p) => compiled.some((m) => m(p));
 }
 
 export function resolveToAbsolute(pattern: string, cwd: string): string {
@@ -89,11 +100,9 @@ export function extractGlobBase(absPattern: string): string {
   return staticParts.length === 0 ? '/' : staticParts.join('/');
 }
 
-function isDirExcluded(dirPath: string, absExcludes: string[]): boolean {
+function isDirExcluded(dirPath: string, isExcluded: PathMatcher): boolean {
   const normalized = dirPath.replace(/\\/g, '/');
-  if (micromatch.isMatch(normalized, absExcludes, { dot: true })) return true;
-  if (micromatch.isMatch(normalized + '/x', absExcludes, { dot: true })) return true;
-  return false;
+  return isExcluded(normalized) || isExcluded(normalized + '/x');
 }
 
 /** Deepest directory nesting the walk descends into. */
@@ -125,7 +134,6 @@ function isUnder(root: string, target: string): boolean {
 
 interface WalkState {
   result: Set<string>;
-  gitignoreCache: Map<string, string[]>;
   realRoots: string[];
   visited: Set<string>;
   entries: number;
@@ -135,6 +143,8 @@ interface WalkState {
 export class GlobMatcher {
   private readonly absIncludes: string[];
   private readonly absExcludes: string[];
+  private readonly matchesInclude: PathMatcher;
+  private readonly matchesExclude: PathMatcher;
   private readonly cwd: string;
   private readonly useGitignore: boolean;
   private readonly options: GlobMatcherOptions;
@@ -154,26 +164,24 @@ export class GlobMatcher {
       ...WELL_KNOWN_EXCLUDES.map((p) => resolveToAbsolute(p, cwd)),
       ...excludePatterns.map((p) => resolveToAbsolute(p, cwd)),
     ];
+    this.matchesInclude = compileMatcher(this.absIncludes);
+    this.matchesExclude = compileMatcher(this.absExcludes, { dot: true });
   }
 
   isIncluded(filePath: string): boolean {
     const abs = path.resolve(filePath).replace(/\\/g, '/');
-    return (
-      micromatch.isMatch(abs, this.absIncludes) &&
-      !micromatch.isMatch(abs, this.absExcludes, { dot: true })
-    );
+    return this.matchesInclude(abs) && !this.matchesExclude(abs);
   }
 
   isExcluded(filePath: string): boolean {
     const abs = path.resolve(filePath).replace(/\\/g, '/');
-    return micromatch.isMatch(abs, this.absExcludes, { dot: true });
+    return this.matchesExclude(abs);
   }
 
   findFiles(): string[] {
     const roots = new Set(this.absIncludes.map(extractGlobBase));
     const state: WalkState = {
       result: new Set<string>(),
-      gitignoreCache: new Map<string, string[]>(),
       realRoots: [],
       visited: new Set<string>(),
       entries: 0,
@@ -184,7 +192,7 @@ export class GlobMatcher {
       if (real !== null) state.realRoots.push(real);
     }
     for (const root of roots) {
-      this.walkDir(root, state, 0);
+      this.walkDir(root, state, 0, this.matchesExclude);
     }
     return [...state.result].sort();
   }
@@ -205,9 +213,10 @@ export class GlobMatcher {
     return this.options.pathGuard?.isAllowed(real) ?? false;
   }
 
-  private walkDir(dir: string, state: WalkState, depth: number): void {
+  /** `isExcluded` is the built-in excludes plus the .gitignore files of every directory above, so a .gitignore covers its whole subtree. */
+  private walkDir(dir: string, state: WalkState, depth: number, isExcluded: PathMatcher): void {
     if (!existsSync(dir)) return;
-    if (isDirExcluded(dir, this.absExcludes)) return;
+    if (isDirExcluded(dir, isExcluded)) return;
     const maxDepth = this.options.maxDepth ?? DEFAULT_MAX_WALK_DEPTH;
     if (depth > maxDepth) {
       this.warnOnce(state, `Directory walk stopped below "${dir}": maximum depth of ${String(maxDepth)} exceeded. Deeper files are not indexed.`);
@@ -217,12 +226,14 @@ export class GlobMatcher {
     if (realDir === null || state.visited.has(realDir)) return;
     state.visited.add(realDir);
 
-    const extraExcludes: string[] = [];
+    let excluded = isExcluded;
     if (this.useGitignore) {
-      if (!state.gitignoreCache.has(dir)) {
-        state.gitignoreCache.set(dir, loadGitignorePatterns(dir).map((p) => resolveToAbsolute(p, dir)));
+      const patterns = loadGitignorePatterns(dir).map((p) => resolveToAbsolute(p, dir));
+      if (patterns.length > 0) {
+        const inherited = isExcluded;
+        const own = compileMatcher(patterns, { dot: true });
+        excluded = (p) => inherited(p) || own(p);
       }
-      extraExcludes.push(...(state.gitignoreCache.get(dir) ?? []));
     }
 
     let entries: Dirent[];
@@ -241,8 +252,7 @@ export class GlobMatcher {
       }
       const fullPath = path.join(dir, entry.name).replace(/\\/g, '/');
 
-      if (isDirExcluded(fullPath, [...this.absExcludes, ...extraExcludes])) continue;
-      if (micromatch.isMatch(fullPath, [...this.absExcludes, ...extraExcludes], { dot: true })) continue;
+      if (isDirExcluded(fullPath, excluded)) continue;
 
       let isDirectory = entry.isDirectory();
       let isFile = entry.isFile();
@@ -267,8 +277,8 @@ export class GlobMatcher {
       }
 
       if (isDirectory) {
-        this.walkDir(fullPath, state, depth + 1);
-      } else if (isFile && micromatch.isMatch(fullPath, this.absIncludes)) {
+        this.walkDir(fullPath, state, depth + 1, excluded);
+      } else if (isFile && this.matchesInclude(fullPath)) {
         state.result.add(fullPath);
       }
     }
