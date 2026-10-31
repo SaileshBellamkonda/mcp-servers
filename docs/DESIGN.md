@@ -52,8 +52,8 @@ The monorepo provides a unified development environment for creating MCP servers
 - **Language**: TypeScript (strict mode)
 - **MCP SDK**: `@modelcontextprotocol/server` and `@modelcontextprotocol/hono` (2.0 alpha, pinned exactly in the shared packages)
 - **HTTP**: Hono with `@hono/node-server`
-- **Storage**: Node's built-in `node:sqlite` plus the `sqlite-vec` extension (Node >= 22.16)
-- **VS Code API**: vscode module for the extension (`engines.vscode ^1.101.0`)
+- **Storage**: Node's built-in `node:sqlite` plus the `sqlite-vec` extension (Node >= 24)
+- **VS Code API**: vscode module for the extension (`engines.vscode >=1.125.0`)
 
 ## System Components
 
@@ -258,7 +258,7 @@ The core server logic (`server/*-server.ts`, `core/`, `tools/`) is mode-agnostic
 - Vectors are stored in a `vec0` virtual table from the `sqlite-vec` extension, loaded with `allowExtension`; keyword
   search uses an FTS5 table. New databases create `vec0` with `chunk_size=256` (the default 1024 blocks the event loop
   for seconds during bulk inserts)
-- Requires Node.js >= 22.16 (earlier 22.x lacks FTS5; tree-sitter crashes on 22.13). The VS Code extension feature-detects
+- Requires Node.js >= 24 (`node:sqlite` with FTS5). The VS Code extension feature-detects
   all of this and reports CodeRAG as unavailable with the reason where it does not hold
 - Native modules (tree-sitter and its grammars, sqlite-vec) are not bundled; the extension stages them per target
   under `dist/native` and passes `nativeModulesDir` to the server
