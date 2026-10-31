@@ -17,7 +17,6 @@ vitest.config.*
 **/*.map
 .env
 .env.*
-.eslintcache
 .gitignore
 node_modules/**
 *.vsix
