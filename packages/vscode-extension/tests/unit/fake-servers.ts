@@ -29,7 +29,7 @@ export async function makeServer(id: string, state: ServerState, port = 3000, la
   const adapter = new EmbeddedServerAdapter(descriptor, {
     loadModule: vi.fn() as never,
     clock: () => 0,
-    logger: { info: vi.fn(), warning: vi.fn(), error: vi.fn() },
+    logger: { debug: vi.fn(), info: vi.fn(), warning: vi.fn(), error: vi.fn() },
     tokens: new InMemoryTokenProvider(),
     config: { get: <T>(_section: string, _key: string, fallback: T): T => fallback },
     workspaceFolders: () => ['/work'],

@@ -92,9 +92,25 @@ function handler(id: string): (arg?: unknown) => Promise<void> {
   const call = vi.mocked(vscode.commands.registerCommand).mock.calls.find(([name]) => name === id);
   return call?.[1] as (arg?: unknown) => Promise<void>;
 }
+/** The names of the Output channels created so far, in creation order. */
+function channelNames(): string[] {
+  return vi.mocked(vscode.window.createOutputChannel).mock.calls.map((call) => String((call as unknown as [string])[0]));
+}
+/** Every line written to the Output channel with this name. */
+function channelLines(name: string): string[] {
+  const { calls, results } = vi.mocked(vscode.window.createOutputChannel).mock;
+  return calls.flatMap((call, index) =>
+    String((call as unknown as [string])[0]) === name
+      ? (results[index]?.value as { appendLine: ReturnType<typeof vi.fn> }).appendLine.mock.calls.map((c) => String(c[0]))
+      : []
+  );
+}
+/** Every line written to any Output channel. */
 function outputLines(): string[] {
-  const channel = vi.mocked(vscode.window.createOutputChannel).mock.results[0]?.value as { appendLine: ReturnType<typeof vi.fn> };
-  return channel.appendLine.mock.calls.map((c) => String(c[0]));
+  return channelNames().flatMap((name) => channelLines(name));
+}
+function serverLogger(options: Record<string, unknown>): Record<'debug' | 'info' | 'warning' | 'error', (data: unknown) => void> {
+  return options['logger'] as Record<'debug' | 'info' | 'warning' | 'error', (data: unknown) => void>;
 }
 function ragOptions(call = 0): Record<string, unknown> {
   return (rag.activateCodeRagServer.mock.calls[call]?.[0] ?? {}) as Record<string, unknown>;
@@ -135,11 +151,11 @@ describe('extension', () => {
   describe('activation', () => {
     it('registers every disposable in context.subscriptions', () => {
       activate(ctx as never);
-      const channel = vi.mocked(vscode.window.createOutputChannel).mock.results[0]?.value as Disposable & { dispose: ReturnType<typeof vi.fn> };
+      const channels = vi.mocked(vscode.window.createOutputChannel).mock.results.map((r) => r.value as { dispose: ReturnType<typeof vi.fn> });
       const treeView = vi.mocked(vscode.window.createTreeView).mock.results[0]?.value as { dispose: ReturnType<typeof vi.fn> };
       const statusItem = vi.mocked(vscode.window.createStatusBarItem).mock.results[0]?.value as { dispose: ReturnType<typeof vi.fn> };
       const commandDisposables = vi.mocked(vscode.commands.registerCommand).mock.results.map((r) => r.value as { dispose: ReturnType<typeof vi.fn> });
-      expect(vscode.window.createOutputChannel).toHaveBeenCalledWith('MCP Servers');
+      expect(channels).toHaveLength(3);
       expect(commandDisposables).toHaveLength(8);
       expect(test.listenerCounts()).toEqual({ config: 1, folders: 1 });
 
@@ -147,13 +163,20 @@ describe('extension', () => {
         d.dispose();
       });
 
-      expect(channel.dispose).toHaveBeenCalled();
+      channels.forEach((channel) => {
+        expect(channel.dispose).toHaveBeenCalled();
+      });
       expect(treeView.dispose).toHaveBeenCalled();
       expect(statusItem.dispose).toHaveBeenCalled();
       commandDisposables.forEach((d) => {
         expect(d.dispose).toHaveBeenCalled();
       });
       expect(test.listenerCounts()).toEqual({ config: 0, folders: 0 });
+    });
+
+    it('creates the shared "MCP Servers" channel and one Output channel per server: "MCP Git" and "MCP CodeRAG"', () => {
+      activate(ctx as never);
+      expect(channelNames()).toEqual(['MCP Servers', 'MCP Git', 'MCP CodeRAG']);
     });
 
     it('creates the "mcpServers" tree view with the git and coderag servers in it', () => {
@@ -213,8 +236,78 @@ describe('extension', () => {
       await until('running');
       const token = callArg<{ authToken: string }>(git.activateGitServer).authToken;
       const lines = outputLines();
-      expect(lines.some((line) => /\[git\] started on 127\.0\.0\.1:3000/.test(line))).toBe(true);
+      expect(lines.some((line) => /started on 127\.0\.0\.1:3000/.test(line))).toBe(true);
       expect(lines.join('\n')).not.toContain(token);
+    });
+
+    describe('logging', () => {
+      it('writes what a server and its adapter log to the channel of that server only', async () => {
+        setting('mcpServers.coderag.autoStart', true);
+        (vscode as unknown as { __test: { setSettings(v: Record<string, unknown>): void } }).__test.setSettings({ 'mcpServers.coderag.embeddingUrl': 'http://127.0.0.1:9/v1', 'mcpServers.coderag.embeddingModel': 'm' });
+        activate(ctx as never);
+        await until('running');
+        await untilServer('coderag', 'running');
+        serverLogger(callArg(git.activateGitServer)).info('git says hello');
+        serverLogger(ragOptions()).info('rag says hello');
+
+        expect(channelLines('MCP Git').some((line) => /\[info\] git says hello$/.test(line))).toBe(true);
+        expect(channelLines('MCP Git').some((line) => /started on 127\.0\.0\.1:3000/.test(line))).toBe(true);
+        expect(channelLines('MCP CodeRAG').some((line) => /\[info\] rag says hello$/.test(line))).toBe(true);
+        expect(channelLines('MCP CodeRAG').some((line) => /started on 127\.0\.0\.1:3100/.test(line))).toBe(true);
+        expect(channelLines('MCP Git').join('\n')).not.toMatch(/rag says hello|3100/);
+        expect(channelLines('MCP CodeRAG').join('\n')).not.toMatch(/git says hello|3000/);
+        expect(channelLines('MCP Servers').join('\n')).not.toMatch(/says hello|started on/);
+      });
+
+      it('keeps extension-wide messages in the "MCP Servers" channel', async () => {
+        activate(ctx as never);
+        await until('running');
+        await vi.waitFor(() => {
+          expect(channelLines('MCP Servers').some((line) => /headers helper/i.test(line))).toBe(true);
+        });
+        expect(channelLines('MCP Git').join('\n')).not.toMatch(/headers helper/i);
+      });
+
+      it('shows info and above by default and hides debug', async () => {
+        activate(ctx as never);
+        await until('running');
+        const logger = serverLogger(callArg(git.activateGitServer));
+        logger.debug('git status --short');
+        logger.info('visible');
+        expect(channelLines('MCP Git').some((line) => line.includes('git status --short'))).toBe(false);
+        expect(channelLines('MCP Git').some((line) => line.includes('visible'))).toBe(true);
+      });
+
+      it('applies a changed mcpServers.<id>.logLevel at once, without restarting the server', async () => {
+        activate(ctx as never);
+        await until('running');
+        const logger = serverLogger(callArg(git.activateGitServer));
+        logger.debug('before');
+        setting('mcpServers.git.logLevel', 'debug');
+        logger.debug('after');
+        setting('mcpServers.git.logLevel', 'error');
+        logger.warning('too quiet');
+
+        const lines = channelLines('MCP Git').join('\n');
+        expect(lines).not.toContain('before');
+        expect(lines).toContain('[debug] after');
+        expect(lines).not.toContain('too quiet');
+        expect(git.activateGitServer).toHaveBeenCalledTimes(1);
+      });
+
+      it('gives each server its own level', async () => {
+        setting('mcpServers.coderag.autoStart', true);
+        (vscode as unknown as { __test: { setSettings(v: Record<string, unknown>): void } }).__test.setSettings({ 'mcpServers.coderag.embeddingUrl': 'http://127.0.0.1:9/v1', 'mcpServers.coderag.embeddingModel': 'm' });
+        setting('mcpServers.coderag.logLevel', 'debug');
+        activate(ctx as never);
+        await until('running');
+        await untilServer('coderag', 'running');
+        serverLogger(callArg(git.activateGitServer)).debug('git debug');
+        serverLogger(ragOptions()).debug('rag debug');
+
+        expect(channelLines('MCP Git').join('\n')).not.toContain('git debug');
+        expect(channelLines('MCP CodeRAG').join('\n')).toContain('rag debug');
+      });
     });
 
     it('keeps the context keys of the menus up to date', async () => {

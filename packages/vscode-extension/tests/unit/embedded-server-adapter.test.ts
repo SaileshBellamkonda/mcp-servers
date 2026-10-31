@@ -70,6 +70,7 @@ function makeHarness(
   const instances: FakeInstance[] = [];
   const logs: { level: string; data: unknown }[] = [];
   const logger: ServerLogger = {
+    debug: (data) => logs.push({ level: 'debug', data }),
     info: (data) => logs.push({ level: 'info', data }),
     warning: (data) => logs.push({ level: 'warning', data }),
     error: (data) => logs.push({ level: 'error', data }),
@@ -630,14 +631,28 @@ describe('EmbeddedServerAdapter', () => {
       expect(everything).toContain('Bearer ***');
     });
 
-    it('prefixes the diagnostics of the server with its id', async () => {
+    it('hands the diagnostics of the server to the logger as they are (its Output channel names the server)', async () => {
       const h = makeHarness();
       h.descriptor.activate.mockImplementationOnce((context) => {
+        context.logger.debug('git status');
         context.logger.info('listening');
         return Promise.resolve(fakeInstance());
       });
       await h.adapter.start();
-      expect(h.logs.some((l) => l.data === '[fake] listening')).toBe(true);
+      expect(h.logs).toContainEqual({ level: 'debug', data: 'git status' });
+      expect(h.logs).toContainEqual({ level: 'info', data: 'listening' });
+      expect(h.logs.some((l) => String(l.data).includes('[fake]'))).toBe(false);
+    });
+
+    it('redacts the token from debug output too', async () => {
+      const h = makeHarness();
+      h.descriptor.activate.mockImplementationOnce((context) => {
+        context.logger.debug(`cmd with ${context.authToken}`);
+        return Promise.resolve(fakeInstance());
+      });
+      await h.adapter.start();
+      const token = await h.tokens.getToken('fake', 'ws');
+      expect(JSON.stringify(h.logs)).not.toContain(token);
     });
 
     it('dispose() stops a running server and silences the events', async () => {

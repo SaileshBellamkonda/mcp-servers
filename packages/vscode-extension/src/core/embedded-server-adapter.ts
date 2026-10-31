@@ -298,16 +298,16 @@ export class EmbeddedServerAdapter implements Disposable {
     return `Open a folder to use the ${this.label} server`;
   }
 
-  /** The logger handed to the server and used by the adapter: prefixed with the id, token redacted. */
+  /** The logger handed to the server and used by the adapter (`deps.logger` writes to this server's own channel): token redacted. */
   private log(): ServerLogger {
     const write =
-      (level: 'info' | 'warning' | 'error') =>
+      (level: 'debug' | 'info' | 'warning' | 'error') =>
       (data: unknown): void => {
         let text = formatLogData(data);
         if (this.token && text.includes(this.token)) text = text.replaceAll(this.token, '***');
-        this.deps.logger[level](`[${this.id}] ${text}`);
+        this.deps.logger[level](text);
       };
-    return { info: write('info'), warning: write('warning'), error: write('error') };
+    return { debug: write('debug'), info: write('info'), warning: write('warning'), error: write('error') };
   }
 }
 

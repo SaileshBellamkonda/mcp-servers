@@ -49,6 +49,12 @@
           "default": true,
           "description": "Start the Git MCP server automatically when VS Code opens with a workspace folder, and when a folder is opened later."
         },
+        "mcpServers.git.logLevel": {
+          "type": "string",
+          "enum": ["debug", "info", "warning", "error"],
+          "default": "info",
+          "description": "Detail of the \"MCP Git\" Output channel: debug (also logs every git command), info, warning or error. Applies at once, without restarting the server."
+        },
         "mcpServers.git.port": {
           "type": "integer",
           "default": 3000,
@@ -60,6 +66,12 @@
           "type": "boolean",
           "default": false,
           "description": "Start the CodeRAG MCP server automatically when VS Code opens with a workspace folder. Off by default: starting it indexes the workspace, which costs CPU, disk space and embedding requests (the first start of a large repository takes a while)."
+        },
+        "mcpServers.coderag.logLevel": {
+          "type": "string",
+          "enum": ["debug", "info", "warning", "error"],
+          "default": "info",
+          "description": "Detail of the \"MCP CodeRAG\" Output channel: debug, info, warning or error. Applies at once, without restarting the server."
         },
         "mcpServers.coderag.port": {
           "type": "integer",
@@ -99,7 +111,7 @@
           "type": "integer",
           "default": 768,
           "minimum": 1,
-          "description": "Number of dimensions of the embedding vectors; must match the model. It applies when a new index is created. An existing index keeps the dimension it was created with: a different value here is ignored and a warning is written to the MCP Servers output. To change the dimension, delete coderag.db in the workspace storage so the index is created again."
+          "description": "Number of dimensions of the embedding vectors; must match the model. It applies when a new index is created. An existing index keeps the dimension it was created with: a different value here is ignored and a warning is written to the MCP CodeRAG output. To change the dimension, delete coderag.db in the workspace storage so the index is created again."
         },
         "mcpServers.coderag.chunkSize": {
           "type": "integer",

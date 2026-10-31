@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { ensurePrivateDirectory } from '../core/private-dir';
-import type { ConfigReader, ServerDescriptor, ServerLogger } from '../core/server-descriptor';
+import type { ConfigReader, ServerDescriptor } from '../core/server-descriptor';
 
 /** What the CodeRAG descriptor takes from the extension host; `vscode`-free so it is unit-tested with fakes. */
 export interface CodeRagEnvironment {
@@ -65,11 +65,6 @@ function configurationFor(config: ConfigReader, dbPath: string): { get(key: stri
   };
 }
 
-/** The server logger as CodeRAG's logger: debug output is dropped. */
-function withDebug(logger: ServerLogger): ServerLogger & { debug(data: unknown): void } {
-  return { debug: () => undefined, info: (d) => { logger.info(d); }, warning: (d) => { logger.warning(d); }, error: (d) => { logger.error(d); } };
-}
-
 /**
  * The CodeRAG MCP server, run in the extension host. It is feature-detected: `isAvailable` runs the capability
  * probe once per session (Node.js >= 22.14, `node:sqlite` with extensions and FTS5, sqlite-vec, tree-sitter with
@@ -130,7 +125,7 @@ export function createCodeRagDescriptor(environment: CodeRagEnvironment): Server
         watch: context.config.get<boolean>(SETTINGS_SECTION, 'watch', true),
         toolset: context.config.get<string>(SETTINGS_SECTION, 'toolset', 'standard'),
         ...(apiKey !== undefined && apiKey !== '' && { apiKey }),
-        logger: withDebug(context.logger),
+        logger: context.logger,
       });
       return { port: instance.port, host: instance.host, close: () => instance.close() };
     },

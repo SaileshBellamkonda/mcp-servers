@@ -5,7 +5,7 @@ import { InMemoryTokenProvider } from '../../src/core/token-provider';
 import type { ModuleLoader } from '../../src/core/module-loader';
 import type { ActivationContext, ServerLogger } from '../../src/core/server-descriptor';
 
-const logger: ServerLogger = { info: vi.fn(), warning: vi.fn(), error: vi.fn() };
+const logger: ServerLogger = { debug: vi.fn(), info: vi.fn(), warning: vi.fn(), error: vi.fn() };
 
 function fakeGitModule() {
   const instance = {

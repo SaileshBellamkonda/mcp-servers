@@ -9,7 +9,7 @@ import { callArg } from './call-args';
 
 type Probe = { ok: true } | { ok: false; reason: string; needs?: 'fts5' | 'node' };
 
-const logger: ServerLogger = { info: vi.fn(), warning: vi.fn(), error: vi.fn() };
+const logger: ServerLogger = { debug: vi.fn(), info: vi.fn(), warning: vi.fn(), error: vi.fn() };
 const TOKEN = 'a'.repeat(64);
 
 interface Options {
@@ -284,18 +284,18 @@ describe('coderag descriptor', () => {
       expect(get('unknownKey')).toBeUndefined();
     });
 
-    it('hands the server a logger with debug (dropped), forwarding info, warning and error', async () => {
+    it('hands the server the logger it was given, debug output included', async () => {
       const t = setup({ storage });
       await t.descriptor.activate(t.activation());
       const given = callArg<{ logger: Record<string, (data: unknown) => void> }>(t.activateCodeRagServer).logger;
-      given['debug']?.('quiet');
+      given['debug']?.('d');
       given['info']?.('i');
       given['warning']?.('w');
       given['error']?.('e');
+      expect(logger.debug).toHaveBeenCalledWith('d');
       expect(logger.info).toHaveBeenCalledWith('i');
       expect(logger.warning).toHaveBeenCalledWith('w');
       expect(logger.error).toHaveBeenCalledWith('e');
-      expect(JSON.stringify(vi.mocked(logger.info).mock.calls)).not.toContain('quiet');
     });
 
     it('rejects with the server error (e.g. a missing embedding URL) so the adapter shows it', async () => {

@@ -4,7 +4,7 @@ import { FailureReporter, registerCommands } from './commands';
 import { Debouncer } from './core/debouncer';
 import { EmbeddedServerAdapter, type AdapterDeps } from './core/embedded-server-adapter';
 import { installHeadersHelper } from './core/helper-installer';
-import { createLineLogger } from './core/logger';
+import { createLineLogger, readLogLevel } from './core/logger';
 import type { ServerDescriptor, ServerLogger } from './core/server-descriptor';
 import { ServerRegistry } from './core/server-registry';
 import { computeScopeKey, SecretStorageTokenProvider, tokenSecretKey, type TokenProvider } from './core/token-provider';
@@ -77,11 +77,12 @@ function createDeps(logger: ServerLogger, tokens: TokenProvider): AdapterDeps {
 }
 
 export function activate(context: vscode.ExtensionContext): void {
+  // Extension-wide messages (token file, headers helper, stopping) go to "MCP Servers"; each server logs to its own channel.
   const output = vscode.window.createOutputChannel('MCP Servers');
   context.subscriptions.push(output);
   const logger = createLineLogger((line) => {
     output.appendLine(line);
-  });
+  }, () => 'info');
 
   // One token per workspace, kept in SecretStorage and mirrored to <globalStorage>/tokens/<scope>.json (0600).
   const tokens = new SecretStorageTokenProvider(context.secrets, path.join(context.globalStorageUri.fsPath, 'tokens'), {
@@ -92,7 +93,15 @@ export function activate(context: vscode.ExtensionContext): void {
   const deps = createDeps(logger, tokens);
   const registry = new ServerRegistry<EmbeddedServerAdapter>();
   context.subscriptions.push(registry);
-  for (const descriptor of createDescriptors(context)) registry.register(new EmbeddedServerAdapter(descriptor, deps));
+  for (const descriptor of createDescriptors(context)) {
+    // "MCP Git", "MCP CodeRAG": filtered by the server's own logLevel setting, which is read on every line.
+    const channel = vscode.window.createOutputChannel(`MCP ${descriptor.label}`);
+    context.subscriptions.push(channel);
+    const serverLogger = createLineLogger((line) => {
+      channel.appendLine(line);
+    }, () => readLogLevel(deps.config, descriptor.settingsSection));
+    registry.register(new EmbeddedServerAdapter(descriptor, { ...deps, logger: serverLogger }));
+  }
   const debouncer = new Debouncer(SETTINGS_DEBOUNCE_MS);
   context.subscriptions.push({ dispose: () => { debouncer.dispose(); } });
   runtime = { registry, logger, debouncer };

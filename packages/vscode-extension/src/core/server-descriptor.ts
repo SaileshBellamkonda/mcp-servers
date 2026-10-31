@@ -4,6 +4,7 @@ export type ServerState = 'stopped' | 'starting' | 'running' | 'error' | 'unavai
 
 /** Receives diagnostics of a server and of its adapter. Never receives tokens. */
 export interface ServerLogger {
+  debug(data: unknown): void;
   info(data: unknown): void;
   warning(data: unknown): void;
   error(data: unknown): void;

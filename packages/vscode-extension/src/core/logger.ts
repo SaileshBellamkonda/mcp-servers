@@ -1,4 +1,4 @@
-import type { ServerLogger } from './server-descriptor';
+import type { ConfigReader, ServerLogger } from './server-descriptor';
 
 /** Renders whatever a server hands to its logger as one line of text (never throws). */
 export function formatLogData(data: unknown): string {
@@ -13,15 +13,27 @@ export function formatLogData(data: unknown): string {
   return String(data);
 }
 
+export type LogLevel = 'debug' | 'info' | 'warning' | 'error';
+
+const LEVEL_RANK: Record<LogLevel, number> = { debug: 0, info: 1, warning: 2, error: 3 };
+
+/** Reads `<section>.logLevel`; anything but debug, info, warning or error counts as info. */
+export function readLogLevel(config: ConfigReader, section: string): LogLevel {
+  const value = config.get<unknown>(section, 'logLevel', 'info');
+  return typeof value === 'string' && Object.hasOwn(LEVEL_RANK, value) ? (value as LogLevel) : 'info';
+}
+
 /**
  * A ServerLogger writing `<ISO time> [level] message` lines through `write` (an OutputChannel's `appendLine` in the
- * extension). `now` is injected so tests do not depend on the clock.
+ * extension). Lines below the level `level()` returns are dropped; the level is read on every call, so a changed
+ * setting applies at once. `now` is injected so tests do not depend on the clock.
  */
-export function createLineLogger(write: (line: string) => void, now: () => Date = () => new Date()): ServerLogger {
+export function createLineLogger(write: (line: string) => void, level: () => LogLevel, now: () => Date = () => new Date()): ServerLogger {
   const log =
-    (level: string) =>
+    (lineLevel: LogLevel) =>
     (data: unknown): void => {
-      write(`${now().toISOString()} [${level}] ${formatLogData(data)}`);
+      if (LEVEL_RANK[lineLevel] < LEVEL_RANK[level()]) return;
+      write(`${now().toISOString()} [${lineLevel}] ${formatLogData(data)}`);
     };
-  return { info: log('info'), warning: log('warning'), error: log('error') };
+  return { debug: log('debug'), info: log('info'), warning: log('warning'), error: log('error') };
 }

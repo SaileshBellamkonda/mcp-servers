@@ -136,18 +136,34 @@ describe('package.json contributes', () => {
     expect(props['mcpServers.git.autoStart']?.description).toMatch(/workspace folder/i);
   });
 
+  describe('logLevel settings', () => {
+    const props = manifest.contributes.configuration.properties;
+    const coderag = createCodeRagDescriptor({ nativeModulesDir: '/x', storageDir: () => '/s', readApiKey: () => Promise.resolve(undefined), isRemote: () => false });
+
+    it.each([gitDescriptor, coderag])('contributes logLevel for $label: debug, info, warning or error, default info, window scope', (descriptor) => {
+      const setting = props[`${descriptor.settingsSection}.logLevel`];
+      expect(setting).toMatchObject({ type: 'string', enum: ['debug', 'info', 'warning', 'error'], default: 'info' });
+      expect(setting?.scope).toBeUndefined();
+      expect(setting?.description).toContain(`MCP ${descriptor.label}`);
+    });
+
+    it.each([gitDescriptor, coderag])('applies logLevel for $label without a restart', (descriptor) => {
+      expect(descriptor.restartSettings ?? []).not.toContain('logLevel');
+    });
+  });
+
   describe('CodeRAG settings', () => {
     const props = manifest.contributes.configuration.properties;
     const coderag = createCodeRagDescriptor({ nativeModulesDir: '/x', storageDir: () => '/s', readApiKey: () => Promise.resolve(undefined), isRemote: () => false });
     const keys = Object.keys(props).filter((key) => key.startsWith('mcpServers.coderag.'));
 
-    it('contributes autoStart (off: indexing costs), port and one setting per key the server reads', () => {
+    it('contributes autoStart (off: indexing costs), port, logLevel and one setting per key the server reads', () => {
       expect(props['mcpServers.coderag.autoStart']).toMatchObject({ type: 'boolean', default: false });
       expect(props['mcpServers.coderag.autoStart']?.description).toMatch(/cost/i);
       expect(coderag.autoStartDefault).toBe(false);
       expect(props['mcpServers.coderag.port']).toMatchObject({ type: 'integer', default: coderag.defaultPort, minimum: 0, maximum: 65535 });
       expect(keys.map((key) => key.replace('mcpServers.coderag.', '')).sort()).toEqual(
-        ['autoStart', 'port', ...(coderag.restartSettings ?? [])].sort()
+        ['autoStart', 'logLevel', 'port', ...(coderag.restartSettings ?? [])].sort()
       );
     });
 
