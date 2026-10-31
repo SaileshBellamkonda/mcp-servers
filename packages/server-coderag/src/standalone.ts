@@ -121,11 +121,12 @@ async function main(): Promise<void> {
     process.on('SIGTERM', () => { void shutdown(); });
   } else if (stdioServer) {
     registerTools(stdioServer, logger);
+    // The startup sync does blocking work (the file walk), so it waits for the client's handshake to finish:
+    // started earlier, it can stall the reply to `initialize` past the client's connect timeout.
+    stdioServer.server.oninitialized = scheduleStartupSync;
     const transport = new StdioServerTransport();
     await stdioServer.connect(transport);
     logger.info(`CodeRAG MCP Server ready (model: ${config.embedding.model}, db: ${config.dbPath})`);
-
-    scheduleStartupSync();
 
     const shutdown = async (): Promise<void> => {
       watcher?.close();
