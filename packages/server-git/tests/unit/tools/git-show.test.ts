@@ -6,6 +6,7 @@ import { PathValidator } from '../../../src/core/path-validator.js';
 import { GitExecutor } from '../../../src/core/git-executor.js';
 import { OutputParser } from '../../../src/core/output-parser.js';
 import type { Services } from '../../../src/core/types.js';
+import { registeredTool, registeredTools } from '../../fixtures/registered-tools.js';
 
 describe('git_show tool', () => {
   let server: McpServer;
@@ -29,7 +30,7 @@ describe('git_show tool', () => {
   });
 
   it('should register git_show tool', () => {
-    const tools = Object.keys((server as any)._registeredTools);
+    const tools = Object.keys(registeredTools(server));
     expect(tools).toContain('git_show');
   });
 
@@ -38,7 +39,7 @@ describe('git_show tool', () => {
       .spyOn(services.gitExecutor, 'execute')
       .mockResolvedValue({ stdout: 'commit abc1234\n...', stderr: '', exitCode: 0, success: true });
 
-    const tool = (server as any)._registeredTools['git_show'];
+    const tool = registeredTool(server, 'git_show');
     await tool.handler({ repository: '/repo', commit: 'abc1234' });
 
     expect(executeSpy).toHaveBeenCalledWith('/repo', ['show', 'abc1234']);
@@ -49,7 +50,7 @@ describe('git_show tool', () => {
       .spyOn(services.gitExecutor, 'execute')
       .mockResolvedValue({ stdout: 'commit abc\n', stderr: '', exitCode: 0, success: true });
 
-    const tool = (server as any)._registeredTools['git_show'];
+    const tool = registeredTool(server, 'git_show');
     await tool.handler({ repository: '/repo', commit: 'HEAD' });
 
     expect(executeSpy).toHaveBeenCalledWith('/repo', ['show', 'HEAD']);
@@ -60,7 +61,7 @@ describe('git_show tool', () => {
       .spyOn(services.gitExecutor, 'execute')
       .mockResolvedValue({ stdout: '', stderr: '', exitCode: 0, success: true });
 
-    const tool = (server as any)._registeredTools['git_show'];
+    const tool = registeredTool(server, 'git_show');
     await tool.handler({ repository: '/repo', commit: 'main' });
 
     expect(executeSpy).toHaveBeenCalledWith('/repo', ['show', 'main']);
@@ -71,7 +72,7 @@ describe('git_show tool', () => {
       .spyOn(services.gitExecutor, 'execute')
       .mockResolvedValue({ stdout: '', stderr: '', exitCode: 0, success: true });
 
-    const tool = (server as any)._registeredTools['git_show'];
+    const tool = registeredTool(server, 'git_show');
     await tool.handler({ repository: '/repo', commit: 'origin/main' });
 
     expect(executeSpy).toHaveBeenCalledWith('/repo', ['show', 'origin/main']);
@@ -82,28 +83,28 @@ describe('git_show tool', () => {
       .spyOn(services.gitExecutor, 'execute')
       .mockResolvedValue({ stdout: '', stderr: '', exitCode: 0, success: true });
 
-    const tool = (server as any)._registeredTools['git_show'];
+    const tool = registeredTool(server, 'git_show');
     await tool.handler({ repository: '/repo', commit: 'HEAD~2' });
 
     expect(executeSpy).toHaveBeenCalledWith('/repo', ['show', 'HEAD~2']);
   });
 
   it('throws Invalid commit ref for ref with $ character', async () => {
-    const tool = (server as any)._registeredTools['git_show'];
+    const tool = registeredTool(server, 'git_show');
     await expect(
       tool.handler({ repository: '/repo', commit: '$bad' }),
     ).rejects.toThrow('Invalid commit ref: $bad');
   });
 
   it('throws Invalid commit ref for ref with space', async () => {
-    const tool = (server as any)._registeredTools['git_show'];
+    const tool = registeredTool(server, 'git_show');
     await expect(
       tool.handler({ repository: '/repo', commit: 'bad ref' }),
     ).rejects.toThrow('Invalid commit ref');
   });
 
   it('throws Invalid commit ref for ref with semicolon', async () => {
-    const tool = (server as any)._registeredTools['git_show'];
+    const tool = registeredTool(server, 'git_show');
     await expect(
       tool.handler({ repository: '/repo', commit: 'main;ls' }),
     ).rejects.toThrow('Invalid commit ref');
@@ -117,7 +118,7 @@ describe('git_show tool', () => {
       success: false,
     });
 
-    const tool = (server as any)._registeredTools['git_show'];
+    const tool = registeredTool(server, 'git_show');
     await expect(
       tool.handler({ repository: '/repo', commit: 'abc1234' }),
     ).rejects.toThrow('Git show failed');
@@ -132,7 +133,7 @@ describe('git_show tool', () => {
       success: true,
     });
 
-    const tool = (server as any)._registeredTools['git_show'];
+    const tool = registeredTool(server, 'git_show');
     const result = await tool.handler({ repository: '/repo', commit: 'abc1234' });
     const content = JSON.parse(result.content[0].text);
 

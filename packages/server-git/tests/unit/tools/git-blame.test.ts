@@ -6,6 +6,7 @@ import { PathValidator } from '../../../src/core/path-validator.js';
 import { GitExecutor } from '../../../src/core/git-executor.js';
 import { OutputParser } from '../../../src/core/output-parser.js';
 import type { Services } from '../../../src/core/types.js';
+import { registeredTool, registeredTools } from '../../fixtures/registered-tools.js';
 
 // Porcelain blame output for a single line
 const HASH = 'a'.repeat(40);
@@ -41,7 +42,7 @@ describe('git_blame tool', () => {
   });
 
   it('should register git_blame tool', () => {
-    const tools = Object.keys((server as any)._registeredTools);
+    const tools = Object.keys(registeredTools(server));
     expect(tools).toContain('git_blame');
   });
 
@@ -50,7 +51,7 @@ describe('git_blame tool', () => {
       .spyOn(services.gitExecutor, 'execute')
       .mockResolvedValue({ stdout: PORCELAIN_OUTPUT, stderr: '', exitCode: 0, success: true });
 
-    const tool = (server as any)._registeredTools['git_blame'];
+    const tool = registeredTool(server, 'git_blame');
     await tool.handler({ repository: '/repo', filepath: 'src/foo.ts' });
 
     expect(executeSpy).toHaveBeenCalledWith('/repo', ['blame', '--porcelain', '--', 'src/foo.ts']);
@@ -61,7 +62,7 @@ describe('git_blame tool', () => {
       .spyOn(services.gitExecutor, 'execute')
       .mockResolvedValue({ stdout: PORCELAIN_OUTPUT, stderr: '', exitCode: 0, success: true });
 
-    const tool = (server as any)._registeredTools['git_blame'];
+    const tool = registeredTool(server, 'git_blame');
     await tool.handler({ repository: '/repo', filepath: 'src/foo.ts', start_line: 5 });
 
     expect(executeSpy).toHaveBeenCalledWith('/repo', ['blame', '--porcelain', '-L', '5,5', '--', 'src/foo.ts']);
@@ -72,7 +73,7 @@ describe('git_blame tool', () => {
       .spyOn(services.gitExecutor, 'execute')
       .mockResolvedValue({ stdout: PORCELAIN_OUTPUT, stderr: '', exitCode: 0, success: true });
 
-    const tool = (server as any)._registeredTools['git_blame'];
+    const tool = registeredTool(server, 'git_blame');
     await tool.handler({ repository: '/repo', filepath: 'src/foo.ts', start_line: 3, end_line: 7 });
 
     expect(executeSpy).toHaveBeenCalledWith('/repo', ['blame', '--porcelain', '-L', '3,7', '--', 'src/foo.ts']);
@@ -86,7 +87,7 @@ describe('git_blame tool', () => {
       success: true,
     });
 
-    const tool = (server as any)._registeredTools['git_blame'];
+    const tool = registeredTool(server, 'git_blame');
     const result = await tool.handler({ repository: '/repo', filepath: 'src/foo.ts' });
     const content = JSON.parse(result.content[0].text);
 
@@ -111,7 +112,7 @@ describe('git_blame tool', () => {
 
     const validateSpy = vi.spyOn(services.pathValidator, 'validatePath');
 
-    const tool = (server as any)._registeredTools['git_blame'];
+    const tool = registeredTool(server, 'git_blame');
     await tool.handler({ repository: '/repo', filepath: 'src/foo.ts' });
 
     expect(validateSpy).toHaveBeenCalledWith('/repo', 'src/foo.ts');
@@ -122,7 +123,7 @@ describe('git_blame tool', () => {
       throw new Error('Path outside repository');
     });
 
-    const tool = (server as any)._registeredTools['git_blame'];
+    const tool = registeredTool(server, 'git_blame');
     await expect(
       tool.handler({ repository: '/repo', filepath: '../secret' }),
     ).rejects.toThrow();
@@ -136,7 +137,7 @@ describe('git_blame tool', () => {
       success: false,
     });
 
-    const tool = (server as any)._registeredTools['git_blame'];
+    const tool = registeredTool(server, 'git_blame');
     await expect(
       tool.handler({ repository: '/repo', filepath: 'src/foo.ts' }),
     ).rejects.toThrow('Git blame failed');
@@ -150,7 +151,7 @@ describe('git_blame tool', () => {
       success: true,
     });
 
-    const tool = (server as any)._registeredTools['git_blame'];
+    const tool = registeredTool(server, 'git_blame');
     const result = await tool.handler({ repository: '/repo', filepath: 'src/foo.ts' });
     const content = JSON.parse(result.content[0].text);
 

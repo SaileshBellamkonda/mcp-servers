@@ -3,6 +3,7 @@ import { McpServer } from '@modelcontextprotocol/server';
 import { createGitServer } from '../../src/server/git-server.js';
 import { RepositoryManager } from '../../src/core/repository-manager.js';
 import { TestRepository } from '../fixtures/test-repo.js';
+import { registeredTool } from '../fixtures/registered-tools.js';
 
 describe('Git Workflow Integration', () => {
   let testRepo: TestRepository;
@@ -26,7 +27,7 @@ describe('Git Workflow Integration', () => {
   it('should complete full commit workflow', async () => {
     await testRepo.writeFile('test.ts', 'console.log("test");');
 
-    const statusHandler = (server as any)._registeredTools['git_status'].handler;
+    const statusHandler = registeredTool(server, 'git_status').handler;
     const statusResult = await statusHandler({ repository: testRepo.path });
     const status = JSON.parse(statusResult.content[0].text);
 
@@ -34,7 +35,7 @@ describe('Git Workflow Integration', () => {
     expect(status.files[0].path).toBe('test.ts');
     expect(status.files[0].status).toBe('??');
 
-    const addHandler = (server as any)._registeredTools['git_add'].handler;
+    const addHandler = registeredTool(server, 'git_add').handler;
     const addResult = await addHandler({
       repository: testRepo.path,
       files: ['test.ts']
@@ -42,7 +43,7 @@ describe('Git Workflow Integration', () => {
     const addData = JSON.parse(addResult.content[0].text);
     expect(addData.success).toBe(true);
 
-    const commitHandler = (server as any)._registeredTools['git_commit'].handler;
+    const commitHandler = registeredTool(server, 'git_commit').handler;
     const commitResult = await commitHandler({
       repository: testRepo.path,
       message: 'test: add test file'
@@ -50,7 +51,7 @@ describe('Git Workflow Integration', () => {
     const commitData = JSON.parse(commitResult.content[0].text);
     expect(commitData.success).toBe(true);
 
-    const logHandler = (server as any)._registeredTools['git_log'].handler;
+    const logHandler = registeredTool(server, 'git_log').handler;
     const logResult = await logHandler({ repository: testRepo.path, limit: 1 });
     const log = JSON.parse(logResult.content[0].text);
     expect(log.commits[0].message).toBe('test: add test file');

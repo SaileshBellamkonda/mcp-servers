@@ -6,6 +6,7 @@ import { PathValidator } from '../../../src/core/path-validator.js';
 import { GitExecutor } from '../../../src/core/git-executor.js';
 import { OutputParser } from '../../../src/core/output-parser.js';
 import type { Services } from '../../../src/core/types.js';
+import { registeredTool, registeredTools } from '../../fixtures/registered-tools.js';
 
 describe('git_workspaces tool', () => {
   let server: McpServer;
@@ -29,12 +30,12 @@ describe('git_workspaces tool', () => {
   });
 
   it('should register git_workspaces tool', () => {
-    const tools = Object.keys((server as any)._registeredTools);
+    const tools = Object.keys(registeredTools(server));
     expect(tools).toContain('git_workspaces');
   });
 
   it('should return list of allowed repositories', async () => {
-    const tool = (server as any)._registeredTools['git_workspaces'];
+    const tool = registeredTool(server, 'git_workspaces');
     const result = await tool.handler({});
     
     const content = JSON.parse(result.content[0].text);
@@ -44,7 +45,7 @@ describe('git_workspaces tool', () => {
   });
 
   it('should extract repository names from paths', async () => {
-    const tool = (server as any)._registeredTools['git_workspaces'];
+    const tool = registeredTool(server, 'git_workspaces');
     const result = await tool.handler({});
     
     const content = JSON.parse(result.content[0].text);

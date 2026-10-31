@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { McpServer } from '@modelcontextprotocol/server';
 import { createGitServer } from '../../../src/server/git-server.js';
 import { RepositoryManager } from '../../../src/core/repository-manager.js';
+import { registeredTools } from '../../fixtures/registered-tools.js';
 
 describe('createGitServer', () => {
   let server: McpServer;
@@ -18,7 +19,7 @@ describe('createGitServer', () => {
   it('should register all 30 tools', () => {
     createGitServer(server, repoManager);
 
-    const tools = Object.keys((server as any)._registeredTools);
+    const tools = Object.keys(registeredTools(server));
     expect(tools).toHaveLength(30);
     // Original 14
     expect(tools).toContain('git_workspaces');
@@ -58,6 +59,6 @@ describe('createGitServer', () => {
 
   it('should create core services', () => {
     createGitServer(server, repoManager);
-    expect(Object.keys((server as any)._registeredTools).length).toBeGreaterThan(0);
+    expect(Object.keys(registeredTools(server)).length).toBeGreaterThan(0);
   });
 });

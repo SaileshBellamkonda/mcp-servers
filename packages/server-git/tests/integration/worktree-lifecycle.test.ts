@@ -4,6 +4,7 @@ import { join } from 'path';
 import { createGitServer } from '../../src/server/git-server.js';
 import { RepositoryManager } from '../../src/core/repository-manager.js';
 import { TestRepository } from '../fixtures/test-repo.js';
+import { registeredTool } from '../fixtures/registered-tools.js';
 
 describe('Worktree Lifecycle Integration', () => {
   let testRepo: TestRepository;
@@ -31,7 +32,7 @@ describe('Worktree Lifecycle Integration', () => {
   it('should complete worktree lifecycle', async () => {
     const worktreePath = join(testRepo.path, 'feature-worktree');
 
-    const addHandler = (server as any)._registeredTools['git_worktree_add'].handler;
+    const addHandler = registeredTool(server, 'git_worktree_add').handler;
     const addResult = await addHandler({
       repository: testRepo.path,
       path: worktreePath,
@@ -40,12 +41,12 @@ describe('Worktree Lifecycle Integration', () => {
     const addData = JSON.parse(addResult.content[0].text);
     expect(addData.success).toBe(true);
 
-    const listHandler = (server as any)._registeredTools['git_worktree_list'].handler;
+    const listHandler = registeredTool(server, 'git_worktree_list').handler;
     const listResult = await listHandler({ repository: testRepo.path });
     const listData = JSON.parse(listResult.content[0].text);
     expect(listData.worktrees.length).toBeGreaterThanOrEqual(2);
 
-    const removeHandler = (server as any)._registeredTools['git_worktree_remove'].handler;
+    const removeHandler = registeredTool(server, 'git_worktree_remove').handler;
     const removeResult = await removeHandler({
       repository: testRepo.path,
       path: worktreePath

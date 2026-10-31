@@ -6,6 +6,7 @@ import { PathValidator } from '../../../src/core/path-validator.js';
 import { GitExecutor } from '../../../src/core/git-executor.js';
 import { OutputParser } from '../../../src/core/output-parser.js';
 import type { Services } from '../../../src/core/types.js';
+import { registeredTool, registeredTools } from '../../fixtures/registered-tools.js';
 
 describe('git_cherry_pick tool', () => {
   let server: McpServer;
@@ -29,7 +30,7 @@ describe('git_cherry_pick tool', () => {
   });
 
   it('should register git_cherry_pick tool', () => {
-    const tools = Object.keys((server as any)._registeredTools);
+    const tools = Object.keys(registeredTools(server));
     expect(tools).toContain('git_cherry_pick');
   });
 
@@ -38,7 +39,7 @@ describe('git_cherry_pick tool', () => {
       .spyOn(services.gitExecutor, 'execute')
       .mockResolvedValue({ stdout: '', stderr: '', exitCode: 0, success: true });
 
-    const tool = (server as any)._registeredTools['git_cherry_pick'];
+    const tool = registeredTool(server, 'git_cherry_pick');
     await tool.handler({ repository: '/repo', commits: ['abc123'] });
 
     expect(executeSpy).toHaveBeenCalledWith('/repo', ['cherry-pick', 'abc123']);
@@ -49,7 +50,7 @@ describe('git_cherry_pick tool', () => {
       .spyOn(services.gitExecutor, 'execute')
       .mockResolvedValue({ stdout: '', stderr: '', exitCode: 0, success: true });
 
-    const tool = (server as any)._registeredTools['git_cherry_pick'];
+    const tool = registeredTool(server, 'git_cherry_pick');
     await tool.handler({ repository: '/repo', commits: ['abc123', 'def456'] });
 
     expect(executeSpy).toHaveBeenCalledWith('/repo', ['cherry-pick', 'abc123', 'def456']);
@@ -60,14 +61,14 @@ describe('git_cherry_pick tool', () => {
       .spyOn(services.gitExecutor, 'execute')
       .mockResolvedValue({ stdout: '', stderr: '', exitCode: 0, success: true });
 
-    const tool = (server as any)._registeredTools['git_cherry_pick'];
+    const tool = registeredTool(server, 'git_cherry_pick');
     await tool.handler({ repository: '/repo', commits: ['abc123'], no_commit: true });
 
     expect(executeSpy).toHaveBeenCalledWith('/repo', ['cherry-pick', '--no-commit', 'abc123']);
   });
 
   it('throws when commits array is empty (Zod min 1 validation)', async () => {
-    const tool = (server as any)._registeredTools['git_cherry_pick'];
+    const tool = registeredTool(server, 'git_cherry_pick');
     await expect(tool.handler({ repository: '/repo', commits: [] })).rejects.toThrow();
   });
 
@@ -79,7 +80,7 @@ describe('git_cherry_pick tool', () => {
       success: false,
     });
 
-    const tool = (server as any)._registeredTools['git_cherry_pick'];
+    const tool = registeredTool(server, 'git_cherry_pick');
     const result = await tool.handler({ repository: '/repo', commits: ['abc123'] });
     const content = JSON.parse(result.content[0].text);
 
@@ -95,7 +96,7 @@ describe('git_cherry_pick tool', () => {
       success: true,
     });
 
-    const tool = (server as any)._registeredTools['git_cherry_pick'];
+    const tool = registeredTool(server, 'git_cherry_pick');
     const result = await tool.handler({ repository: '/repo', commits: ['abc123'] });
     const content = JSON.parse(result.content[0].text);
 
@@ -112,7 +113,7 @@ describe('git_cherry_pick tool', () => {
       success: false,
     });
 
-    const tool = (server as any)._registeredTools['git_cherry_pick'];
+    const tool = registeredTool(server, 'git_cherry_pick');
     await expect(tool.handler({ repository: '/repo', commits: ['abc123'] })).rejects.toThrow(
       'Git cherry-pick failed',
     );

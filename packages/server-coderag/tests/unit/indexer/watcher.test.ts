@@ -14,6 +14,11 @@ vi.mock('node:fs', () => ({
 import * as fs from 'node:fs';
 import { CodeRagWatcher } from '../../../src/indexer/watcher.js';
 
+/** `handleChange` is private; the tests drive it directly instead of waiting for file-system events. */
+interface WatcherInternals {
+  handleChange(filePath: string): Promise<void>;
+}
+
 const mockWatch = vi.mocked(fs.watch);
 const mockExistsSync = vi.mocked(fs.existsSync);
 
@@ -109,7 +114,7 @@ describe('CodeRagWatcher', () => {
     it('indexes .md file via indexFile when docsMatcher includes it', async () => {
       mockExistsSync.mockReturnValue(true);
 
-      await (watcher as any).handleChange('/some/dir/README.md');
+      await (watcher as unknown as WatcherInternals).handleChange('/some/dir/README.md');
 
       expect(mockIndexer.indexFile).toHaveBeenCalledWith('/some/dir/README.md');
       expect(mockIndexer.indexCodeFile).not.toHaveBeenCalled();
@@ -118,7 +123,7 @@ describe('CodeRagWatcher', () => {
     it('indexes .ts file via indexCodeFile when codeMatcher includes it', async () => {
       mockExistsSync.mockReturnValue(true);
 
-      await (watcher as any).handleChange('/some/dir/app.ts');
+      await (watcher as unknown as WatcherInternals).handleChange('/some/dir/app.ts');
 
       expect(mockIndexer.indexCodeFile).toHaveBeenCalledWith('/some/dir/app.ts');
       expect(mockIndexer.indexFile).not.toHaveBeenCalled();
@@ -127,7 +132,7 @@ describe('CodeRagWatcher', () => {
     it('calls db.deleteDocument when file no longer exists', async () => {
       mockExistsSync.mockReturnValue(false);
 
-      await (watcher as any).handleChange('/some/dir/deleted.md');
+      await (watcher as unknown as WatcherInternals).handleChange('/some/dir/deleted.md');
 
       expect(mockDb.deleteDocument).toHaveBeenCalledWith('/some/dir/deleted.md');
     });
@@ -136,7 +141,7 @@ describe('CodeRagWatcher', () => {
       mockSyncManager.inProgress = true;
       mockExistsSync.mockReturnValue(true);
 
-      await (watcher as any).handleChange('/some/dir/README.md');
+      await (watcher as unknown as WatcherInternals).handleChange('/some/dir/README.md');
 
       expect(mockIndexer.indexFile).not.toHaveBeenCalled();
       expect(mockIndexer.indexCodeFile).not.toHaveBeenCalled();
@@ -146,7 +151,7 @@ describe('CodeRagWatcher', () => {
       mockExistsSync.mockReturnValue(true);
       vi.mocked(mockDocsMatcher.isIncluded).mockReturnValue(false);
 
-      await (watcher as any).handleChange('/some/dir/README.md');
+      await (watcher as unknown as WatcherInternals).handleChange('/some/dir/README.md');
 
       expect(mockIndexer.indexFile).not.toHaveBeenCalled();
     });
@@ -155,7 +160,7 @@ describe('CodeRagWatcher', () => {
       mockExistsSync.mockReturnValue(true);
       vi.mocked(mockCodeMatcher.isIncluded).mockReturnValue(false);
 
-      await (watcher as any).handleChange('/some/dir/app.ts');
+      await (watcher as unknown as WatcherInternals).handleChange('/some/dir/app.ts');
 
       expect(mockIndexer.indexCodeFile).not.toHaveBeenCalled();
     });
@@ -163,7 +168,7 @@ describe('CodeRagWatcher', () => {
     it('ignores files with unsupported extensions', async () => {
       mockExistsSync.mockReturnValue(true);
 
-      await (watcher as any).handleChange('/some/dir/file.xyz');
+      await (watcher as unknown as WatcherInternals).handleChange('/some/dir/file.xyz');
 
       expect(mockIndexer.indexFile).not.toHaveBeenCalled();
       expect(mockIndexer.indexCodeFile).not.toHaveBeenCalled();
@@ -176,7 +181,7 @@ describe('CodeRagWatcher', () => {
       });
 
       await expect(
-        (watcher as any).handleChange('/some/dir/README.md'),
+        (watcher as unknown as WatcherInternals).handleChange('/some/dir/README.md'),
       ).resolves.not.toThrow();
     });
 
@@ -185,7 +190,7 @@ describe('CodeRagWatcher', () => {
       vi.mocked(mockIndexer.indexFile).mockRejectedValue(new Error('indexing failed'));
 
       await expect(
-        (watcher as any).handleChange('/some/dir/README.md'),
+        (watcher as unknown as WatcherInternals).handleChange('/some/dir/README.md'),
       ).resolves.not.toThrow();
 
       expect(mockLogger.warning).toHaveBeenCalled();

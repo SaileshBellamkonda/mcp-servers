@@ -6,6 +6,7 @@ import { PathValidator } from '../../../src/core/path-validator.js';
 import { GitExecutor } from '../../../src/core/git-executor.js';
 import { OutputParser } from '../../../src/core/output-parser.js';
 import type { Services } from '../../../src/core/types.js';
+import { registeredTool, registeredTools } from '../../fixtures/registered-tools.js';
 
 describe('git_stash tool', () => {
   let server: McpServer;
@@ -29,7 +30,7 @@ describe('git_stash tool', () => {
   });
 
   it('should register git_stash tool', () => {
-    const tools = Object.keys((server as any)._registeredTools);
+    const tools = Object.keys(registeredTools(server));
     expect(tools).toContain('git_stash');
   });
 
@@ -38,7 +39,7 @@ describe('git_stash tool', () => {
       .spyOn(services.gitExecutor, 'execute')
       .mockResolvedValue({ stdout: 'Saved working directory', stderr: '', exitCode: 0, success: true });
 
-    const tool = (server as any)._registeredTools['git_stash'];
+    const tool = registeredTool(server, 'git_stash');
     await tool.handler({ repository: '/repo', action: 'push' });
 
     expect(executeSpy).toHaveBeenCalledWith('/repo', ['stash', 'push']);
@@ -49,7 +50,7 @@ describe('git_stash tool', () => {
       .spyOn(services.gitExecutor, 'execute')
       .mockResolvedValue({ stdout: '', stderr: '', exitCode: 0, success: true });
 
-    const tool = (server as any)._registeredTools['git_stash'];
+    const tool = registeredTool(server, 'git_stash');
     await tool.handler({ repository: '/repo', action: 'push', message: 'my work' });
 
     expect(executeSpy).toHaveBeenCalledWith('/repo', ['stash', 'push', '-m', 'my work']);
@@ -60,7 +61,7 @@ describe('git_stash tool', () => {
       .spyOn(services.gitExecutor, 'execute')
       .mockResolvedValue({ stdout: '', stderr: '', exitCode: 0, success: true });
 
-    const tool = (server as any)._registeredTools['git_stash'];
+    const tool = registeredTool(server, 'git_stash');
     await tool.handler({ repository: '/repo', action: 'pop', index: 0 });
 
     expect(executeSpy).toHaveBeenCalledWith('/repo', ['stash', 'pop', 'stash@{0}']);
@@ -71,7 +72,7 @@ describe('git_stash tool', () => {
       .spyOn(services.gitExecutor, 'execute')
       .mockResolvedValue({ stdout: '', stderr: '', exitCode: 0, success: true });
 
-    const tool = (server as any)._registeredTools['git_stash'];
+    const tool = registeredTool(server, 'git_stash');
     await tool.handler({ repository: '/repo', action: 'pop', index: 2 });
 
     expect(executeSpy).toHaveBeenCalledWith('/repo', ['stash', 'pop', 'stash@{2}']);
@@ -87,7 +88,7 @@ describe('git_stash tool', () => {
         success: true,
       });
 
-    const tool = (server as any)._registeredTools['git_stash'];
+    const tool = registeredTool(server, 'git_stash');
     const result = await tool.handler({ repository: '/repo', action: 'list' });
     const content = JSON.parse(result.content[0].text);
 
@@ -104,7 +105,7 @@ describe('git_stash tool', () => {
       success: true,
     });
 
-    const tool = (server as any)._registeredTools['git_stash'];
+    const tool = registeredTool(server, 'git_stash');
     const result = await tool.handler({ repository: '/repo', action: 'list' });
     const content = JSON.parse(result.content[0].text);
 
@@ -125,7 +126,7 @@ describe('git_stash tool', () => {
       success: true,
     });
 
-    const tool = (server as any)._registeredTools['git_stash'];
+    const tool = registeredTool(server, 'git_stash');
     const result = await tool.handler({ repository: '/repo', action: 'list' });
     const content = JSON.parse(result.content[0].text);
 
@@ -137,7 +138,7 @@ describe('git_stash tool', () => {
       .spyOn(services.gitExecutor, 'execute')
       .mockResolvedValue({ stdout: '', stderr: '', exitCode: 0, success: true });
 
-    const tool = (server as any)._registeredTools['git_stash'];
+    const tool = registeredTool(server, 'git_stash');
     await tool.handler({ repository: '/repo', action: 'drop', index: 0 });
 
     expect(executeSpy).toHaveBeenCalledWith('/repo', ['stash', 'drop', 'stash@{0}']);
@@ -151,7 +152,7 @@ describe('git_stash tool', () => {
       success: false,
     });
 
-    const tool = (server as any)._registeredTools['git_stash'];
+    const tool = registeredTool(server, 'git_stash');
     await expect(tool.handler({ repository: '/repo', action: 'pop' })).rejects.toThrow('Git stash failed');
   });
 });

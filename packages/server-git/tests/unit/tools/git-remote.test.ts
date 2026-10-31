@@ -10,6 +10,7 @@ import { PathValidator } from '../../../src/core/path-validator.js';
 import { GitExecutor } from '../../../src/core/git-executor.js';
 import { OutputParser } from '../../../src/core/output-parser.js';
 import type { Services } from '../../../src/core/types.js';
+import { registeredTool, registeredTools } from '../../fixtures/registered-tools.js';
 
 function createServerAndServices(): { server: McpServer; services: Services } {
   const server = new McpServer(
@@ -40,7 +41,7 @@ describe('git_remote_list tool', () => {
   });
 
   it('should register git_remote_list tool', () => {
-    const tools = Object.keys((server as any)._registeredTools);
+    const tools = Object.keys(registeredTools(server));
     expect(tools).toContain('git_remote_list');
   });
 
@@ -53,7 +54,7 @@ describe('git_remote_list tool', () => {
       success: true,
     });
 
-    const tool = (server as any)._registeredTools['git_remote_list'];
+    const tool = registeredTool(server, 'git_remote_list');
     const result = await tool.handler({ repository: '/repo' });
     const content = JSON.parse(result.content[0].text);
 
@@ -78,7 +79,7 @@ describe('git_remote_list tool', () => {
       success: true,
     });
 
-    const tool = (server as any)._registeredTools['git_remote_list'];
+    const tool = registeredTool(server, 'git_remote_list');
     const result = await tool.handler({ repository: '/repo' });
     const content = JSON.parse(result.content[0].text);
 
@@ -94,7 +95,7 @@ describe('git_remote_list tool', () => {
       success: true,
     });
 
-    const tool = (server as any)._registeredTools['git_remote_list'];
+    const tool = registeredTool(server, 'git_remote_list');
     const result = await tool.handler({ repository: '/repo' });
     const content = JSON.parse(result.content[0].text);
 
@@ -109,7 +110,7 @@ describe('git_remote_list tool', () => {
       success: false,
     });
 
-    const tool = (server as any)._registeredTools['git_remote_list'];
+    const tool = registeredTool(server, 'git_remote_list');
     await expect(tool.handler({ repository: '/repo' })).rejects.toThrow('Git remote list failed');
   });
 });
@@ -126,7 +127,7 @@ describe('git_remote_add tool', () => {
   });
 
   it('should register git_remote_add tool', () => {
-    const tools = Object.keys((server as any)._registeredTools);
+    const tools = Object.keys(registeredTools(server));
     expect(tools).toContain('git_remote_add');
   });
 
@@ -135,7 +136,7 @@ describe('git_remote_add tool', () => {
       .spyOn(services.gitExecutor, 'execute')
       .mockResolvedValue({ stdout: '', stderr: '', exitCode: 0, success: true });
 
-    const tool = (server as any)._registeredTools['git_remote_add'];
+    const tool = registeredTool(server, 'git_remote_add');
     await tool.handler({ repository: '/repo', name: 'upstream', url: 'https://github.com/upstream/repo.git' });
 
     expect(executeSpy).toHaveBeenCalledWith('/repo', [
@@ -154,7 +155,7 @@ describe('git_remote_add tool', () => {
       success: true,
     });
 
-    const tool = (server as any)._registeredTools['git_remote_add'];
+    const tool = registeredTool(server, 'git_remote_add');
     const result = await tool.handler({
       repository: '/repo',
       name: 'upstream',
@@ -175,7 +176,7 @@ describe('git_remote_add tool', () => {
       success: false,
     });
 
-    const tool = (server as any)._registeredTools['git_remote_add'];
+    const tool = registeredTool(server, 'git_remote_add');
     await expect(
       tool.handler({ repository: '/repo', name: 'origin', url: 'https://example.com' }),
     ).rejects.toThrow('Git remote add failed');
@@ -194,7 +195,7 @@ describe('git_remote_remove tool', () => {
   });
 
   it('should register git_remote_remove tool', () => {
-    const tools = Object.keys((server as any)._registeredTools);
+    const tools = Object.keys(registeredTools(server));
     expect(tools).toContain('git_remote_remove');
   });
 
@@ -203,7 +204,7 @@ describe('git_remote_remove tool', () => {
       .spyOn(services.gitExecutor, 'execute')
       .mockResolvedValue({ stdout: '', stderr: '', exitCode: 0, success: true });
 
-    const tool = (server as any)._registeredTools['git_remote_remove'];
+    const tool = registeredTool(server, 'git_remote_remove');
     await tool.handler({ repository: '/repo', name: 'upstream' });
 
     expect(executeSpy).toHaveBeenCalledWith('/repo', ['remote', 'remove', 'upstream']);
@@ -217,7 +218,7 @@ describe('git_remote_remove tool', () => {
       success: true,
     });
 
-    const tool = (server as any)._registeredTools['git_remote_remove'];
+    const tool = registeredTool(server, 'git_remote_remove');
     const result = await tool.handler({ repository: '/repo', name: 'upstream' });
     const content = JSON.parse(result.content[0].text);
 
@@ -233,7 +234,7 @@ describe('git_remote_remove tool', () => {
       success: false,
     });
 
-    const tool = (server as any)._registeredTools['git_remote_remove'];
+    const tool = registeredTool(server, 'git_remote_remove');
     await expect(tool.handler({ repository: '/repo', name: 'upstream' })).rejects.toThrow(
       'Git remote remove failed',
     );

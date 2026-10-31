@@ -6,6 +6,7 @@ import { PathValidator } from '../../../src/core/path-validator.js';
 import { GitExecutor } from '../../../src/core/git-executor.js';
 import { OutputParser } from '../../../src/core/output-parser.js';
 import type { Services } from '../../../src/core/types.js';
+import { registeredTool, registeredTools } from '../../fixtures/registered-tools.js';
 
 describe('git_reflog tool', () => {
   let server: McpServer;
@@ -29,7 +30,7 @@ describe('git_reflog tool', () => {
   });
 
   it('should register git_reflog tool', () => {
-    const tools = Object.keys((server as any)._registeredTools);
+    const tools = Object.keys(registeredTools(server));
     expect(tools).toContain('git_reflog');
   });
 
@@ -38,7 +39,7 @@ describe('git_reflog tool', () => {
       .spyOn(services.gitExecutor, 'execute')
       .mockResolvedValue({ stdout: '', stderr: '', exitCode: 0, success: true });
 
-    const tool = (server as any)._registeredTools['git_reflog'];
+    const tool = registeredTool(server, 'git_reflog');
     await tool.handler({ repository: '/repo' });
 
     expect(executeSpy).toHaveBeenCalledWith('/repo', [
@@ -54,7 +55,7 @@ describe('git_reflog tool', () => {
       .spyOn(services.gitExecutor, 'execute')
       .mockResolvedValue({ stdout: '', stderr: '', exitCode: 0, success: true });
 
-    const tool = (server as any)._registeredTools['git_reflog'];
+    const tool = registeredTool(server, 'git_reflog');
     await tool.handler({ repository: '/repo', limit: 5 });
 
     expect(executeSpy).toHaveBeenCalledWith('/repo', [
@@ -66,12 +67,12 @@ describe('git_reflog tool', () => {
   });
 
   it('throws on limit of 0 (below min of 1)', async () => {
-    const tool = (server as any)._registeredTools['git_reflog'];
+    const tool = registeredTool(server, 'git_reflog');
     await expect(tool.handler({ repository: '/repo', limit: 0 })).rejects.toThrow();
   });
 
   it('throws on limit of 101 (above max of 100)', async () => {
-    const tool = (server as any)._registeredTools['git_reflog'];
+    const tool = registeredTool(server, 'git_reflog');
     await expect(tool.handler({ repository: '/repo', limit: 101 })).rejects.toThrow();
   });
 
@@ -83,7 +84,7 @@ describe('git_reflog tool', () => {
       success: true,
     });
 
-    const tool = (server as any)._registeredTools['git_reflog'];
+    const tool = registeredTool(server, 'git_reflog');
     const result = await tool.handler({ repository: '/repo' });
     const content = JSON.parse(result.content[0].text);
 
@@ -105,7 +106,7 @@ describe('git_reflog tool', () => {
       success: true,
     });
 
-    const tool = (server as any)._registeredTools['git_reflog'];
+    const tool = registeredTool(server, 'git_reflog');
     const result = await tool.handler({ repository: '/repo' });
     const content = JSON.parse(result.content[0].text);
 
@@ -120,7 +121,7 @@ describe('git_reflog tool', () => {
       success: false,
     });
 
-    const tool = (server as any)._registeredTools['git_reflog'];
+    const tool = registeredTool(server, 'git_reflog');
     await expect(tool.handler({ repository: '/repo' })).rejects.toThrow('Git reflog failed');
   });
 });

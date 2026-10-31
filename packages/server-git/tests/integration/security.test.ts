@@ -3,6 +3,7 @@ import { McpServer } from '@modelcontextprotocol/server';
 import { createGitServer } from '../../src/server/git-server.js';
 import { RepositoryManager } from '../../src/core/repository-manager.js';
 import { TestRepository } from '../fixtures/test-repo.js';
+import { registeredTool } from '../fixtures/registered-tools.js';
 
 describe('Security Integration', () => {
   let testRepo: TestRepository;
@@ -24,7 +25,7 @@ describe('Security Integration', () => {
   });
 
   it('should reject path traversal in git_add', async () => {
-    const addHandler = (server as any)._registeredTools['git_add'].handler;
+    const addHandler = registeredTool(server, 'git_add').handler;
 
     await expect(
       addHandler({ repository: testRepo.path, files: ['../etc/passwd'] })
@@ -32,7 +33,7 @@ describe('Security Integration', () => {
   });
 
   it('should reject unauthorized repository access', async () => {
-    const statusHandler = (server as any)._registeredTools['git_status'].handler;
+    const statusHandler = registeredTool(server, 'git_status').handler;
 
     await expect(
       statusHandler({ repository: '/unauthorized/repo' })
@@ -40,7 +41,7 @@ describe('Security Integration', () => {
   });
 
   it('should reject wildcard patterns in git_add', async () => {
-    const addHandler = (server as any)._registeredTools['git_add'].handler;
+    const addHandler = registeredTool(server, 'git_add').handler;
 
     await expect(
       addHandler({ repository: testRepo.path, files: ['.'] })
@@ -54,10 +55,10 @@ describe('Security Integration', () => {
   it('should sanitize commit messages', async () => {
     await testRepo.writeFile('test.ts', 'content');
 
-    const addHandler = (server as any)._registeredTools['git_add'].handler;
+    const addHandler = registeredTool(server, 'git_add').handler;
     await addHandler({ repository: testRepo.path, files: ['test.ts'] });
 
-    const commitHandler = (server as any)._registeredTools['git_commit'].handler;
+    const commitHandler = registeredTool(server, 'git_commit').handler;
     const result = await commitHandler({
       repository: testRepo.path,
       message: 'test\x00message\x1F'

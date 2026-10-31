@@ -6,6 +6,7 @@ import { PathValidator } from '../../../src/core/path-validator.js';
 import { GitExecutor } from '../../../src/core/git-executor.js';
 import { OutputParser } from '../../../src/core/output-parser.js';
 import type { Services } from '../../../src/core/types.js';
+import { registeredTool, registeredTools } from '../../fixtures/registered-tools.js';
 
 describe('git_log tool', () => {
   let server: McpServer;
@@ -29,12 +30,12 @@ describe('git_log tool', () => {
   });
 
   it('should register git_log tool', () => {
-    const tools = Object.keys((server as any)._registeredTools);
+    const tools = Object.keys(registeredTools(server));
     expect(tools).toContain('git_log');
   });
 
   it('should validate limit parameter', async () => {
-    const tool = (server as any)._registeredTools['git_log'];
+    const tool = registeredTool(server, 'git_log');
     await expect(tool.handler({ repository: '/repo', limit: 101 })).rejects.toThrow();
   });
 });

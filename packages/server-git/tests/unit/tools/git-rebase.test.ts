@@ -6,6 +6,7 @@ import { PathValidator } from '../../../src/core/path-validator.js';
 import { GitExecutor } from '../../../src/core/git-executor.js';
 import { OutputParser } from '../../../src/core/output-parser.js';
 import type { Services } from '../../../src/core/types.js';
+import { registeredTool, registeredTools } from '../../fixtures/registered-tools.js';
 
 describe('git_rebase tool', () => {
   let server: McpServer;
@@ -29,7 +30,7 @@ describe('git_rebase tool', () => {
   });
 
   it('should register git_rebase tool', () => {
-    const tools = Object.keys((server as any)._registeredTools);
+    const tools = Object.keys(registeredTools(server));
     expect(tools).toContain('git_rebase');
   });
 
@@ -38,7 +39,7 @@ describe('git_rebase tool', () => {
       .spyOn(services.gitExecutor, 'execute')
       .mockResolvedValue({ stdout: '', stderr: '', exitCode: 0, success: true });
 
-    const tool = (server as any)._registeredTools['git_rebase'];
+    const tool = registeredTool(server, 'git_rebase');
     await tool.handler({ repository: '/repo', onto: 'main' });
 
     expect(executeSpy).toHaveBeenCalledWith('/repo', ['rebase', 'main']);
@@ -49,7 +50,7 @@ describe('git_rebase tool', () => {
       .spyOn(services.gitExecutor, 'execute')
       .mockResolvedValue({ stdout: '', stderr: '', exitCode: 0, success: true });
 
-    const tool = (server as any)._registeredTools['git_rebase'];
+    const tool = registeredTool(server, 'git_rebase');
     await tool.handler({ repository: '/repo', onto: 'main', abort: true });
 
     expect(executeSpy).toHaveBeenCalledWith('/repo', ['rebase', '--abort']);
@@ -60,7 +61,7 @@ describe('git_rebase tool', () => {
       .spyOn(services.gitExecutor, 'execute')
       .mockResolvedValue({ stdout: '', stderr: '', exitCode: 0, success: true });
 
-    const tool = (server as any)._registeredTools['git_rebase'];
+    const tool = registeredTool(server, 'git_rebase');
     await tool.handler({ repository: '/repo', onto: 'main', continue_: true });
 
     expect(executeSpy).toHaveBeenCalledWith('/repo', ['rebase', '--continue']);
@@ -71,7 +72,7 @@ describe('git_rebase tool', () => {
       .spyOn(services.gitExecutor, 'execute')
       .mockResolvedValue({ stdout: '', stderr: '', exitCode: 0, success: true });
 
-    const tool = (server as any)._registeredTools['git_rebase'];
+    const tool = registeredTool(server, 'git_rebase');
     // JSON 'continue' field maps to 'continue_' via the handler's mapping logic
     await tool.handler({ repository: '/repo', onto: 'main', continue: true });
 
@@ -86,7 +87,7 @@ describe('git_rebase tool', () => {
       success: false,
     });
 
-    const tool = (server as any)._registeredTools['git_rebase'];
+    const tool = registeredTool(server, 'git_rebase');
     const result = await tool.handler({ repository: '/repo', onto: 'main' });
     const content = JSON.parse(result.content[0].text);
 
@@ -102,7 +103,7 @@ describe('git_rebase tool', () => {
       success: true,
     });
 
-    const tool = (server as any)._registeredTools['git_rebase'];
+    const tool = registeredTool(server, 'git_rebase');
     const result = await tool.handler({ repository: '/repo', onto: 'main' });
     const content = JSON.parse(result.content[0].text);
 
@@ -118,7 +119,7 @@ describe('git_rebase tool', () => {
       success: true,
     });
 
-    const tool = (server as any)._registeredTools['git_rebase'];
+    const tool = registeredTool(server, 'git_rebase');
     const result = await tool.handler({ repository: '/repo', onto: 'main', abort: true });
     const content = JSON.parse(result.content[0].text);
 
@@ -134,7 +135,7 @@ describe('git_rebase tool', () => {
       success: false,
     });
 
-    const tool = (server as any)._registeredTools['git_rebase'];
+    const tool = registeredTool(server, 'git_rebase');
     await expect(tool.handler({ repository: '/repo', onto: 'main' })).rejects.toThrow(
       'Git rebase failed',
     );

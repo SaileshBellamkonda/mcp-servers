@@ -6,6 +6,7 @@ import { PathValidator } from '../../../src/core/path-validator.js';
 import { GitExecutor } from '../../../src/core/git-executor.js';
 import { OutputParser } from '../../../src/core/output-parser.js';
 import type { Services } from '../../../src/core/types.js';
+import { registeredTool, registeredTools } from '../../fixtures/registered-tools.js';
 
 describe('git_commit tool', () => {
   let server: McpServer;
@@ -34,17 +35,17 @@ describe('git_commit tool', () => {
   });
 
   it('should register git_commit tool', () => {
-    const tools = Object.keys((server as any)._registeredTools);
+    const tools = Object.keys(registeredTools(server));
     expect(tools).toContain('git_commit');
   });
 
   it('should reject empty message', async () => {
-    const tool = (server as any)._registeredTools['git_commit'];
+    const tool = registeredTool(server, 'git_commit');
     await expect(tool.handler({ repository: '/repo', message: '' })).rejects.toThrow();
   });
 
   it('should reject message over 500 characters', async () => {
-    const tool = (server as any)._registeredTools['git_commit'];
+    const tool = registeredTool(server, 'git_commit');
     const longMessage = 'a'.repeat(501);
     await expect(tool.handler({ repository: '/repo', message: longMessage })).rejects.toThrow();
   });
@@ -60,7 +61,7 @@ describe('git_commit tool', () => {
       success: true,
     });
 
-    const tool = (server as any)._registeredTools['git_commit'];
+    const tool = registeredTool(server, 'git_commit');
     await tool.handler({ repository: '/repo', message: 'test commit' });
 
     expect(executeSpy).toHaveBeenCalledWith('/repo', [
@@ -78,7 +79,7 @@ describe('git_commit tool', () => {
       success: true,
     });
 
-    const tool = (server as any)._registeredTools['git_commit'];
+    const tool = registeredTool(server, 'git_commit');
     await tool.handler({ repository: '/repo', message: 'test commit' });
 
     expect(executeSpy).toHaveBeenCalledWith('/repo', ['commit', '-m', 'test commit']);
@@ -94,7 +95,7 @@ describe('git_commit tool', () => {
       success: true,
     });
 
-    const tool = (server as any)._registeredTools['git_commit'];
+    const tool = registeredTool(server, 'git_commit');
     await tool.handler({ repository: '/repo', message: 'test commit' });
 
     expect(executeSpy).toHaveBeenCalledWith('/repo', [

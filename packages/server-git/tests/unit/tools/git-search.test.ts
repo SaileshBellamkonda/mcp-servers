@@ -6,6 +6,7 @@ import { PathValidator } from '../../../src/core/path-validator.js';
 import { GitExecutor } from '../../../src/core/git-executor.js';
 import { OutputParser } from '../../../src/core/output-parser.js';
 import type { Services } from '../../../src/core/types.js';
+import { registeredTool, registeredTools } from '../../fixtures/registered-tools.js';
 
 describe('git_search tool', () => {
   let server: McpServer;
@@ -29,7 +30,7 @@ describe('git_search tool', () => {
   });
 
   it('should register git_search tool', () => {
-    const tools = Object.keys((server as any)._registeredTools);
+    const tools = Object.keys(registeredTools(server));
     expect(tools).toContain('git_search');
   });
 
@@ -38,7 +39,7 @@ describe('git_search tool', () => {
       .spyOn(services.gitExecutor, 'execute')
       .mockResolvedValue({ stdout: '', stderr: '', exitCode: 0, success: true });
 
-    const tool = (server as any)._registeredTools['git_search'];
+    const tool = registeredTool(server, 'git_search');
     await tool.handler({ repository: '/repo', query: 'fix', search_type: 'message' });
 
     const calledArgs = executeSpy.mock.calls[0]![1];
@@ -50,7 +51,7 @@ describe('git_search tool', () => {
       .spyOn(services.gitExecutor, 'execute')
       .mockResolvedValue({ stdout: '', stderr: '', exitCode: 0, success: true });
 
-    const tool = (server as any)._registeredTools['git_search'];
+    const tool = registeredTool(server, 'git_search');
     await tool.handler({ repository: '/repo', query: 'fix', search_type: 'diff' });
 
     const calledArgs = executeSpy.mock.calls[0]![1];
@@ -63,7 +64,7 @@ describe('git_search tool', () => {
       .spyOn(services.gitExecutor, 'execute')
       .mockResolvedValue({ stdout: '', stderr: '', exitCode: 0, success: true });
 
-    const tool = (server as any)._registeredTools['git_search'];
+    const tool = registeredTool(server, 'git_search');
     await tool.handler({ repository: '/repo', query: 'fix', branch: 'develop' });
 
     const calledArgs = executeSpy.mock.calls[0]![1];
@@ -75,7 +76,7 @@ describe('git_search tool', () => {
       .spyOn(services.gitExecutor, 'execute')
       .mockResolvedValue({ stdout: '', stderr: '', exitCode: 0, success: true });
 
-    const tool = (server as any)._registeredTools['git_search'];
+    const tool = registeredTool(server, 'git_search');
     await tool.handler({ repository: '/repo', query: 'fix', limit: 5 });
 
     const calledArgs = executeSpy.mock.calls[0]![1];
@@ -91,7 +92,7 @@ describe('git_search tool', () => {
       success: true,
     });
 
-    const tool = (server as any)._registeredTools['git_search'];
+    const tool = registeredTool(server, 'git_search');
     const result = await tool.handler({ repository: '/repo', query: 'feature' });
     const content = JSON.parse(result.content[0].text);
 
@@ -112,7 +113,7 @@ describe('git_search tool', () => {
       success: true,
     });
 
-    const tool = (server as any)._registeredTools['git_search'];
+    const tool = registeredTool(server, 'git_search');
     const result = await tool.handler({ repository: '/repo', query: 'fix' });
     const content = JSON.parse(result.content[0].text);
 
@@ -127,7 +128,7 @@ describe('git_search tool', () => {
       success: true,
     });
 
-    const tool = (server as any)._registeredTools['git_search'];
+    const tool = registeredTool(server, 'git_search');
     const result = await tool.handler({ repository: '/repo', query: 'nothing' });
     const content = JSON.parse(result.content[0].text);
 
@@ -143,7 +144,7 @@ describe('git_search tool', () => {
       success: false,
     });
 
-    const tool = (server as any)._registeredTools['git_search'];
+    const tool = registeredTool(server, 'git_search');
     await expect(
       tool.handler({ repository: '/repo', query: 'fix' }),
     ).rejects.toThrow('Git search failed');

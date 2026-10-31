@@ -6,6 +6,7 @@ import { PathValidator } from '../../../../src/core/path-validator.js';
 import { GitExecutor } from '../../../../src/core/git-executor.js';
 import { OutputParser } from '../../../../src/core/output-parser.js';
 import type { Services } from '../../../../src/core/types.js';
+import { registeredTools } from '../../../fixtures/registered-tools.js';
 
 describe('git_worktree_prune tool', () => {
   let server: McpServer;
@@ -29,7 +30,7 @@ describe('git_worktree_prune tool', () => {
   });
 
   it('should register git_worktree_prune tool', () => {
-    const tools = Object.keys((server as any)._registeredTools);
+    const tools = Object.keys(registeredTools(server));
     expect(tools).toContain('git_worktree_prune');
   });
 });

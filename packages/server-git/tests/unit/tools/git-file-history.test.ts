@@ -6,6 +6,7 @@ import { PathValidator } from '../../../src/core/path-validator.js';
 import { GitExecutor } from '../../../src/core/git-executor.js';
 import { OutputParser } from '../../../src/core/output-parser.js';
 import type { Services } from '../../../src/core/types.js';
+import { registeredTool, registeredTools } from '../../fixtures/registered-tools.js';
 
 describe('git_file_history tool', () => {
   let server: McpServer;
@@ -29,7 +30,7 @@ describe('git_file_history tool', () => {
   });
 
   it('should register git_file_history tool', () => {
-    const tools = Object.keys((server as any)._registeredTools);
+    const tools = Object.keys(registeredTools(server));
     expect(tools).toContain('git_file_history');
   });
 
@@ -38,7 +39,7 @@ describe('git_file_history tool', () => {
       .spyOn(services.gitExecutor, 'execute')
       .mockResolvedValue({ stdout: '', stderr: '', exitCode: 0, success: true });
 
-    const tool = (server as any)._registeredTools['git_file_history'];
+    const tool = registeredTool(server, 'git_file_history');
     await tool.handler({ repository: '/repo', filepath: 'src/foo.ts' });
 
     expect(executeSpy).toHaveBeenCalledWith('/repo', [
@@ -56,7 +57,7 @@ describe('git_file_history tool', () => {
       .spyOn(services.gitExecutor, 'execute')
       .mockResolvedValue({ stdout: '', stderr: '', exitCode: 0, success: true });
 
-    const tool = (server as any)._registeredTools['git_file_history'];
+    const tool = registeredTool(server, 'git_file_history');
     await tool.handler({ repository: '/repo', filepath: 'src/foo.ts', limit: 5 });
 
     const calledArgs = executeSpy.mock.calls[0]![1];
@@ -74,7 +75,7 @@ describe('git_file_history tool', () => {
 
     const validateSpy = vi.spyOn(services.pathValidator, 'validatePath');
 
-    const tool = (server as any)._registeredTools['git_file_history'];
+    const tool = registeredTool(server, 'git_file_history');
     await tool.handler({ repository: '/repo', filepath: 'src/foo.ts' });
 
     expect(validateSpy).toHaveBeenCalledWith('/repo', 'src/foo.ts');
@@ -88,7 +89,7 @@ describe('git_file_history tool', () => {
       success: true,
     });
 
-    const tool = (server as any)._registeredTools['git_file_history'];
+    const tool = registeredTool(server, 'git_file_history');
     const result = await tool.handler({ repository: '/repo', filepath: 'src/foo.ts' });
     const content = JSON.parse(result.content[0].text);
 
@@ -109,7 +110,7 @@ describe('git_file_history tool', () => {
       success: true,
     });
 
-    const tool = (server as any)._registeredTools['git_file_history'];
+    const tool = registeredTool(server, 'git_file_history');
     const result = await tool.handler({ repository: '/repo', filepath: 'src/foo.ts' });
     const content = JSON.parse(result.content[0].text);
 
@@ -126,7 +127,7 @@ describe('git_file_history tool', () => {
       success: false,
     });
 
-    const tool = (server as any)._registeredTools['git_file_history'];
+    const tool = registeredTool(server, 'git_file_history');
     await expect(
       tool.handler({ repository: '/repo', filepath: 'src/foo.ts' }),
     ).rejects.toThrow('Git file history failed');
@@ -137,7 +138,7 @@ describe('git_file_history tool', () => {
       throw new Error('Path outside repository');
     });
 
-    const tool = (server as any)._registeredTools['git_file_history'];
+    const tool = registeredTool(server, 'git_file_history');
     await expect(
       tool.handler({ repository: '/repo', filepath: '../secret' }),
     ).rejects.toThrow();

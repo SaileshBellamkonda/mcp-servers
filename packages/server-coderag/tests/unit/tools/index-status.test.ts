@@ -3,6 +3,7 @@ import { McpServer } from '@modelcontextprotocol/server';
 import { registerIndexStatus } from '../../../src/tools/index-status.js';
 import { VectorDB } from '../../../src/vectordb/db.js';
 import { SyncManager } from '../../../src/indexer/sync-manager.js';
+import { registeredTool, registeredTools } from '../../fixtures/registered-tools.js';
 
 const DIMS = 4;
 
@@ -34,12 +35,12 @@ describe('get_index_status tool', () => {
   });
 
   it('should register get_index_status tool', () => {
-    const tools = Object.keys((server as any)._registeredTools);
+    const tools = Object.keys(registeredTools(server));
     expect(tools).toContain('get_index_status');
   });
 
   it('returns zero counts for empty db', async () => {
-    const tool = (server as any)._registeredTools['get_index_status'];
+    const tool = registeredTool(server, 'get_index_status');
     const result = await tool.handler({});
     const content = JSON.parse(result.content[0].text);
 
@@ -49,7 +50,7 @@ describe('get_index_status tool', () => {
   });
 
   it('returns null sync timestamps for fresh db', async () => {
-    const tool = (server as any)._registeredTools['get_index_status'];
+    const tool = registeredTool(server, 'get_index_status');
     const result = await tool.handler({});
     const content = JSON.parse(result.content[0].text);
 
@@ -58,7 +59,7 @@ describe('get_index_status tool', () => {
   });
 
   it('returns the embedding model string passed in', async () => {
-    const tool = (server as any)._registeredTools['get_index_status'];
+    const tool = registeredTool(server, 'get_index_status');
     const result = await tool.handler({});
     const content = JSON.parse(result.content[0].text);
 
@@ -66,7 +67,7 @@ describe('get_index_status tool', () => {
   });
 
   it('returns the dbPath passed in', async () => {
-    const tool = (server as any)._registeredTools['get_index_status'];
+    const tool = registeredTool(server, 'get_index_status');
     const result = await tool.handler({});
     const content = JSON.parse(result.content[0].text);
 
@@ -74,7 +75,7 @@ describe('get_index_status tool', () => {
   });
 
   it('returns sync_in_progress: false when no sync is running', async () => {
-    const tool = (server as any)._registeredTools['get_index_status'];
+    const tool = registeredTool(server, 'get_index_status');
     const result = await tool.handler({});
     const content = JSON.parse(result.content[0].text);
 
@@ -82,7 +83,7 @@ describe('get_index_status tool', () => {
   });
 
   it('returns sync_operation: null when no sync is running', async () => {
-    const tool = (server as any)._registeredTools['get_index_status'];
+    const tool = registeredTool(server, 'get_index_status');
     const result = await tool.handler({});
     const content = JSON.parse(result.content[0].text);
 
@@ -90,7 +91,7 @@ describe('get_index_status tool', () => {
   });
 
   it('returns embedding_dim as a number or null', async () => {
-    const tool = (server as any)._registeredTools['get_index_status'];
+    const tool = registeredTool(server, 'get_index_status');
     const result = await tool.handler({});
     const content = JSON.parse(result.content[0].text);
 
@@ -99,7 +100,7 @@ describe('get_index_status tool', () => {
   });
 
   it('returns stored dimensions matching DIMS', async () => {
-    const tool = (server as any)._registeredTools['get_index_status'];
+    const tool = registeredTool(server, 'get_index_status');
     const result = await tool.handler({});
     const content = JSON.parse(result.content[0].text);
 
@@ -110,7 +111,7 @@ describe('get_index_status tool', () => {
     const syncDate = new Date('2024-01-01T00:00:00.000Z');
     db.setLastSyncAt('docs', syncDate);
 
-    const tool = (server as any)._registeredTools['get_index_status'];
+    const tool = registeredTool(server, 'get_index_status');
     const result = await tool.handler({});
     const content = JSON.parse(result.content[0].text);
 
@@ -121,7 +122,7 @@ describe('get_index_status tool', () => {
     const syncDate = new Date('2024-06-15T12:00:00.000Z');
     db.setLastSyncAt('code', syncDate);
 
-    const tool = (server as any)._registeredTools['get_index_status'];
+    const tool = registeredTool(server, 'get_index_status');
     const result = await tool.handler({});
     const content = JSON.parse(result.content[0].text);
 

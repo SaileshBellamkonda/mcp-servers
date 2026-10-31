@@ -6,6 +6,7 @@ import { PathValidator } from '../../../src/core/path-validator.js';
 import { GitExecutor } from '../../../src/core/git-executor.js';
 import { OutputParser } from '../../../src/core/output-parser.js';
 import type { Services } from '../../../src/core/types.js';
+import { registeredTool, registeredTools } from '../../fixtures/registered-tools.js';
 
 describe('git_fetch tool', () => {
   // The argument-shape tests below use mocked executors with no configured remotes, so they run in the
@@ -38,7 +39,7 @@ describe('git_fetch tool', () => {
   });
 
   it('should register git_fetch tool', () => {
-    const tools = Object.keys((server as any)._registeredTools);
+    const tools = Object.keys(registeredTools(server));
     expect(tools).toContain('git_fetch');
   });
 
@@ -47,7 +48,7 @@ describe('git_fetch tool', () => {
       .spyOn(services.gitExecutor, 'execute')
       .mockResolvedValue({ stdout: '', stderr: '', exitCode: 0, success: true });
 
-    const tool = (server as any)._registeredTools['git_fetch'];
+    const tool = registeredTool(server, 'git_fetch');
     await tool.handler({ repository: '/repo' });
 
     expect(executeSpy).toHaveBeenCalledWith('/repo', ['fetch', 'origin']);
@@ -58,7 +59,7 @@ describe('git_fetch tool', () => {
       .spyOn(services.gitExecutor, 'execute')
       .mockResolvedValue({ stdout: '', stderr: '', exitCode: 0, success: true });
 
-    const tool = (server as any)._registeredTools['git_fetch'];
+    const tool = registeredTool(server, 'git_fetch');
     await tool.handler({ repository: '/repo', branch: 'main' });
 
     expect(executeSpy).toHaveBeenCalledWith('/repo', ['fetch', 'origin', 'main']);
@@ -69,7 +70,7 @@ describe('git_fetch tool', () => {
       .spyOn(services.gitExecutor, 'execute')
       .mockResolvedValue({ stdout: '', stderr: '', exitCode: 0, success: true });
 
-    const tool = (server as any)._registeredTools['git_fetch'];
+    const tool = registeredTool(server, 'git_fetch');
     await tool.handler({ repository: '/repo', remote: 'upstream' });
 
     expect(executeSpy).toHaveBeenCalledWith('/repo', ['fetch', 'upstream']);
@@ -83,7 +84,7 @@ describe('git_fetch tool', () => {
       success: false,
     });
 
-    const tool = (server as any)._registeredTools['git_fetch'];
+    const tool = registeredTool(server, 'git_fetch');
     await expect(tool.handler({ repository: '/repo' })).rejects.toThrow('Git fetch failed: no such remote');
   });
 
@@ -95,7 +96,7 @@ describe('git_fetch tool', () => {
       success: true,
     });
 
-    const tool = (server as any)._registeredTools['git_fetch'];
+    const tool = registeredTool(server, 'git_fetch');
     const result = await tool.handler({ repository: '/repo' });
     const content = JSON.parse(result.content[0].text);
 
@@ -112,7 +113,7 @@ describe('git_fetch tool', () => {
       success: true,
     });
 
-    const tool = (server as any)._registeredTools['git_fetch'];
+    const tool = registeredTool(server, 'git_fetch');
     const result = await tool.handler({ repository: '/repo', branch: 'feature' });
     const content = JSON.parse(result.content[0].text);
 
@@ -120,7 +121,7 @@ describe('git_fetch tool', () => {
   });
 
   it('throws for invalid repository', async () => {
-    const tool = (server as any)._registeredTools['git_fetch'];
+    const tool = registeredTool(server, 'git_fetch');
     await expect(tool.handler({ repository: '/invalid' })).rejects.toThrow();
   });
 
@@ -139,7 +140,7 @@ describe('git_fetch tool', () => {
 
     it('runs fetch against a configured remote', async () => {
       const executeSpy = mockGit();
-      const tool = (server as any)._registeredTools['git_fetch'];
+      const tool = registeredTool(server, 'git_fetch');
       await tool.handler({ repository: '/repo', remote: 'upstream' });
       expect(executeSpy).toHaveBeenCalledWith('/repo', ['remote']);
       expect(executeSpy.mock.calls.some((c) => c[1][0] === 'fetch' && c[1].includes('upstream'))).toBe(true);
@@ -149,7 +150,7 @@ describe('git_fetch tool', () => {
       'refuses %s without running fetch',
       async (remote) => {
         const executeSpy = mockGit();
-        const tool = (server as any)._registeredTools['git_fetch'];
+        const tool = registeredTool(server, 'git_fetch');
         await expect(tool.handler({ repository: '/repo', remote })).rejects.toThrow(/configured remote/);
         expect(executeSpy.mock.calls.some((c) => c[1][0] === 'fetch')).toBe(false);
       },
@@ -157,7 +158,7 @@ describe('git_fetch tool', () => {
 
     it('refuses option-like remote and branch values', async () => {
       const executeSpy = mockGit();
-      const tool = (server as any)._registeredTools['git_fetch'];
+      const tool = registeredTool(server, 'git_fetch');
       await expect(tool.handler({ repository: '/repo', remote: '--upload-pack=touch /tmp/x', branch: 'main' })).rejects.toThrow(/must not start with/);
       await expect(tool.handler({ repository: '/repo', remote: 'origin', branch: '--upload-pack=touch /tmp/x' })).rejects.toThrow(/Invalid branch/);
       expect(executeSpy.mock.calls.some((c) => c[1][0] === 'fetch')).toBe(false);
@@ -166,7 +167,7 @@ describe('git_fetch tool', () => {
     it('allows URLs when GIT_ALLOW_REMOTE_URLS=1 but still refuses ext:: helpers', async () => {
       process.env['GIT_ALLOW_REMOTE_URLS'] = '1';
       const executeSpy = mockGit();
-      const tool = (server as any)._registeredTools['git_fetch'];
+      const tool = registeredTool(server, 'git_fetch');
       await tool.handler({ repository: '/repo', remote: 'https://example.com/r.git' });
       expect(executeSpy.mock.calls.some((c) => c[1][0] === 'fetch' && c[1].includes('https://example.com/r.git'))).toBe(true);
       await expect(tool.handler({ repository: '/repo', remote: 'ext::sh -c id' })).rejects.toThrow(/helper/);

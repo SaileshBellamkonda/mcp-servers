@@ -6,6 +6,7 @@ import { PathValidator } from '../../../src/core/path-validator.js';
 import { GitExecutor } from '../../../src/core/git-executor.js';
 import { OutputParser } from '../../../src/core/output-parser.js';
 import type { Services } from '../../../src/core/types.js';
+import { registeredTool, registeredTools } from '../../fixtures/registered-tools.js';
 
 describe('git_push tool', () => {
   // The argument-shape tests below use mocked executors with no configured remotes, so they run in the
@@ -42,7 +43,7 @@ describe('git_push tool', () => {
   });
 
   it('should register git_push tool', () => {
-    const tools = Object.keys((server as any)._registeredTools);
+    const tools = Object.keys(registeredTools(server));
     expect(tools).toContain('git_push');
   });
 
@@ -51,7 +52,7 @@ describe('git_push tool', () => {
       .spyOn(services.gitExecutor, 'execute')
       .mockResolvedValue({ stdout: '', stderr: '', exitCode: 0, success: true });
 
-    const tool = (server as any)._registeredTools['git_push'];
+    const tool = registeredTool(server, 'git_push');
     await tool.handler({ repository: '/repo', branch: 'feature' });
 
     expect(executeSpy).toHaveBeenCalledTimes(1);
@@ -64,7 +65,7 @@ describe('git_push tool', () => {
       .mockResolvedValueOnce({ stdout: 'main\n', stderr: '', exitCode: 0, success: true })
       .mockResolvedValueOnce({ stdout: '', stderr: '', exitCode: 0, success: true });
 
-    const tool = (server as any)._registeredTools['git_push'];
+    const tool = registeredTool(server, 'git_push');
     await tool.handler({ repository: '/repo' });
 
     expect(executeSpy).toHaveBeenNthCalledWith(1, '/repo', ['rev-parse', '--abbrev-ref', 'HEAD']);
@@ -76,7 +77,7 @@ describe('git_push tool', () => {
       .spyOn(services.gitExecutor, 'execute')
       .mockResolvedValue({ stdout: '', stderr: '', exitCode: 0, success: true });
 
-    const tool = (server as any)._registeredTools['git_push'];
+    const tool = registeredTool(server, 'git_push');
     await tool.handler({ repository: '/repo', branch: 'feature', force: true });
 
     expect(executeSpy).toHaveBeenCalledWith('/repo', ['push', '--force', 'origin', 'feature']);
@@ -91,14 +92,14 @@ describe('git_push tool', () => {
       success: true,
     });
 
-    const tool = (server as any)._registeredTools['git_push'];
+    const tool = registeredTool(server, 'git_push');
     await expect(tool.handler({ repository: '/repo', branch: 'main' })).resolves.not.toThrow();
   });
 
   it('blocks push when branch is not in allowlist', async () => {
     process.env['GIT_PUSH_ALLOWED_BRANCHES'] = 'main';
 
-    const tool = (server as any)._registeredTools['git_push'];
+    const tool = registeredTool(server, 'git_push');
     await expect(tool.handler({ repository: '/repo', branch: 'feature' })).rejects.toThrow(
       'not in the allowed list',
     );
@@ -113,7 +114,7 @@ describe('git_push tool', () => {
       success: true,
     });
 
-    const tool = (server as any)._registeredTools['git_push'];
+    const tool = registeredTool(server, 'git_push');
     await expect(tool.handler({ repository: '/repo', branch: 'anything' })).resolves.not.toThrow();
   });
 
@@ -125,7 +126,7 @@ describe('git_push tool', () => {
       success: false,
     });
 
-    const tool = (server as any)._registeredTools['git_push'];
+    const tool = registeredTool(server, 'git_push');
     await expect(tool.handler({ repository: '/repo', branch: 'main' })).rejects.toThrow(
       'Git push failed',
     );
@@ -139,7 +140,7 @@ describe('git_push tool', () => {
       success: false,
     });
 
-    const tool = (server as any)._registeredTools['git_push'];
+    const tool = registeredTool(server, 'git_push');
     await expect(tool.handler({ repository: '/repo' })).rejects.toThrow(
       'unable to determine current branch',
     );
@@ -153,7 +154,7 @@ describe('git_push tool', () => {
       success: true,
     });
 
-    const tool = (server as any)._registeredTools['git_push'];
+    const tool = registeredTool(server, 'git_push');
     const result = await tool.handler({ repository: '/repo', branch: 'feature', force: false });
     const content = JSON.parse(result.content[0].text);
 
@@ -178,7 +179,7 @@ describe('git_push tool', () => {
 
     it('runs push against a configured remote', async () => {
       const executeSpy = mockGit();
-      const tool = (server as any)._registeredTools['git_push'];
+      const tool = registeredTool(server, 'git_push');
       await tool.handler({ repository: '/repo', remote: 'upstream', branch: 'main' });
       expect(executeSpy).toHaveBeenCalledWith('/repo', ['remote']);
       expect(executeSpy.mock.calls.some((c) => c[1][0] === 'push' && c[1].includes('upstream'))).toBe(true);
@@ -188,7 +189,7 @@ describe('git_push tool', () => {
       'refuses %s without running push',
       async (remote) => {
         const executeSpy = mockGit();
-        const tool = (server as any)._registeredTools['git_push'];
+        const tool = registeredTool(server, 'git_push');
         await expect(tool.handler({ repository: '/repo', remote, branch: 'main' })).rejects.toThrow(/configured remote/);
         expect(executeSpy.mock.calls.some((c) => c[1][0] === 'push')).toBe(false);
       },
@@ -196,7 +197,7 @@ describe('git_push tool', () => {
 
     it('refuses option-like remote and branch values', async () => {
       const executeSpy = mockGit();
-      const tool = (server as any)._registeredTools['git_push'];
+      const tool = registeredTool(server, 'git_push');
       await expect(tool.handler({ repository: '/repo', remote: '--upload-pack=touch /tmp/x', branch: 'main' })).rejects.toThrow(/must not start with/);
       await expect(tool.handler({ repository: '/repo', remote: 'origin', branch: '--upload-pack=touch /tmp/x' })).rejects.toThrow(/Invalid branch/);
       expect(executeSpy.mock.calls.some((c) => c[1][0] === 'push')).toBe(false);
@@ -205,7 +206,7 @@ describe('git_push tool', () => {
     it('allows URLs when GIT_ALLOW_REMOTE_URLS=1 but still refuses ext:: helpers', async () => {
       process.env['GIT_ALLOW_REMOTE_URLS'] = '1';
       const executeSpy = mockGit();
-      const tool = (server as any)._registeredTools['git_push'];
+      const tool = registeredTool(server, 'git_push');
       await tool.handler({ repository: '/repo', remote: 'https://example.com/r.git', branch: 'main' });
       expect(executeSpy.mock.calls.some((c) => c[1][0] === 'push' && c[1].includes('https://example.com/r.git'))).toBe(true);
       await expect(tool.handler({ repository: '/repo', remote: 'ext::sh -c id', branch: 'main' })).rejects.toThrow(/helper/);

@@ -30,7 +30,7 @@ describe('GitExecutor branch coverage', () => {
     whichMock.mockReset();
 
     ({ GitExecutor } = await import('../../../src/core/git-executor.js'));
-    (GitExecutor as any).gitPath = null;
+    (GitExecutor as unknown as { gitPath: string | null }).gitPath = null;
   });
 
   afterEach(() => {

@@ -13,6 +13,11 @@ vi.mock('node:fs', () => ({
 import * as fs from 'node:fs';
 import { CodeRagWatcher } from '../../../src/indexer/watcher.js';
 
+/** `handleChange` is private; the tests drive it directly instead of waiting for file-system events. */
+interface WatcherInternals {
+  handleChange(filePath: string): Promise<void>;
+}
+
 const mockExistsSync = vi.mocked(fs.existsSync);
 
 describe('CodeRagWatcher document types', () => {
@@ -47,20 +52,20 @@ describe('CodeRagWatcher document types', () => {
   });
 
   it('indexes a file the indexer recognises as a document, such as .mdx', async () => {
-    await (watcher as any).handleChange('/d/page.mdx');
+    await (watcher as unknown as WatcherInternals).handleChange('/d/page.mdx');
     expect(isDocumentFile).toHaveBeenCalledWith('/d/page.mdx');
     expect(indexer.indexFile).toHaveBeenCalledWith('/d/page.mdx');
   });
 
   it('ignores a file the indexer does not recognise as a document, even if it ends in .md', async () => {
-    await (watcher as any).handleChange('/d/notes.md');
+    await (watcher as unknown as WatcherInternals).handleChange('/d/notes.md');
     expect(indexer.indexFile).not.toHaveBeenCalled();
     expect(indexer.indexCodeFile).not.toHaveBeenCalled();
   });
 
   it('still honours the docs include/exclude matcher', async () => {
     vi.mocked(docsMatcher.isIncluded).mockReturnValue(false);
-    await (watcher as any).handleChange('/d/page.mdx');
+    await (watcher as unknown as WatcherInternals).handleChange('/d/page.mdx');
     expect(indexer.indexFile).not.toHaveBeenCalled();
   });
 });

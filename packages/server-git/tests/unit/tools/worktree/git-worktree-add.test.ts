@@ -6,6 +6,7 @@ import { PathValidator } from '../../../../src/core/path-validator.js';
 import { GitExecutor } from '../../../../src/core/git-executor.js';
 import { OutputParser } from '../../../../src/core/output-parser.js';
 import type { Services } from '../../../../src/core/types.js';
+import { registeredTool, registeredTools } from '../../../fixtures/registered-tools.js';
 
 describe('git_worktree_add tool', () => {
   let server: McpServer;
@@ -29,12 +30,12 @@ describe('git_worktree_add tool', () => {
   });
 
   it('should register git_worktree_add tool', () => {
-    const tools = Object.keys((server as any)._registeredTools);
+    const tools = Object.keys(registeredTools(server));
     expect(tools).toContain('git_worktree_add');
   });
 
   it('should validate path parameter', async () => {
-    const tool = (server as any)._registeredTools['git_worktree_add'];
+    const tool = registeredTool(server, 'git_worktree_add');
     await expect(tool.handler({ repository: '/repo', path: '../outside' })).rejects.toThrow();
   });
 });
