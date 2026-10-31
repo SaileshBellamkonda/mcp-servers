@@ -4,11 +4,6 @@
   "compilerOptions": {
     "module": "preserve",
     "moduleResolution": "bundler",
-    "target": "ES2022",
-    "noEmit": true,
-    "customConditions": ["@mcp-servers/source"],
-    "types": ["node"]
-  },
-  "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist", "tests"]
+    "erasableSyntaxOnly": false
+  }
 }

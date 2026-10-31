@@ -11,11 +11,6 @@
   "include": [
     "src/**/*"
   ],
-  "exclude": [
-    "node_modules",
-    "dist",
-    "tests"
-  ],
   "references": [
     {
       "path": "../common/tsconfig.build.json"
