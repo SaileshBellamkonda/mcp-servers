@@ -25,6 +25,9 @@ description); the status bar counts the running servers.
   tells you. Changes are applied 500 ms after the last edit, so editing several settings causes one restart. A taken
   port is reported as "Port N is already in use (change mcpServers.git.port)"; any other startup failure shows its real
   message once.
+- **Logs:** each server writes to its own Output channel, **MCP Git** and **MCP CodeRAG** (View > Output, then pick it in
+  the dropdown), filtered by `mcpServers.<id>.logLevel`. Messages about the extension itself (token file, headers
+  helper, stopping) go to the **MCP Servers** channel. Tokens and API keys are never logged.
 - **Several windows:** if another VS Code window on the same workspace rotates the token (or two windows race the first
   run), this window's running servers restart with the stored token after a short pause and say so, so they keep
   accepting the helper's token.
@@ -53,8 +56,10 @@ From the palette with several candidates you pick the server; with exactly one i
 |---|---|---|
 | `mcpServers.git.autoStart` | `true` | Start the Git server when a workspace folder is open |
 | `mcpServers.git.port` | `3000` | Port of the Git server (`0` picks a free port) |
+| `mcpServers.git.logLevel` | `info` | Detail of the **MCP Git** Output channel: `debug` (also every git command), `info`, `warning` or `error`. Applies at once |
 | `mcpServers.coderag.autoStart` | `false` | Start CodeRAG when a workspace folder is open (indexing costs CPU, disk and embedding requests) |
 | `mcpServers.coderag.port` | `3100` | Port of the CodeRAG server (`0` picks a free port) |
+| `mcpServers.coderag.logLevel` | `info` | Detail of the **MCP CodeRAG** Output channel: `debug`, `info`, `warning` or `error`. Applies at once |
 | `mcpServers.coderag.watch` | `true` | Re-index files as they change in the workspace folders; turn it off if watching a very large folder strains the system |
 | `mcpServers.coderag.toolset` | `standard` | Tools CodeRAG offers: `search`, `standard` (search, search_relations, get_index_status, sync_documents) or `all` (11 tools; their definitions cost about 1.1k more tokens per session) |
 | `mcpServers.coderag.embeddingUrl` | *(required)* | Base URL of the OpenAI-compatible embeddings endpoint, e.g. `http://localhost:11434/v1`. **Machine scoped** |

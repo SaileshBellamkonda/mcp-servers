@@ -46,7 +46,21 @@ The endpoint is `http://127.0.0.1:3000/mcp`; clients send `Authorization: Bearer
 | `MCP_AUTH_TOKEN` | unset | Bearer token, at least 32 characters. Never passed on to git |
 | `GIT_PUSH_ALLOWED_BRANCHES` | unset | `;`-separated list of branches `git_push` may push; `*` allows all. Unset means no restriction |
 | `GIT_ALLOW_REMOTE_URLS` | off | `1`/`true`/`yes`/`on` lets `git_fetch`, `git_pull` and `git_push` take a URL or path as the remote instead of only the name of a configured remote |
+| `LOG_LEVEL` | `info` | Lowest level written to `LOG_FILE`: `debug`, `info`, `notice`, `warning`, `error`, `critical`, `alert` or `emergency`. `debug` also logs every git command |
+| `LOG_FILE` | unset | File to append log entries to; unset means no log file |
 | `GIT_COMMIT_NAME`, `GIT_COMMIT_EMAIL` | unset | When either is set, `git_commit` commits with `-c user.name=... -c user.email=...` (the unset one becomes empty) instead of the repository's identity |
+
+### Logging
+
+Nothing is written to stderr. Set `LOG_FILE` to get a log: each entry at or above `LOG_LEVEL` is appended as
+`<ISO time> [LEVEL] [component] message`. Without `LOG_FILE` the server keeps no log of its own (MCP clients still
+receive log notifications, filtered by their `logging/setLevel`). Missing directories are created, the file is
+created with mode `0600`, and an invalid `LOG_LEVEL` makes the process exit with a message on stderr. Tool failures are logged at `error` level.
+
+```sh
+LOG_FILE=/var/log/mcp/git.log LOG_LEVEL=debug GIT_ALLOWED_REPOS="/path/to/repo" node dist/standalone.js
+```
+
 
 ### Embedded mode (VS Code extension)
 

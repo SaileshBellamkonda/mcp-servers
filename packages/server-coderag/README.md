@@ -77,6 +77,8 @@ are watched for changes unless `CODERAG_WATCH=0`. See [Freshness](#freshness).
 | `CODERAG_ALLOWED_ROOTS` | none | `;`-separated extra directories the file tools may use (see [Security](#security)) |
 | `CODERAG_WATCH` | `true` | Watch the include directories and re-index changed files; `0`, `false`, `no` or `off` disables it |
 | `CODERAG_TOOLSET` | `standard` | Which tools to offer: `search`, `standard` or `all`, see [Tools](#tools) |
+| `LOG_LEVEL` | `info` | Lowest level written to `LOG_FILE`: `debug`, `info`, `notice`, `warning`, `error`, `critical`, `alert` or `emergency` |
+| `LOG_FILE` | unset | File to append log entries to; unset means no log file |
 | `MCP_TRANSPORT` | `stdio` | `http` selects the HTTP transport |
 | `MCP_HTTP_HOST` | `127.0.0.1` | Interface to bind. A non-loopback value requires `MCP_AUTH_TOKEN` |
 | `MCP_HTTP_PORT` | `3100` | TCP port (`0` picks a free port) |
@@ -85,6 +87,14 @@ are watched for changes unless `CODERAG_WATCH=0`. See [Freshness](#freshness).
 Built-in excludes (`.git`, `node_modules`, `dist`, `build`, `out`, `target`, `vendor`, `coverage`, editor folders and
 similar) always apply. Code is parsed with tree-sitter for TypeScript/TSX, JavaScript/JSX, Python, Go, Rust, PHP, Java,
 C#, C++, C, Ruby, shell and Vue.
+
+### Logging
+
+Nothing is written to stderr. Set `LOG_FILE` to get a log: each entry at or above `LOG_LEVEL` is appended as
+`<ISO time> [LEVEL] [component] message`. Without `LOG_FILE` the server keeps no log of its own (MCP clients still
+receive log notifications, filtered by their `logging/setLevel`). Missing directories are created, the file is
+created with mode `0600`, and an invalid `LOG_LEVEL` makes the process exit with a message on stderr. Indexing, the startup sync and the file watcher log at `info`; skipped files and failed grammars at `warning`.
+
 
 ### Embedded mode (VS Code extension)
 
