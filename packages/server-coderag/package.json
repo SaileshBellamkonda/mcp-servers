@@ -21,14 +21,14 @@
   "scripts": {
     "bundle": "tsdown",
     "build": "pnpm run clean && pnpm run bundle",
-    "dev": "tsx --conditions=@mcp-servers/source src/standalone.ts",
+    "dev": "node --conditions=@mcp-servers/source src/standalone.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "bench": "tsx --conditions=@mcp-servers/source scripts/bench-search.ts",
-    "eval": "tsx --conditions=@mcp-servers/source scripts/retrieval-eval.ts",
-    "eval:relations": "tsx --conditions=@mcp-servers/source scripts/relations-eval.ts",
-    "bench:repo": "tsx --conditions=@mcp-servers/source scripts/bench-repo.ts",
+    "bench": "node --conditions=@mcp-servers/source scripts/bench-search.ts",
+    "eval": "node --conditions=@mcp-servers/source scripts/retrieval-eval.ts",
+    "eval:relations": "node --conditions=@mcp-servers/source scripts/relations-eval.ts",
+    "bench:repo": "node --conditions=@mcp-servers/source scripts/bench-repo.ts",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist"
   },
@@ -67,7 +67,6 @@
     "@types/node": "catalog:",
     "@vitest/coverage-v8": "catalog:",
     "tsdown": "catalog:",
-    "tsx": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:",
     "node-gyp": "catalog:"

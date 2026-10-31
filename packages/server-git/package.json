@@ -21,7 +21,7 @@
   "scripts": {
     "bundle": "tsdown",
     "build": "pnpm run clean && pnpm run bundle",
-    "dev": "tsx --conditions=@mcp-servers/source src/standalone.ts",
+    "dev": "node --conditions=@mcp-servers/source src/standalone.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
@@ -52,7 +52,6 @@
     "@types/which": "catalog:",
     "@vitest/coverage-v8": "catalog:",
     "tsdown": "catalog:",
-    "tsx": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
   },

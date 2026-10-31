@@ -147,7 +147,7 @@ package, so `pnpm --filter mcp-servers ...` matches both. Select the extension w
 (`--filter @mcp-servers/server-coderag`).
 
 `pnpm -C packages/server-git run dev` (and the same for `server-coderag`) runs the standalone entry point from source
-with `tsx`.
+with Node's built-in TypeScript support (no loader or build step).
 
 Project rules for contributors and agents are in [AGENTS.md](AGENTS.md); the system design is in
 [docs/DESIGN.md](docs/DESIGN.md).

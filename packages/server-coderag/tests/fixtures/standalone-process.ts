@@ -55,7 +55,7 @@ export interface StandaloneProcess {
  */
 export function spawnStandalone(env: Record<string, string>, builtScript?: string): StandaloneProcess {
   const args = builtScript === undefined
-    ? ['--conditions=@mcp-servers/source', '--import', 'tsx', 'src/standalone.ts']
+    ? ['--conditions=@mcp-servers/source', 'src/standalone.ts']
     : [builtScript];
   const child = spawn(
     process.execPath,
