@@ -154,7 +154,7 @@ Project rules for contributors and agents are in [AGENTS.md](AGENTS.md); the sys
 
 ## VS Code extension
 
-The extension (`packages/vscode-extension`, VS Code 1.101 or later) starts the Git server and, where the runtime
+The extension (`packages/vscode-extension`, VS Code 1.125 or later) starts the Git server and, where the runtime
 supports it, CodeRAG inside the extension host. It adds an **MCP Servers** view with start, stop and restart, registers
 the servers in VS Code's own MCP server list, keeps one stable bearer token per workspace in Secret Storage, and can
 write a Claude Code `.mcp.json` entry that fetches that token through a helper script. Settings, commands, the token

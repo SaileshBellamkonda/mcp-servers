@@ -28,6 +28,7 @@ interface Manifest {
     mcpServerDefinitionProviders?: { id: string; label: string }[];
   };
   engines: { vscode: string };
+  devDependencies: Record<string, string>;
   capabilities?: Record<string, { supported?: unknown; description?: unknown }>;
 }
 const manifest = JSON.parse(readFileSync(path.resolve(import.meta.dirname, '../../package.json'), 'utf8')) as Manifest;
@@ -198,7 +199,21 @@ describe('package.json contributes', () => {
 
   it('declares the MCP server definition provider the extension registers, on an engine that has the API', () => {
     expect(manifest.contributes.mcpServerDefinitionProviders).toEqual([{ id: MCP_PROVIDER_ID, label: expect.any(String) as string }]);
-    expect(manifest.engines.vscode).toBe('>=1.123.0');
+    expect(manifest.engines.vscode).toBe('>=1.125.0');
+  });
+
+  it('types the VS Code API with the catalog version, at or below the engine vsce packages for', () => {
+    const types = manifest.devDependencies['@types/vscode'] ?? '';
+    // vsce reads this from the manifest and cannot resolve "catalog:", so the exact version is repeated here.
+    expect(types).toMatch(/^\d+\.\d+\.\d+$/);
+    const workspace = readFileSync(path.resolve(import.meta.dirname, '../../../../pnpm-workspace.yaml'), 'utf8');
+    expect(/^\s+'@types\/vscode':\s*(\S+)\s*$/m.exec(workspace)?.[1]).toBe(types);
+    // vsce refuses to package when @types/vscode's major.minor is above engines.vscode's.
+    const rank = (version: string): number => {
+      const [major = 0, minor = 0] = version.replace(/^[^0-9]+/, '').split('.').map(Number);
+      return major * 10_000 + minor;
+    };
+    expect(rank(types)).toBeLessThanOrEqual(rank(manifest.engines.vscode));
   });
 
   it('offers the integration commands in the view title menu', () => {

@@ -13,6 +13,10 @@ catalog:
   # Use Node.js 24 for now, as it is the latest stable version with full support for our dependencies + VS Code version 1.123 and above uses Node.js 24.
   # https://github.com/ewanharris/vscode-versions
   '@types/node': ^24.13.2
+  # The extension's package.json repeats this exact version instead of using `catalog:`: `vsce package` reads
+  # @types/vscode from the manifest and cannot resolve a catalog reference. It must not be newer than
+  # `engines.vscode` there (a manifest test checks both).
+  '@types/vscode': 1.125.0
   '@types/which': ^3.0.4
   '@vitest/coverage-v8': ^5.0.5
   '@vscode/vsce': ^4.1.0

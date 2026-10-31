@@ -36,7 +36,7 @@
     }
   },
   "engines": {
-    "vscode": ">=1.123.0",
+    "vscode": ">=1.125.0",
     "node": ">=24.0.0"
   },
   "activationEvents": ["onStartupFinished"],
@@ -325,7 +325,7 @@
     "@mcp-servers/server-coderag": "workspace:*",
     "@mcp-servers/server-git": "workspace:*",
     "@types/node": "catalog:",
-    "@types/vscode": "1.101.0",
+    "@types/vscode": "1.125.0",
     "@vitest/coverage-v8": "catalog:",
     "@vscode/vsce": "catalog:",
     "esbuild": "catalog:",

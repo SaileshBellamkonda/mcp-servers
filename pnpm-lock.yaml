@@ -318,7 +318,7 @@ importers:
         version: 2.0.0-alpha.2(@cfworker/json-schema@4.1.1)
       '@types/vscode':
         specifier: '*'
-        version: 1.101.0
+        version: 1.125.0
       gray-matter:
         specifier: 'catalog:'
         version: 4.0.3
@@ -421,7 +421,7 @@ importers:
         version: 2.0.0-alpha.2(@cfworker/json-schema@4.1.1)
       '@types/vscode':
         specifier: '*'
-        version: 1.101.0
+        version: 1.125.0
       hono:
         specifier: 'catalog:'
         version: 4.13.14
@@ -531,8 +531,8 @@ importers:
         specifier: 'catalog:'
         version: 24.13.2
       '@types/vscode':
-        specifier: 1.101.0
-        version: 1.101.0
+        specifier: 1.125.0
+        version: 1.125.0
       '@vitest/coverage-v8':
         specifier: 'catalog:'
         version: 5.0.5(vitest@5.0.5)
@@ -1287,8 +1287,8 @@ packages:
   '@types/node@24.13.2':
     resolution: {integrity: sha512-fRa09kZTgu8o71KFcDjUFuc7F+dEbZYZmkI0mg5YBTRs0yMKjYHsq/c0urDKeDb+D5qVgXOdFcuu+DZPKOITwA==}
 
-  '@types/vscode@1.101.0':
-    resolution: {integrity: sha512-ZWf0IWa+NGegdW3iU42AcDTFHWW7fApLdkdnBqwYEtHVIBGbTu0ZNQKP/kX3Ds/uMJXIMQNAojHR4vexCEEz5Q==}
+  '@types/vscode@1.125.0':
+    resolution: {integrity: sha512-0icm/ZQAaism87P0ekHqi4/Ju9du+Tm0RUW+y7vqRsxY2cY0FNRX1nAnaW7nT6npPt2tfHiheZ55Zm9UhqonFA==}
 
   '@types/which@3.0.4':
     resolution: {integrity: sha512-liyfuo/106JdlgSchJzXEQCVArk0CvevqPote8F8HgWgJ3dRCcTHgJIsLDuee0kxk/mhbInzIZk3QWSZJ8R+2w==}
@@ -3103,7 +3103,7 @@ snapshots:
     dependencies:
       undici-types: 7.18.2
 
-  '@types/vscode@1.101.0': {}
+  '@types/vscode@1.125.0': {}
 
   '@types/which@3.0.4': {}
 
