@@ -1,8 +1,8 @@
 import micromatch from 'micromatch';
 import path from 'node:path';
 import { statSync, readdirSync, readFileSync, existsSync, realpathSync, type Dirent } from 'node:fs';
-import type { PathGuard } from './path-guard.js';
-import { createStderrLogger } from './logger.js';
+import type { PathGuard } from './path-guard.ts';
+import { createStderrLogger } from './logger.ts';
 
 export const WELL_KNOWN_EXCLUDES = [
   '**/.git/**',

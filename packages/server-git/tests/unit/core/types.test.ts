@@ -5,7 +5,7 @@ import type {
   Commit,
   Branch,
   Worktree
-} from '../../../src/core/types.js';
+} from '../../../src/core/types.ts';
 
 describe('Core Types', () => {
   it('should define GitCommandResult interface', () => {

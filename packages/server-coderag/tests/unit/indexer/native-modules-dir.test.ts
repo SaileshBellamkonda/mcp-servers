@@ -2,10 +2,10 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { CodeParser } from '../../../src/indexer/code-parser.js';
-import { Indexer } from '../../../src/indexer/indexer.js';
-import { Embedder } from '../../../src/embedder/embedder.js';
-import { VectorDB } from '../../../src/vectordb/db.js';
+import { CodeParser } from '../../../src/indexer/code-parser.ts';
+import { Indexer } from '../../../src/indexer/indexer.ts';
+import { Embedder } from '../../../src/embedder/embedder.ts';
+import { VectorDB } from '../../../src/vectordb/db.ts';
 
 describe('nativeModulesDir', () => {
   let dir: string;

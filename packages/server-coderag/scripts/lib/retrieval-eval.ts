@@ -1,5 +1,5 @@
-import type { SearchResult } from '../../src/core/types.js';
-import type { LabelledQuery, QueryKind, Target } from './retrieval-queries.js';
+import type { SearchResult } from '../../src/core/types.ts';
+import type { LabelledQuery, QueryKind, Target } from './retrieval-queries.ts';
 
 /** True when the hit lies in the target's file and, if the target names a symbol, is that symbol or one of its members. */
 export function matchesTarget(hit: SearchResult, target: Target): boolean {

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { startMcpHttpServer, type McpHttpServer } from '../../src/index.js';
-import { initializeSession, postJsonRpc, startTestServer } from '../../src/testing/index.js';
-import { INIT_BODY, JSON_HEADERS, makeCountingFactory, rawRequest } from './support.js';
+import { startMcpHttpServer, type McpHttpServer } from '../../src/index.ts';
+import { initializeSession, postJsonRpc, startTestServer } from '../../src/testing/index.ts';
+import { INIT_BODY, JSON_HEADERS, makeCountingFactory, rawRequest } from './support.ts';
 
 const TOKEN = `tok-${'x'.repeat(40)}`;
 const SESSION_HEADER = 'mcp-session-id';

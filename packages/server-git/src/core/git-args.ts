@@ -1,7 +1,7 @@
 import path from 'node:path';
 import { parseBool } from '@mcp-servers/common';
-import { GitMcpError, ErrorCode } from './types.js';
-import type { GitExecutor } from './git-executor.js';
+import { GitMcpError, ErrorCode } from './types.ts';
+import type { GitExecutor } from './git-executor.ts';
 
 /**
  * Validators for every user-supplied string that ends up in a git argument vector.

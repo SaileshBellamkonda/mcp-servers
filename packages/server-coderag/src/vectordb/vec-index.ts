@@ -1,4 +1,4 @@
-import type { SqliteDatabase } from './sqlite-db.js';
+import type { SqliteDatabase } from './sqlite-db.ts';
 import {
   LEGACY_VEC_TABLE,
   VEC_DELETE_TRIGGER_NAME,
@@ -6,7 +6,7 @@ import {
   VEC_TABLE,
   buildVecChunksDdl,
   buildVecDeleteTriggerDdl,
-} from './schema.js';
+} from './schema.ts';
 
 /**
  * Where the vectors live and how a database written with the old plain vec0 table (`vec_chunks`, searched with a

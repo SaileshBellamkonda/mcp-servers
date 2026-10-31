@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { MarkdownLoader } from '../../../../src/indexer/loaders/markdown.js';
+import { MarkdownLoader } from '../../../../src/indexer/loaders/markdown.ts';
 
 const loader = new MarkdownLoader();
 

@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { GitMcpError, ErrorCode } from './types.js';
+import { GitMcpError, ErrorCode } from './types.ts';
 
 /** True when `repoPath` contains a `..` segment (either separator style). */
 function hasParentSegment(repoPath: string): boolean {

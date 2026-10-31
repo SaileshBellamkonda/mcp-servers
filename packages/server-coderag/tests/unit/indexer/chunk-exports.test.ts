@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import * as chunk from '../../../src/indexer/chunk.js';
+import * as chunk from '../../../src/indexer/chunk.ts';
 
 describe('chunk module exports', () => {
   it('no longer exposes the file-reading markdown parser', () => {

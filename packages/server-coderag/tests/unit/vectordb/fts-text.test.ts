@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { splitIdentifier, expandIdentifiers, buildFtsQueries, symbolNameCandidates } from '../../../src/vectordb/fts-text.js';
+import { splitIdentifier, expandIdentifiers, buildFtsQueries, symbolNameCandidates } from '../../../src/vectordb/fts-text.ts';
 
 describe('splitIdentifier', () => {
   it.each([

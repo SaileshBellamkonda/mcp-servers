@@ -2,8 +2,8 @@
 import { McpServer, StdioServerTransport } from '@modelcontextprotocol/server';
 import { McpLogger, parseList, parsePort } from '@mcp-servers/common';
 import { resolveHttpSecurity, startMcpHttpServer } from '@mcp-servers/http-host';
-import { createGitServer } from './server/git-server.js';
-import { RepositoryManager } from './core/repository-manager.js';
+import { createGitServer } from './server/git-server.ts';
+import { RepositoryManager } from './core/repository-manager.ts';
 
 function newServer(): McpServer {
   return new McpServer(

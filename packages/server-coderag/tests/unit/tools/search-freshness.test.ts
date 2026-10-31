@@ -3,12 +3,12 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { writeFileSync, mkdirSync, rmSync, utimesSync } from 'node:fs';
 import type { McpServer } from '@modelcontextprotocol/server';
-import { VectorDB } from '../../../src/vectordb/db.js';
-import type { Embedder } from '../../../src/embedder/embedder.js';
-import { PathGuard } from '../../../src/core/path-guard.js';
-import { IndexFreshness } from '../../../src/indexer/freshness.js';
-import type { CodeChunk } from '../../../src/core/types.js';
-import { registerSearch } from '../../../src/tools/search.js';
+import { VectorDB } from '../../../src/vectordb/db.ts';
+import type { Embedder } from '../../../src/embedder/embedder.ts';
+import { PathGuard } from '../../../src/core/path-guard.ts';
+import { IndexFreshness } from '../../../src/indexer/freshness.ts';
+import type { CodeChunk } from '../../../src/core/types.ts';
+import { registerSearch } from '../../../src/tools/search.ts';
 
 type Handler = (input: unknown) => Promise<{ content: { text: string }[] }>;
 

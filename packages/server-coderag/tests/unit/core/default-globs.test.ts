@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { DEFAULT_DOCS_INCLUDE, GlobMatcher } from '../../../src/core/glob-utils.js';
-import { loadConfigFromVsCode } from '../../../src/core/config.js';
+import { DEFAULT_DOCS_INCLUDE, GlobMatcher } from '../../../src/core/glob-utils.ts';
+import { loadConfigFromVsCode } from '../../../src/core/config.ts';
 
 describe('default docs include globs', () => {
   it('cover markdown and mdx', () => {

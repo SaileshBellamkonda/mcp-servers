@@ -6,10 +6,10 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { createGitServer } from '../../src/server/git-server.js';
-import { RepositoryManager } from '../../src/core/repository-manager.js';
-import { GitExecutor } from '../../src/core/git-executor.js';
-import { TestRepository } from '../fixtures/test-repo.js';
+import { createGitServer } from '../../src/server/git-server.ts';
+import { RepositoryManager } from '../../src/core/repository-manager.ts';
+import { GitExecutor } from '../../src/core/git-executor.ts';
+import { TestRepository } from '../fixtures/test-repo.ts';
 
 const execFileAsync = promisify(execFile);
 

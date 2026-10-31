@@ -9,9 +9,9 @@ import {
   type McpServer,
 } from '@modelcontextprotocol/server';
 import { Hono, type Context } from 'hono';
-import { isLoopbackHost } from './loopback.js';
-import { bodyLimit, jsonContentType, jsonRpcError, originGuard } from './guards.js';
-import { assertSafeBinding, bearerAuth } from './security.js';
+import { isLoopbackHost } from './loopback.ts';
+import { bodyLimit, jsonContentType, jsonRpcError, originGuard } from './guards.ts';
+import { assertSafeBinding, bearerAuth } from './security.ts';
 
 /** Logger shape the host needs; `McpLogger` from `@mcp-servers/common` satisfies it. */
 export interface HttpHostLogger {

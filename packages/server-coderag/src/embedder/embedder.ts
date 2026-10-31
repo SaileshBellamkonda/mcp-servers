@@ -1,4 +1,4 @@
-import type { EmbeddingConfig } from '../core/types.js';
+import type { EmbeddingConfig } from '../core/types.ts';
 
 interface EmbeddingResponse {
   data: { index: number; embedding: number[] }[];

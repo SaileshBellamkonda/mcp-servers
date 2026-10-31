@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
-import { parseArgs, sampleSeeded, seededRandom, type RepoQueryFile } from '../../../scripts/lib/repo-bench.js';
+import { parseArgs, sampleSeeded, seededRandom, type RepoQueryFile } from '../../../scripts/lib/repo-bench.ts';
 
 describe('bench:repo helpers', () => {
   it('parses the repository, language and comma separated include globs, ignoring a bare --', () => {

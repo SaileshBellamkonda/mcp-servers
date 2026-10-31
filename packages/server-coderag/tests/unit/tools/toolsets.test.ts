@@ -1,12 +1,12 @@
 import { describe, it, expect, afterEach, beforeEach } from 'vitest';
 import { McpServer } from '@modelcontextprotocol/server';
 import { initializeSession, postJsonRpc, startTestServer, type TestServer } from '@mcp-servers/http-host/testing';
-import { VectorDB } from '../../../src/vectordb/db.js';
-import { Embedder } from '../../../src/embedder/embedder.js';
-import { Indexer } from '../../../src/indexer/indexer.js';
-import { SyncManager } from '../../../src/indexer/sync-manager.js';
-import { createCodeRagServer } from '../../../src/server/coderag-server.js';
-import type { Toolset } from '../../../src/core/toolset.js';
+import { VectorDB } from '../../../src/vectordb/db.ts';
+import { Embedder } from '../../../src/embedder/embedder.ts';
+import { Indexer } from '../../../src/indexer/indexer.ts';
+import { SyncManager } from '../../../src/indexer/sync-manager.ts';
+import { createCodeRagServer } from '../../../src/server/coderag-server.ts';
+import type { Toolset } from '../../../src/core/toolset.ts';
 
 const TOKEN = `toolset-token-${'t'.repeat(32)}`;
 

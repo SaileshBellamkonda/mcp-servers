@@ -1,24 +1,24 @@
 import { McpServer } from '@modelcontextprotocol/server';
 import { McpLogger } from '@mcp-servers/common';
 import { requireToken, startMcpHttpServer, type McpHttpServer } from '@mcp-servers/http-host';
-import { assertSecureEmbeddingUrl, loadConfigFromVsCode, type VsCodeConfiguration } from './core/config.js';
-import { ConfigError } from './core/types.js';
-import { resolveDimensions } from './core/dimensions.js';
-import { createStderrLogger, type CodeRagLogger } from './core/logger.js';
-import { Embedder } from './embedder/embedder.js';
-import { VectorDB } from './vectordb/db.js';
-import { probeSqliteSupport, type SqliteProbeDeps, type SqliteProbeResult } from './vectordb/sqlite-probe.js';
-import { CodeParser } from './indexer/code-parser.js';
-import { Indexer } from './indexer/indexer.js';
-import { GlobMatcher } from './core/glob-utils.js';
-import { PathGuard, computeAllowedRoots } from './core/path-guard.js';
-import { SyncManager } from './indexer/sync-manager.js';
-import { CodeRagWatcher, computeWatchDirs } from './indexer/watcher.js';
-import { FileRefresher } from './indexer/refresher.js';
-import { IndexFreshness } from './indexer/freshness.js';
-import { parseToolset } from './core/toolset.js';
-import { runStartupSync } from './indexer/sync.js';
-import { createCodeRagServer } from './server/coderag-server.js';
+import { assertSecureEmbeddingUrl, loadConfigFromVsCode, type VsCodeConfiguration } from './core/config.ts';
+import { ConfigError } from './core/types.ts';
+import { resolveDimensions } from './core/dimensions.ts';
+import { createStderrLogger, type CodeRagLogger } from './core/logger.ts';
+import { Embedder } from './embedder/embedder.ts';
+import { VectorDB } from './vectordb/db.ts';
+import { probeSqliteSupport, type SqliteProbeDeps, type SqliteProbeResult } from './vectordb/sqlite-probe.ts';
+import { CodeParser } from './indexer/code-parser.ts';
+import { Indexer } from './indexer/indexer.ts';
+import { GlobMatcher } from './core/glob-utils.ts';
+import { PathGuard, computeAllowedRoots } from './core/path-guard.ts';
+import { SyncManager } from './indexer/sync-manager.ts';
+import { CodeRagWatcher, computeWatchDirs } from './indexer/watcher.ts';
+import { FileRefresher } from './indexer/refresher.ts';
+import { IndexFreshness } from './indexer/freshness.ts';
+import { parseToolset } from './core/toolset.ts';
+import { runStartupSync } from './indexer/sync.ts';
+import { createCodeRagServer } from './server/coderag-server.ts';
 
 export interface ActivateCodeRagServerOptions {
   /** The extension's `coderag` configuration section. */

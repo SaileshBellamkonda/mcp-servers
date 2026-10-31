@@ -1,8 +1,8 @@
 import path from 'node:path';
 import matter from 'gray-matter';
-import type { DocumentLoader, DocumentMetadata, DocumentSection, LoadedDocument } from './types.js';
-import { isFenceClose, matchFenceOpen, type Fence } from './fence.js';
-import { createStderrLogger } from '../../core/logger.js';
+import type { DocumentLoader, DocumentMetadata, DocumentSection, LoadedDocument } from './types.ts';
+import { isFenceClose, matchFenceOpen, type Fence } from './fence.ts';
+import { createStderrLogger } from '../../core/logger.ts';
 
 const ATX_OPEN = /^ {0,3}(#{1,6})[ \t]/;
 const SETEXT_UNDERLINE = /^ {0,3}(=+|-+)[ \t]*$/;

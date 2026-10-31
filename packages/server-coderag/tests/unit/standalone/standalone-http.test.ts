@@ -10,7 +10,7 @@ import {
   freePort,
   spawnStandalone,
   type StandaloneProcess,
-} from '../../fixtures/standalone-process.js';
+} from '../../fixtures/standalone-process.ts';
 
 describe('standalone coderag HTTP entry point', () => {
   let dir: string;

@@ -1,9 +1,9 @@
 import { type McpServer, fromJsonSchema } from '@modelcontextprotocol/server';
 import { z } from 'zod';
-import type { VectorDB } from '../vectordb/db.js';
-import type { SyncManager } from '../indexer/sync-manager.js';
-import { syncLockedResponse } from '../indexer/sync-manager.js';
-import type { PathGuard } from '../core/path-guard.js';
+import type { VectorDB } from '../vectordb/db.ts';
+import type { SyncManager } from '../indexer/sync-manager.ts';
+import { syncLockedResponse } from '../indexer/sync-manager.ts';
+import type { PathGuard } from '../core/path-guard.ts';
 
 const DeleteDocumentSchema = z.object({
   filename: z.string().min(1),

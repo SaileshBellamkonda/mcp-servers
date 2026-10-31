@@ -2,12 +2,12 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { writeFileSync, mkdirSync, rmSync } from 'node:fs';
-import { Indexer } from '../../../src/indexer/indexer.js';
-import { LoaderRegistry } from '../../../src/indexer/loaders/registry.js';
-import { VectorDB } from '../../../src/vectordb/db.js';
-import { Embedder } from '../../../src/embedder/embedder.js';
-import { GlobMatcher } from '../../../src/core/glob-utils.js';
-import type { EmbeddingConfig } from '../../../src/core/types.js';
+import { Indexer } from '../../../src/indexer/indexer.ts';
+import { LoaderRegistry } from '../../../src/indexer/loaders/registry.ts';
+import { VectorDB } from '../../../src/vectordb/db.ts';
+import { Embedder } from '../../../src/embedder/embedder.ts';
+import { GlobMatcher } from '../../../src/core/glob-utils.ts';
+import type { EmbeddingConfig } from '../../../src/core/types.ts';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const tmpDir = path.join(__dirname, '../../../.tmp-indexer-docs-test');

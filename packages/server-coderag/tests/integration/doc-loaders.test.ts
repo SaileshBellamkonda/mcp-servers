@@ -3,11 +3,11 @@ import { McpServer } from '@modelcontextprotocol/server';
 import { writeFileSync, mkdirSync, rmSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { VectorDB } from '../../src/vectordb/db.js';
-import { Embedder } from '../../src/embedder/embedder.js';
-import { Indexer } from '../../src/indexer/indexer.js';
-import { SyncManager } from '../../src/indexer/sync-manager.js';
-import { createCodeRagServer } from '../../src/server/coderag-server.js';
+import { VectorDB } from '../../src/vectordb/db.ts';
+import { Embedder } from '../../src/embedder/embedder.ts';
+import { Indexer } from '../../src/indexer/indexer.ts';
+import { SyncManager } from '../../src/indexer/sync-manager.ts';
+import { createCodeRagServer } from '../../src/server/coderag-server.ts';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const tmpDir = path.join(__dirname, '../../.tmp-doc-loaders-integration-test');

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { matchFenceOpen, isFenceClose } from '../../../../src/indexer/loaders/fence.js';
+import { matchFenceOpen, isFenceClose } from '../../../../src/indexer/loaders/fence.ts';
 
 describe('matchFenceOpen', () => {
   it('recognises backtick fences with an info string', () => {

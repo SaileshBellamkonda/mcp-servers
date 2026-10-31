@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import matter from 'gray-matter';
-import { MarkdownLoader } from '../../../../src/indexer/loaders/markdown.js';
+import { MarkdownLoader } from '../../../../src/indexer/loaders/markdown.ts';
 
 const loader = new MarkdownLoader();
 const globals = globalThis as Record<string, unknown>;

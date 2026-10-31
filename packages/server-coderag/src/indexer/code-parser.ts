@@ -1,9 +1,9 @@
 import { createRequire } from 'node:module';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
-import type { CodeChunk, SymbolType } from '../core/types.js';
-import { getLanguageByExtension, SUPPORTED_LANGUAGES } from './languages.js';
-import { extractRelations, NO_RELATIONS, type ChunkNode, type ExtractedRelations } from './relations.js';
+import type { CodeChunk, SymbolType } from '../core/types.ts';
+import { getLanguageByExtension, SUPPORTED_LANGUAGES } from './languages.ts';
+import { extractRelations, NO_RELATIONS, type ChunkNode, type ExtractedRelations } from './relations.ts';
 
 /**
  * Version of what `CodeParser` stores per symbol (signature rules, symbol selection). Bump it when the output for an

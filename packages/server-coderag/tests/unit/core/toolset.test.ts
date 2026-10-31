@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { DEFAULT_TOOLSET, isToolEnabled, loadRuntimeOptionsFromEnv, parseToolset } from '../../../src/core/toolset.js';
-import { ConfigError } from '../../../src/core/types.js';
+import { DEFAULT_TOOLSET, isToolEnabled, loadRuntimeOptionsFromEnv, parseToolset } from '../../../src/core/toolset.ts';
+import { ConfigError } from '../../../src/core/types.ts';
 
 describe('parseToolset', () => {
   it('defaults to standard', () => {

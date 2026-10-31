@@ -1,12 +1,12 @@
 import { type McpServer, fromJsonSchema } from '@modelcontextprotocol/server';
 import { z } from 'zod';
 import path from 'node:path';
-import type { VectorDB } from '../vectordb/db.js';
-import type { Indexer } from '../indexer/indexer.js';
-import type { SyncManager } from '../indexer/sync-manager.js';
-import { syncLockedResponse } from '../indexer/sync-manager.js';
-import { isSupportedExtension } from '../indexer/languages.js';
-import type { PathGuard } from '../core/path-guard.js';
+import type { VectorDB } from '../vectordb/db.ts';
+import type { Indexer } from '../indexer/indexer.ts';
+import type { SyncManager } from '../indexer/sync-manager.ts';
+import { syncLockedResponse } from '../indexer/sync-manager.ts';
+import { isSupportedExtension } from '../indexer/languages.ts';
+import type { PathGuard } from '../core/path-guard.ts';
 
 const ReindexDocumentSchema = z.object({
   filename: z.string().min(1),

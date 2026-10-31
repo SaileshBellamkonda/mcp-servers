@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { McpServer } from '@modelcontextprotocol/server';
-import { createGitServer } from '../../src/server/git-server.js';
-import { RepositoryManager } from '../../src/core/repository-manager.js';
-import { TestRepository } from '../fixtures/test-repo.js';
-import { registeredTool } from '../fixtures/registered-tools.js';
+import { createGitServer } from '../../src/server/git-server.ts';
+import { RepositoryManager } from '../../src/core/repository-manager.ts';
+import { TestRepository } from '../fixtures/test-repo.ts';
+import { registeredTool } from '../fixtures/registered-tools.ts';
 
 describe('Security Integration', () => {
   let testRepo: TestRepository;

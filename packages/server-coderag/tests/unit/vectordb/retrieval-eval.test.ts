@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { EVAL_FETCH, evaluate, type EvalSummary } from '../../../scripts/lib/retrieval-eval.js';
-import { LABELLED_QUERIES } from '../../../scripts/lib/retrieval-queries.js';
-import { refIsAvailable, indexPinnedCorpus, type PinnedCorpus } from '../../../scripts/lib/corpus.js';
+import { EVAL_FETCH, evaluate, type EvalSummary } from '../../../scripts/lib/retrieval-eval.ts';
+import { LABELLED_QUERIES } from '../../../scripts/lib/retrieval-queries.ts';
+import { refIsAvailable, indexPinnedCorpus, type PinnedCorpus } from '../../../scripts/lib/corpus.ts';
 
 /**
  * Retrieval regression guard: 52 labelled queries over the pinned snapshot of this repository (see

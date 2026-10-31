@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { SseParser } from '../../src/testing/index.js';
+import { SseParser } from '../../src/testing/index.ts';
 
 describe('SseParser', () => {
   it('parses events with id, event and data fields', () => {

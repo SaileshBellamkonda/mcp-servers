@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseBool, parseList, parsePort } from '../../src/env.js';
+import { parseBool, parseList, parsePort } from '../../src/env.ts';
 
 describe('parsePort', () => {
   it('returns the default when the value is undefined, empty or blank', () => {

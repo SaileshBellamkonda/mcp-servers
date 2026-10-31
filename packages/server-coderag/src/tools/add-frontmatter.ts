@@ -1,9 +1,9 @@
 import { type McpServer, fromJsonSchema } from '@modelcontextprotocol/server';
 import { z } from 'zod';
 import { readFileSync, writeFileSync } from 'node:fs';
-import { assertFrontmatterFile } from '../indexer/loaders/index.js';
-import { parseFrontmatter, stringifyFrontmatter } from '../indexer/loaders/markdown.js';
-import type { PathGuard } from '../core/path-guard.js';
+import { assertFrontmatterFile } from '../indexer/loaders/index.ts';
+import { parseFrontmatter, stringifyFrontmatter } from '../indexer/loaders/markdown.ts';
+import type { PathGuard } from '../core/path-guard.ts';
 
 const AddFrontmatterSchema = z.object({
   filepath: z.string().min(1).describe('Path to the markdown file'),

@@ -1,8 +1,8 @@
 import { execFile } from 'node:child_process';
 import which from 'which';
-import { GitMcpError, ErrorCode } from './types.js';
-import type { RepositoryManager } from './repository-manager.js';
-import type { GitCommandResult, ExecuteOptions, ServerLogger } from './types.js';
+import { GitMcpError, ErrorCode } from './types.ts';
+import type { RepositoryManager } from './repository-manager.ts';
+import type { GitCommandResult, ExecuteOptions, ServerLogger } from './types.ts';
 
 const POSIX_ALLOWED = [
   'PATH', 'HOME', 'USER', 'LOGNAME', 'LANG', 'LANGUAGE', 'TZ', 'TMPDIR', 'TEMP', 'TMP', 'SSH_AUTH_SOCK',

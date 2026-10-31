@@ -1,11 +1,11 @@
 import { parseBool, parseList } from '@mcp-servers/common';
-import type { CodeRagConfig, GlobConfig } from './types.js';
-import { ConfigError } from './types.js';
+import type { CodeRagConfig, GlobConfig } from './types.ts';
+import { ConfigError } from './types.ts';
 import {
   DEFAULT_DOCS_INCLUDE,
   DEFAULT_CODE_INCLUDE,
   resolveToAbsolute,
-} from './glob-utils.js';
+} from './glob-utils.ts';
 
 const DEFAULT_BATCH_SIZE = 100;
 const DEFAULT_CHUNK_SIZE = 500;

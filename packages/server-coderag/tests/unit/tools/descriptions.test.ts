@@ -1,11 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import type { McpServer } from '@modelcontextprotocol/server';
-import type { VectorDB } from '../../../src/vectordb/db.js';
-import type { Indexer } from '../../../src/indexer/indexer.js';
-import { SyncManager } from '../../../src/indexer/sync-manager.js';
-import { registerIndexMarkdown } from '../../../src/tools/index-markdown.js';
-import { registerSyncDocuments } from '../../../src/tools/sync-documents.js';
-import { PathGuard } from '../../../src/core/path-guard.js';
+import type { VectorDB } from '../../../src/vectordb/db.ts';
+import type { Indexer } from '../../../src/indexer/indexer.ts';
+import { SyncManager } from '../../../src/indexer/sync-manager.ts';
+import { registerIndexMarkdown } from '../../../src/tools/index-markdown.ts';
+import { registerSyncDocuments } from '../../../src/tools/sync-documents.ts';
+import { PathGuard } from '../../../src/core/path-guard.ts';
 
 interface ToolConfig {
   description: string;

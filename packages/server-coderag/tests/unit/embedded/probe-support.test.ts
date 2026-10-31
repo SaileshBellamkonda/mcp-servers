@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { probeCodeRagSupport } from '../../../src/embedded.js';
+import { probeCodeRagSupport } from '../../../src/embedded.ts';
 
 describe('probeCodeRagSupport (the capability probe the VS Code extension runs before starting CodeRAG)', () => {
   it('passes on this runtime: sqlite, sqlite-vec, FTS5 and tree-sitter with a grammar', () => {

@@ -4,8 +4,8 @@ import { createConnection } from 'node:net';
 import { networkInterfaces } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { activateGitServer, deactivateGitServer, type GitServerInstance } from '../../../src/embedded.js';
-import { TestRepository } from '../../fixtures/test-repo.js';
+import { activateGitServer, deactivateGitServer, type GitServerInstance } from '../../../src/embedded.ts';
+import { TestRepository } from '../../fixtures/test-repo.ts';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const TOKEN = `loopback-token-${'z'.repeat(32)}`;

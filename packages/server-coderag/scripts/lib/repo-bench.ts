@@ -2,8 +2,8 @@
  * Helpers of the real-repository benchmark (`bench-repo.ts`): argument parsing, the labelled-query file format, seeded
  * sampling of relation rows and the recall of hand-picked known edges. Nothing here reads a repository by itself.
  */
-import type { LabelledQuery, QueryKind, Target } from './retrieval-queries.js';
-import type { SqliteDatabase } from '../../src/vectordb/sqlite-db.js';
+import type { LabelledQuery, QueryKind, Target } from './retrieval-queries.ts';
+import type { SqliteDatabase } from '../../src/vectordb/sqlite-db.ts';
 
 export interface RepoBenchArgs {
   repo: string;

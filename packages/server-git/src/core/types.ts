@@ -1,7 +1,7 @@
-import type { RepositoryManager } from './repository-manager.js';
-import type { PathValidator } from './path-validator.js';
-import type { GitExecutor } from './git-executor.js';
-import type { OutputParser } from './output-parser.js';
+import type { RepositoryManager } from './repository-manager.ts';
+import type { PathValidator } from './path-validator.ts';
+import type { GitExecutor } from './git-executor.ts';
+import type { OutputParser } from './output-parser.ts';
 
 /**
  * Result of a Git command execution

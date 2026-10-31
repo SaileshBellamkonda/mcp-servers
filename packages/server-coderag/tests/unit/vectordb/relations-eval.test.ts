@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { evaluateRelations, type RelationEvalSummary } from '../../../scripts/lib/relations-eval.js';
-import { RELATION_QUESTIONS, VERIFIED_CALL_SAMPLE } from '../../../scripts/lib/relations-queries.js';
-import { refIsAvailable, indexPinnedCorpus, type PinnedCorpus } from '../../../scripts/lib/corpus.js';
+import { evaluateRelations, type RelationEvalSummary } from '../../../scripts/lib/relations-eval.ts';
+import { RELATION_QUESTIONS, VERIFIED_CALL_SAMPLE } from '../../../scripts/lib/relations-queries.ts';
+import { refIsAvailable, indexPinnedCorpus, type PinnedCorpus } from '../../../scripts/lib/corpus.ts';
 
 /**
  * Quality guard for `search_relations`: labelled questions over the pinned snapshot of this repository (see

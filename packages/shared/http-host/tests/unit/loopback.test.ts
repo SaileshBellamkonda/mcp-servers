@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isLoopbackHost } from '../../src/index.js';
+import { isLoopbackHost } from '../../src/index.ts';
 
 describe('isLoopbackHost', () => {
   it.each(['127.0.0.1', '127.0.0.2', '127.255.255.255', 'localhost', 'LOCALHOST', '::1', '[::1]', ' 127.0.0.1 '])(

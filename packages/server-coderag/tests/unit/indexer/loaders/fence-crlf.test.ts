@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { matchFenceOpen, isFenceClose } from '../../../../src/indexer/loaders/fence.js';
+import { matchFenceOpen, isFenceClose } from '../../../../src/indexer/loaders/fence.ts';
 
 describe('fence helpers with CRLF line endings', () => {
   it('recognises an opening fence that still has its trailing carriage return', () => {

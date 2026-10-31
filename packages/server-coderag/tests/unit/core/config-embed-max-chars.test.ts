@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { loadConfigFromEnv, loadConfigFromVsCode } from '../../../src/core/config.js';
-import { ConfigError } from '../../../src/core/types.js';
+import { loadConfigFromEnv, loadConfigFromVsCode } from '../../../src/core/config.ts';
+import { ConfigError } from '../../../src/core/types.ts';
 
 const baseEnv = {
   CODERAG_EMBEDDING_URL: 'http://localhost:11434/v1',

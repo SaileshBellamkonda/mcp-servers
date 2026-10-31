@@ -1,12 +1,12 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { McpServer } from '@modelcontextprotocol/server';
-import { registerGitWorktreeMove } from '../../../../src/tools/worktree/git-worktree-move.js';
-import { RepositoryManager } from '../../../../src/core/repository-manager.js';
-import { PathValidator } from '../../../../src/core/path-validator.js';
-import { GitExecutor } from '../../../../src/core/git-executor.js';
-import { OutputParser } from '../../../../src/core/output-parser.js';
-import type { Services } from '../../../../src/core/types.js';
-import { registeredTools } from '../../../fixtures/registered-tools.js';
+import { registerGitWorktreeMove } from '../../../../src/tools/worktree/git-worktree-move.ts';
+import { RepositoryManager } from '../../../../src/core/repository-manager.ts';
+import { PathValidator } from '../../../../src/core/path-validator.ts';
+import { GitExecutor } from '../../../../src/core/git-executor.ts';
+import { OutputParser } from '../../../../src/core/output-parser.ts';
+import type { Services } from '../../../../src/core/types.ts';
+import { registeredTools } from '../../../fixtures/registered-tools.ts';
 
 describe('git_worktree_move tool', () => {
   let server: McpServer;

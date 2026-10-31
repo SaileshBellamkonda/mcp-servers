@@ -7,8 +7,8 @@ import {
   PathNotAllowedError,
   computeAllowedRoots,
   isPathWithin,
-} from '../../../src/core/path-guard.js';
-import type { GlobConfig } from '../../../src/core/types.js';
+} from '../../../src/core/path-guard.ts';
+import type { GlobConfig } from '../../../src/core/types.ts';
 
 let base: string;
 let root: string;

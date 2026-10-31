@@ -10,9 +10,9 @@
  * (comma list, default hybrid,keyword,semantic), BENCH_SHOW=1 (also print every response).
  */
 import { McpServer } from '@modelcontextprotocol/server';
-import { SyncManager } from '../src/indexer/sync-manager.js';
-import { createCodeRagServer } from '../src/server/coderag-server.js';
-import { DEFAULT_DIM, DEFAULT_REF, indexPinnedCorpus } from './lib/corpus.js';
+import { SyncManager } from '../src/indexer/sync-manager.ts';
+import { createCodeRagServer } from '../src/server/coderag-server.ts';
+import { DEFAULT_DIM, DEFAULT_REF, indexPinnedCorpus } from './lib/corpus.ts';
 
 const REF = process.env['BENCH_REF'] ?? DEFAULT_REF;
 const DIM = Number(process.env['BENCH_DIM'] ?? String(DEFAULT_DIM));

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { computeWatchDirs } from '../../../src/indexer/watcher.js';
+import { computeWatchDirs } from '../../../src/indexer/watcher.ts';
 
 const globs = (over: Partial<{ docsInclude: string[]; codeInclude: string[] }>) => ({
   docsInclude: ['**/*.{md,mdx}'], docsExclude: [], codeInclude: ['**/*.ts'], codeExclude: [], ...over,

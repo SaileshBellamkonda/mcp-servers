@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { createStderrLogger } from '../../../src/core/logger.js';
+import { createStderrLogger } from '../../../src/core/logger.ts';
 
 describe('createStderrLogger', () => {
   afterEach(() => { vi.restoreAllMocks(); });

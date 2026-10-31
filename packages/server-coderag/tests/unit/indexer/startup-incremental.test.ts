@@ -2,12 +2,12 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { writeFileSync, mkdirSync, rmSync, utimesSync } from 'node:fs';
-import { runStartupSync } from '../../../src/indexer/sync.js';
-import { Indexer } from '../../../src/indexer/indexer.js';
-import { VectorDB } from '../../../src/vectordb/db.js';
-import { Embedder } from '../../../src/embedder/embedder.js';
-import { GlobMatcher } from '../../../src/core/glob-utils.js';
-import { SyncManager } from '../../../src/indexer/sync-manager.js';
+import { runStartupSync } from '../../../src/indexer/sync.ts';
+import { Indexer } from '../../../src/indexer/indexer.ts';
+import { VectorDB } from '../../../src/vectordb/db.ts';
+import { Embedder } from '../../../src/embedder/embedder.ts';
+import { GlobMatcher } from '../../../src/core/glob-utils.ts';
+import { SyncManager } from '../../../src/indexer/sync-manager.ts';
 import type { McpLogger } from '@mcp-servers/common';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));

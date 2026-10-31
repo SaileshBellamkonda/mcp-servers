@@ -6,9 +6,9 @@ import {
   assertRemoteUrl,
   assertPathspecs,
   resolveRemote,
-} from '../../../src/core/git-args.js';
-import { GitMcpError, ErrorCode } from '../../../src/core/types.js';
-import type { GitExecutor } from '../../../src/core/git-executor.js';
+} from '../../../src/core/git-args.ts';
+import { GitMcpError, ErrorCode } from '../../../src/core/types.ts';
+import type { GitExecutor } from '../../../src/core/git-executor.ts';
 
 const dashValues = ['-f', '--output=/tmp/x', '--upload-pack=touch /tmp/x', '--exec=id', '--help', '-'];
 

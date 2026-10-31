@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { VectorDB } from '../../../src/vectordb/db.js';
+import { VectorDB } from '../../../src/vectordb/db.ts';
 
 const posix = process.platform !== 'win32';
 const mode = (p: string): number => statSync(p).mode & 0o777;

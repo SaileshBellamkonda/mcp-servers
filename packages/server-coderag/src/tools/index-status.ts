@@ -1,6 +1,6 @@
 import { type McpServer, fromJsonSchema } from '@modelcontextprotocol/server';
-import type { VectorDB } from '../vectordb/db.js';
-import type { SyncManager } from '../indexer/sync-manager.js';
+import type { VectorDB } from '../vectordb/db.ts';
+import type { SyncManager } from '../indexer/sync-manager.ts';
 
 export function registerIndexStatus(
   server: McpServer,

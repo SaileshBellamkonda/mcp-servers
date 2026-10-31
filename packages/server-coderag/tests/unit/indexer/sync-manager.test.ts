@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { SyncManager, SyncInProgressError, syncLockedResponse } from '../../../src/indexer/sync-manager.js';
+import { SyncManager, SyncInProgressError, syncLockedResponse } from '../../../src/indexer/sync-manager.ts';
 
 describe('SyncManager — initial state', () => {
   it('starts with inProgress = false', () => {

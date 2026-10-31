@@ -1,11 +1,11 @@
 import { type McpServer, fromJsonSchema } from '@modelcontextprotocol/server';
 import { z } from 'zod';
-import type { VectorDB } from '../vectordb/db.js';
-import type { Embedder } from '../embedder/embedder.js';
-import type { SearchFilter, SearchResult } from '../core/types.js';
-import { PathGuard } from '../core/path-guard.js';
-import { dropContainersOfMatches, formatConcise } from './search-format.js';
-import { applyFreshness, type SearchFreshness } from './search-freshness.js';
+import type { VectorDB } from '../vectordb/db.ts';
+import type { Embedder } from '../embedder/embedder.ts';
+import type { SearchFilter, SearchResult } from '../core/types.ts';
+import { PathGuard } from '../core/path-guard.ts';
+import { dropContainersOfMatches, formatConcise } from './search-format.ts';
+import { applyFreshness, type SearchFreshness } from './search-freshness.ts';
 
 const DEFAULT_MAX_TOKENS = 1500;
 /** Upper bound of the candidates added to the second retrieval, on top of the ones that were dropped. */

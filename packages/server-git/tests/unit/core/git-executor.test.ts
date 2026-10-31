@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { GitExecutor } from '../../../src/core/git-executor.js';
-import { GitMcpError, ErrorCode } from '../../../src/core/types.js';
+import { GitExecutor } from '../../../src/core/git-executor.ts';
+import { GitMcpError, ErrorCode } from '../../../src/core/types.ts';
 //import { tmpdir } from 'os';
 //import { join } from 'path';
 
@@ -105,7 +105,7 @@ describe('GitExecutor environment', () => {
 
 describe('buildGitEnvironment', () => {
   it('keeps only allow-listed variables and overrides the security-critical ones', async () => {
-    const { buildGitEnvironment } = await import('../../../src/core/git-executor.js');
+    const { buildGitEnvironment } = await import('../../../src/core/git-executor.ts');
     const env = buildGitEnvironment(
       {
         PATH: '/bin', HOME: '/home/u', LANG: 'C.UTF-8', LC_ALL: 'C', TMPDIR: '/tmp', SSH_AUTH_SOCK: '/s',
@@ -122,7 +122,7 @@ describe('buildGitEnvironment', () => {
   });
 
   it('forwards Windows essentials only on win32 and accepts the Path spelling', async () => {
-    const { buildGitEnvironment } = await import('../../../src/core/git-executor.js');
+    const { buildGitEnvironment } = await import('../../../src/core/git-executor.ts');
     const win = buildGitEnvironment({ Path: 'C:\\bin', SystemRoot: 'C:\\Windows', USERPROFILE: 'C:\\Users\\u', windir: 'C:\\Windows' }, 'win32');
     expect(win['PATH']).toBe('C:\\bin');
     expect(win['SystemRoot']).toBe('C:\\Windows');

@@ -1,4 +1,4 @@
-import type { TSNode } from './code-parser.js';
+import type { TSNode } from './code-parser.ts';
 
 /**
  * Relations between symbols, read from the syntax tree of one file.

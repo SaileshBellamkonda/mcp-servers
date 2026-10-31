@@ -2,11 +2,11 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { McpServer } from '@modelcontextprotocol/server';
-import { VectorDB } from '../../../src/vectordb/db.js';
-import type { Embedder } from '../../../src/embedder/embedder.js';
-import { PathGuard } from '../../../src/core/path-guard.js';
-import { CodeParser } from '../../../src/indexer/code-parser.js';
-import { registerSearch } from '../../../src/tools/search.js';
+import { VectorDB } from '../../../src/vectordb/db.ts';
+import type { Embedder } from '../../../src/embedder/embedder.ts';
+import { PathGuard } from '../../../src/core/path-guard.ts';
+import { CodeParser } from '../../../src/indexer/code-parser.ts';
+import { registerSearch } from '../../../src/tools/search.ts';
 
 type Handler = (input: unknown) => Promise<{ content: { text: string }[] }>;
 

@@ -4,8 +4,8 @@ import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { mkdirSync, rmSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
-import { VectorDB } from '../../../src/vectordb/db.js';
-import type { DocumentMetadata, MarkdownChunk } from '../../../src/core/types.js';
+import { VectorDB } from '../../../src/vectordb/db.ts';
+import type { DocumentMetadata, MarkdownChunk } from '../../../src/core/types.ts';
 
 const require = createRequire(import.meta.url);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));

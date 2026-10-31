@@ -1,8 +1,8 @@
 import { type McpServer, fromJsonSchema } from '@modelcontextprotocol/server';
 import { z } from 'zod';
-import { GitMcpError, ErrorCode } from '../core/types.js';
-import type { Services } from '../core/types.js';
-import { assertPathspecs } from '../core/git-args.js';
+import { GitMcpError, ErrorCode } from '../core/types.ts';
+import type { Services } from '../core/types.ts';
+import { assertPathspecs } from '../core/git-args.ts';
 
 const GitAddSchema = z.object({
   repository: z.string().describe('Repository path'),

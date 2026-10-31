@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { OutputParser } from '../../../src/core/output-parser.js';
+import { OutputParser } from '../../../src/core/output-parser.ts';
 
 describe('OutputParser', () => {
   let parser: OutputParser;

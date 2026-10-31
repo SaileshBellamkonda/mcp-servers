@@ -1,6 +1,6 @@
 import { parseBool } from '@mcp-servers/common';
-import { ConfigError } from './types.js';
-import type { Env } from './config.js';
+import { ConfigError } from './types.ts';
+import type { Env } from './config.ts';
 
 /**
  * Which tools a server offers. Every tool definition is sent to the model in every session, so the default offers

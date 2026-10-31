@@ -7,7 +7,7 @@ import {
   WELL_KNOWN_EXCLUDES,
   DEFAULT_DOCS_INCLUDE,
   DEFAULT_CODE_INCLUDE,
-} from '../../../src/core/glob-utils.js';
+} from '../../../src/core/glob-utils.ts';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const tmpDir = path.join(__dirname, '../../../.tmp-glob-test');

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { Hono } from 'hono';
-import { HttpSecurityError, MIN_TOKEN_LENGTH, assertSafeBinding, bearerAuth, requireToken, resolveHttpSecurity, tokensEqual } from '../../src/index.js';
+import { HttpSecurityError, MIN_TOKEN_LENGTH, assertSafeBinding, bearerAuth, requireToken, resolveHttpSecurity, tokensEqual } from '../../src/index.ts';
 
 const TOKEN = `tok-${'x'.repeat(40)}`;
 

@@ -5,9 +5,9 @@
  * so compare it with the `semantic` row to see the FTS contribution; real semantic quality needs a real embedder and is not measured here.
  * Run: `pnpm --filter @mcp-servers/server-coderag run eval`. Env: BENCH_REF, BENCH_DIM, EVAL_SHOW=1 (per-query ranks).
  */
-import { DEFAULT_DIM, DEFAULT_REF, indexPinnedCorpus } from './lib/corpus.js';
-import { EVAL_FETCH, evaluate, formatSummary } from './lib/retrieval-eval.js';
-import { LABELLED_QUERIES } from './lib/retrieval-queries.js';
+import { DEFAULT_DIM, DEFAULT_REF, indexPinnedCorpus } from './lib/corpus.ts';
+import { EVAL_FETCH, evaluate, formatSummary } from './lib/retrieval-eval.ts';
+import { LABELLED_QUERIES } from './lib/retrieval-queries.ts';
 
 const ref = process.env['BENCH_REF'] ?? DEFAULT_REF;
 const dim = Number(process.env['BENCH_DIM'] ?? String(DEFAULT_DIM));

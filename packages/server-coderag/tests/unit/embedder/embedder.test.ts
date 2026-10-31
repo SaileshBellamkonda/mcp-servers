@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
-import { Embedder } from '../../../src/embedder/embedder.js';
-import type { EmbeddingConfig } from '../../../src/core/types.js';
+import { Embedder } from '../../../src/embedder/embedder.ts';
+import type { EmbeddingConfig } from '../../../src/core/types.ts';
 
 const baseConfig: EmbeddingConfig = {
   url: 'http://localhost:11434/v1',

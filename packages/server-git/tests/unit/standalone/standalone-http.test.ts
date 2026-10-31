@@ -1,6 +1,6 @@
 import { describe, it, expect, afterEach, beforeEach } from 'vitest';
 import { initializeSession, postJsonRpc } from '@mcp-servers/http-host/testing';
-import { TestRepository } from '../../fixtures/test-repo.js';
+import { TestRepository } from '../../fixtures/test-repo.ts';
 import {
   TOKEN,
   connectOutcome,
@@ -8,7 +8,7 @@ import {
   freePort,
   spawnStandalone,
   type StandaloneProcess,
-} from '../../fixtures/standalone-process.js';
+} from '../../fixtures/standalone-process.ts';
 
 describe('standalone git HTTP entry point', () => {
   let repo: TestRepository;

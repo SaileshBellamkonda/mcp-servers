@@ -1,13 +1,13 @@
 import { existsSync } from 'node:fs';
-import type { VectorDB } from '../vectordb/db.js';
-import type { Indexer } from './indexer.js';
-import type { CodeRagLogger } from '../core/logger.js';
-import type { GlobConfig } from '../core/types.js';
-import { GlobMatcher } from '../core/glob-utils.js';
-import { SyncManager } from './sync-manager.js';
-import { yieldToEventLoop } from './indexer.js';
-import { CODE_PARSER_VERSION } from './code-parser.js';
-import { RELATIONS_VERSION } from './relations.js';
+import type { VectorDB } from '../vectordb/db.ts';
+import type { Indexer } from './indexer.ts';
+import type { CodeRagLogger } from '../core/logger.ts';
+import type { GlobConfig } from '../core/types.ts';
+import { GlobMatcher } from '../core/glob-utils.ts';
+import { SyncManager } from './sync-manager.ts';
+import { yieldToEventLoop } from './indexer.ts';
+import { CODE_PARSER_VERSION } from './code-parser.ts';
+import { RELATIONS_VERSION } from './relations.ts';
 
 export interface SyncResult {
   indexed: number;

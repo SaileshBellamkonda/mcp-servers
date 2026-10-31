@@ -1,23 +1,23 @@
 import type { McpServer } from '@modelcontextprotocol/server';
-import type { VectorDB } from '../vectordb/db.js';
-import type { Embedder } from '../embedder/embedder.js';
-import type { Indexer } from '../indexer/indexer.js';
-import type { CodeRagLogger } from '../core/logger.js';
-import type { SyncManager } from '../indexer/sync-manager.js';
-import { PathGuard } from '../core/path-guard.js';
-import { DEFAULT_TOOLSET, isToolEnabled, type Toolset } from '../core/toolset.js';
-import type { SearchFreshness } from '../tools/search-freshness.js';
-import { registerSearch } from '../tools/search.js';
-import { registerIndexMarkdown } from '../tools/index-markdown.js';
-import { registerListDocuments } from '../tools/list-documents.js';
-import { registerDeleteDocument } from '../tools/delete-document.js';
-import { registerReindexDocument } from '../tools/reindex-document.js';
-import { registerAddFrontmatter } from '../tools/add-frontmatter.js';
-import { registerUpdateFrontmatter } from '../tools/update-frontmatter.js';
-import { registerIndexCode } from '../tools/index-code.js';
-import { registerSearchRelations } from '../tools/search-relations.js';
-import { registerSyncDocuments } from '../tools/sync-documents.js';
-import { registerIndexStatus } from '../tools/index-status.js';
+import type { VectorDB } from '../vectordb/db.ts';
+import type { Embedder } from '../embedder/embedder.ts';
+import type { Indexer } from '../indexer/indexer.ts';
+import type { CodeRagLogger } from '../core/logger.ts';
+import type { SyncManager } from '../indexer/sync-manager.ts';
+import { PathGuard } from '../core/path-guard.ts';
+import { DEFAULT_TOOLSET, isToolEnabled, type Toolset } from '../core/toolset.ts';
+import type { SearchFreshness } from '../tools/search-freshness.ts';
+import { registerSearch } from '../tools/search.ts';
+import { registerIndexMarkdown } from '../tools/index-markdown.ts';
+import { registerListDocuments } from '../tools/list-documents.ts';
+import { registerDeleteDocument } from '../tools/delete-document.ts';
+import { registerReindexDocument } from '../tools/reindex-document.ts';
+import { registerAddFrontmatter } from '../tools/add-frontmatter.ts';
+import { registerUpdateFrontmatter } from '../tools/update-frontmatter.ts';
+import { registerIndexCode } from '../tools/index-code.ts';
+import { registerSearchRelations } from '../tools/search-relations.ts';
+import { registerSyncDocuments } from '../tools/sync-documents.ts';
+import { registerIndexStatus } from '../tools/index-status.ts';
 
 export interface CodeRagServerOptions {
   /** Which tools to register (default: `standard`). */

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { RepositoryManager } from '../../../src/core/repository-manager.js';
-import { GitMcpError, ErrorCode } from '../../../src/core/types.js';
+import { RepositoryManager } from '../../../src/core/repository-manager.ts';
+import { GitMcpError, ErrorCode } from '../../../src/core/types.ts';
 import path from 'node:path';
 import fs from 'node:fs';
 import os from 'node:os';

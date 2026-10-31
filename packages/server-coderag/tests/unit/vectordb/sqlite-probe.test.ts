@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { DatabaseSync } from 'node:sqlite';
-import { probeSqliteSupport } from '../../../src/vectordb/sqlite-probe.js';
-import type { NodeSqliteModule } from '../../../src/vectordb/sqlite-db.js';
+import { probeSqliteSupport } from '../../../src/vectordb/sqlite-probe.ts';
+import type { NodeSqliteModule } from '../../../src/vectordb/sqlite-db.ts';
 
 /** A node:sqlite module whose databases throw when a statement matches `failOn`. */
 function moduleFailing(failOn: RegExp, message: string): NodeSqliteModule {

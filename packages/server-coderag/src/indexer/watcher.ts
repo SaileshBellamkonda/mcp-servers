@@ -1,13 +1,13 @@
 import { watch, existsSync, type FSWatcher } from 'node:fs';
 import path from 'node:path';
-import type { VectorDB } from '../vectordb/db.js';
-import type { Indexer } from './indexer.js';
-import type { CodeRagLogger } from '../core/logger.js';
-import type { SyncManager } from './sync-manager.js';
-import type { GlobMatcher } from '../core/glob-utils.js';
-import { FileRefresher } from './refresher.js';
-import { extractGlobBase, resolveToAbsolute } from '../core/glob-utils.js';
-import type { GlobConfig } from '../core/types.js';
+import type { VectorDB } from '../vectordb/db.ts';
+import type { Indexer } from './indexer.ts';
+import type { CodeRagLogger } from '../core/logger.ts';
+import type { SyncManager } from './sync-manager.ts';
+import type { GlobMatcher } from '../core/glob-utils.ts';
+import { FileRefresher } from './refresher.ts';
+import { extractGlobBase, resolveToAbsolute } from '../core/glob-utils.ts';
+import type { GlobConfig } from '../core/types.ts';
 
 /** The directories to watch: the base directory of every document and code include pattern, each listed once. */
 export function computeWatchDirs(globs: Pick<GlobConfig, 'docsInclude' | 'codeInclude'>, cwd: string): string[] {

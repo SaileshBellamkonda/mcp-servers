@@ -2,9 +2,9 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { VectorDB } from '../../../src/vectordb/db.js';
-import { loadSqliteVec, openSqliteDatabase } from '../../../src/vectordb/sqlite-db.js';
-import type { CodeChunk } from '../../../src/core/types.js';
+import { VectorDB } from '../../../src/vectordb/db.ts';
+import { loadSqliteVec, openSqliteDatabase } from '../../../src/vectordb/sqlite-db.ts';
+import type { CodeChunk } from '../../../src/core/types.ts';
 
 const DIM = 4;
 let dir: string;

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { loadConfigFromEnv, loadConfigFromVsCode } from '../../../src/core/config.js';
-import { ConfigError } from '../../../src/core/types.js';
-import { activateCodeRagServer } from '../../../src/embedded.js';
+import { loadConfigFromEnv, loadConfigFromVsCode } from '../../../src/core/config.ts';
+import { ConfigError } from '../../../src/core/types.ts';
+import { activateCodeRagServer } from '../../../src/embedded.ts';
 
 const KEY = 'sk-super-secret-key';
 

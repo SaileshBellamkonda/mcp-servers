@@ -1,6 +1,6 @@
-import type { DocumentLoader, LoadedDocument } from './types.js';
-import { isFenceClose, matchFenceOpen, type Fence } from './fence.js';
-import { loadMarkdownLike } from './markdown.js';
+import type { DocumentLoader, LoadedDocument } from './types.ts';
+import { isFenceClose, matchFenceOpen, type Fence } from './fence.ts';
+import { loadMarkdownLike } from './markdown.ts';
 
 // An MDX ESM block starts with a column-0 import/export statement and runs to the next blank line.
 // `import x from` only counts when a quoted module follows, so prose such as "import data from the cache"

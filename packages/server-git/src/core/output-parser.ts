@@ -1,4 +1,4 @@
-import type { FileStatus, Commit, Branch, Worktree } from './types.js';
+import type { FileStatus, Commit, Branch, Worktree } from './types.ts';
 
 /**
  * Parses Git command output into structured data

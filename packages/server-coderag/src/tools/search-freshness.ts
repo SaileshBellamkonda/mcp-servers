@@ -1,5 +1,5 @@
-import type { SearchResult } from '../core/types.js';
-import type { FileState } from '../indexer/freshness.js';
+import type { SearchResult } from '../core/types.ts';
+import type { FileState } from '../indexer/freshness.ts';
 
 /** What `search` needs to keep results honest; implemented by `IndexFreshness`. */
 export interface SearchFreshness {

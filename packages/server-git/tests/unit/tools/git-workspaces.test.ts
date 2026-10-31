@@ -1,12 +1,12 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { McpServer } from '@modelcontextprotocol/server';
-import { registerGitWorkspaces } from '../../../src/tools/git-workspaces.js';
-import { RepositoryManager } from '../../../src/core/repository-manager.js';
-import { PathValidator } from '../../../src/core/path-validator.js';
-import { GitExecutor } from '../../../src/core/git-executor.js';
-import { OutputParser } from '../../../src/core/output-parser.js';
-import type { Services } from '../../../src/core/types.js';
-import { registeredTool, registeredTools } from '../../fixtures/registered-tools.js';
+import { registerGitWorkspaces } from '../../../src/tools/git-workspaces.ts';
+import { RepositoryManager } from '../../../src/core/repository-manager.ts';
+import { PathValidator } from '../../../src/core/path-validator.ts';
+import { GitExecutor } from '../../../src/core/git-executor.ts';
+import { OutputParser } from '../../../src/core/output-parser.ts';
+import type { Services } from '../../../src/core/types.ts';
+import { registeredTool, registeredTools } from '../../fixtures/registered-tools.ts';
 
 describe('git_workspaces tool', () => {
   let server: McpServer;

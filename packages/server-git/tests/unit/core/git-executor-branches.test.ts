@@ -11,7 +11,7 @@ vi.mock('which', () => ({
   default: whichMock,
 }));
 
-let GitExecutor: typeof import('../../../src/core/git-executor.js').GitExecutor;
+let GitExecutor: typeof import('../../../src/core/git-executor.ts').GitExecutor;
 
 function createFakeProcess() {
   return {
@@ -29,7 +29,7 @@ describe('GitExecutor branch coverage', () => {
     execFileMock.mockReset();
     whichMock.mockReset();
 
-    ({ GitExecutor } = await import('../../../src/core/git-executor.js'));
+    ({ GitExecutor } = await import('../../../src/core/git-executor.ts'));
     (GitExecutor as unknown as { gitPath: string | null }).gitPath = null;
   });
 

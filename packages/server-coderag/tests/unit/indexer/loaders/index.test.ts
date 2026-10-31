@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { createDefaultLoaderRegistry } from '../../../../src/indexer/loaders/index.js';
+import { createDefaultLoaderRegistry } from '../../../../src/indexer/loaders/index.ts';
 
 describe('createDefaultLoaderRegistry', () => {
   it('registers the markdown and mdx loaders', () => {

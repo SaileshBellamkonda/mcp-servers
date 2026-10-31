@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { loadConfigFromEnv, loadConfigFromVsCode } from '../../../src/core/config.js';
-import { DEFAULT_DOCS_INCLUDE, DEFAULT_CODE_INCLUDE } from '../../../src/core/glob-utils.js';
+import { loadConfigFromEnv, loadConfigFromVsCode } from '../../../src/core/config.ts';
+import { DEFAULT_DOCS_INCLUDE, DEFAULT_CODE_INCLUDE } from '../../../src/core/glob-utils.ts';
 
 describe('loadConfigFromEnv', () => {
   const originalEnv = process.env;

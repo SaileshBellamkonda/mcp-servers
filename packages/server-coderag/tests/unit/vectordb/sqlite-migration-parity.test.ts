@@ -3,8 +3,8 @@ import { copyFileSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { VectorDB } from '../../../src/vectordb/db.js';
-import { openSqliteDatabase } from '../../../src/vectordb/sqlite-db.js';
+import { VectorDB } from '../../../src/vectordb/db.ts';
+import { openSqliteDatabase } from '../../../src/vectordb/sqlite-db.ts';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 // Created by the pre-node:sqlite (native-addon driver) code path: dim 4, default vec0 chunk size, WAL, 2 docs + 1 code file.

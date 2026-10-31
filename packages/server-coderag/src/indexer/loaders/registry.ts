@@ -1,5 +1,5 @@
 import path from 'node:path';
-import type { DocumentLoader } from './types.js';
+import type { DocumentLoader } from './types.ts';
 
 export class LoaderRegistry {
   private readonly byExtension = new Map<string, DocumentLoader>();

@@ -7,11 +7,11 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { Embedder } from '../../src/embedder/embedder.js';
-import { VectorDB } from '../../src/vectordb/db.js';
-import { Indexer } from '../../src/indexer/indexer.js';
-import { GlobMatcher } from '../../src/core/glob-utils.js';
-import { PathGuard } from '../../src/core/path-guard.js';
+import { Embedder } from '../../src/embedder/embedder.ts';
+import { VectorDB } from '../../src/vectordb/db.ts';
+import { Indexer } from '../../src/indexer/indexer.ts';
+import { GlobMatcher } from '../../src/core/glob-utils.ts';
+import { PathGuard } from '../../src/core/path-guard.ts';
 
 export const DEFAULT_REF = 'bdb73d5';
 export const DEFAULT_DIM = 768;

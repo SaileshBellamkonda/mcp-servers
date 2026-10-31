@@ -4,13 +4,13 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { initializeSession } from '@mcp-servers/http-host/testing';
 
-vi.mock('../../../src/indexer/sync.js', async (importOriginal) => {
-  const original = await importOriginal<typeof import('../../../src/indexer/sync.js')>();
+vi.mock('../../../src/indexer/sync.ts', async (importOriginal) => {
+  const original = await importOriginal<typeof import('../../../src/indexer/sync.ts')>();
   return { ...original, runStartupSync: vi.fn().mockResolvedValue(undefined) };
 });
 
-import { runStartupSync } from '../../../src/indexer/sync.js';
-import { activateCodeRagServer, deactivateCodeRagServer, type CodeRagServerInstance } from '../../../src/embedded.js';
+import { runStartupSync } from '../../../src/indexer/sync.ts';
+import { activateCodeRagServer, deactivateCodeRagServer, type CodeRagServerInstance } from '../../../src/embedded.ts';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const tmpDir = path.join(__dirname, '../../../.tmp-embedded-sync-test');

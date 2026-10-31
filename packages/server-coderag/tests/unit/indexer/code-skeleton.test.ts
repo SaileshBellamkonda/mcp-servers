@@ -3,8 +3,8 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { CODE_PARSER_VERSION, CodeParser } from '../../../src/indexer/code-parser.js';
-import type { CodeChunk } from '../../../src/core/types.js';
+import { CODE_PARSER_VERSION, CodeParser } from '../../../src/indexer/code-parser.ts';
+import type { CodeChunk } from '../../../src/core/types.ts';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const SKELETON_MAX_CHARS = 2000;

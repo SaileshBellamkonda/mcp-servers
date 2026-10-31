@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { McpServer } from '@modelcontextprotocol/server';
-import { McpLogger } from '../../src/logger.js';
+import { McpLogger } from '../../src/logger.ts';
 
 function fakeServer(impl?: () => Promise<void>) {
   const sendLoggingMessage = vi.fn(impl ?? (() => Promise.resolve()));

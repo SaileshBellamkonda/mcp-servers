@@ -2,9 +2,9 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { CodeParser } from '../../../src/indexer/code-parser.js';
-import type { ExtractedRelations } from '../../../src/indexer/relations.js';
-import type { CodeChunk } from '../../../src/core/types.js';
+import { CodeParser } from '../../../src/indexer/code-parser.ts';
+import type { ExtractedRelations } from '../../../src/indexer/relations.ts';
+import type { CodeChunk } from '../../../src/core/types.ts';
 
 let parser: CodeParser;
 let dir: string;

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { splitIntoChunks } from '../../../src/indexer/chunk.js';
+import { splitIntoChunks } from '../../../src/indexer/chunk.ts';
 
 describe('splitIntoChunks', () => {
   it('returns single chunk for small content', () => {

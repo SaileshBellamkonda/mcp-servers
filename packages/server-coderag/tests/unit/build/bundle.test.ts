@@ -6,8 +6,8 @@ import { builtinModules } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { initializeSession, postJsonRpc } from '@mcp-servers/http-host/testing';
-import { importedSpecifiers } from '../../fixtures/bundle-imports.js';
-import { TOKEN, freePort, spawnStandalone, type StandaloneProcess } from '../../fixtures/standalone-process.js';
+import { importedSpecifiers } from '../../fixtures/bundle-imports.ts';
+import { TOKEN, freePort, spawnStandalone, type StandaloneProcess } from '../../fixtures/standalone-process.ts';
 
 const packageRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 const outdir = path.join(packageRoot, '.tmp-bundle-test');

@@ -1,7 +1,7 @@
 import { statSync } from 'node:fs';
-import type { VectorDB } from '../vectordb/db.js';
-import type { CodeRagLogger } from '../core/logger.js';
-import { isUnchangedSince } from './indexer.js';
+import type { VectorDB } from '../vectordb/db.ts';
+import type { CodeRagLogger } from '../core/logger.ts';
+import { isUnchangedSince } from './indexer.ts';
 
 /** `missing`: the file is gone; `changed`: its modification time differs from the indexed one. */
 export type FileState = 'fresh' | 'changed' | 'missing';

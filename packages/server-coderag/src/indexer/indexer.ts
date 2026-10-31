@@ -1,15 +1,15 @@
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
-import type { VectorDB } from '../vectordb/db.js';
-import type { Embedder } from '../embedder/embedder.js';
-import { chunkSections } from './chunk.js';
-import { CodeParser } from './code-parser.js';
-import { isSupportedExtension } from './languages.js';
-import { createDefaultLoaderRegistry, type LoaderRegistry } from './loaders/index.js';
-import type { CodeSyncResult, DocumentMetadata, MarkdownChunk } from '../core/types.js';
-import type { CodeRagLogger } from '../core/logger.js';
-import { GlobMatcher, type GlobMatcherOptions } from '../core/glob-utils.js';
-import type { PathGuard } from '../core/path-guard.js';
+import type { VectorDB } from '../vectordb/db.ts';
+import type { Embedder } from '../embedder/embedder.ts';
+import { chunkSections } from './chunk.ts';
+import { CodeParser } from './code-parser.ts';
+import { isSupportedExtension } from './languages.ts';
+import { createDefaultLoaderRegistry, type LoaderRegistry } from './loaders/index.ts';
+import type { CodeSyncResult, DocumentMetadata, MarkdownChunk } from '../core/types.ts';
+import type { CodeRagLogger } from '../core/logger.ts';
+import { GlobMatcher, type GlobMatcherOptions } from '../core/glob-utils.ts';
+import type { PathGuard } from '../core/path-guard.ts';
 
 export interface IndexerOptions {
   docsMatcher?: GlobMatcher;

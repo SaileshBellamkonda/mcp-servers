@@ -1,6 +1,6 @@
 import { type McpServer, fromJsonSchema } from '@modelcontextprotocol/server';
 import path from 'node:path';
-import type { Services } from '../core/types.js';
+import type { Services } from '../core/types.ts';
 
 export function registerGitWorkspaces(server: McpServer, services: Services): void {
   server.registerTool(

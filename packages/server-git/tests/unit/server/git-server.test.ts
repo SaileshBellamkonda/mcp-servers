@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { McpServer } from '@modelcontextprotocol/server';
-import { createGitServer } from '../../../src/server/git-server.js';
-import { RepositoryManager } from '../../../src/core/repository-manager.js';
-import { registeredTools } from '../../fixtures/registered-tools.js';
+import { createGitServer } from '../../../src/server/git-server.ts';
+import { RepositoryManager } from '../../../src/core/repository-manager.ts';
+import { registeredTools } from '../../fixtures/registered-tools.ts';
 
 describe('createGitServer', () => {
   let server: McpServer;

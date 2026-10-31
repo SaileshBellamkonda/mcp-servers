@@ -1,9 +1,9 @@
 import path from 'node:path';
-import { RELATIONS_ADDED_COLUMNS, RELATIONS_AUX_DDL, RELATIONS_TABLE_DDL } from './schema.js';
-import type { SqlParam, SqliteDatabase } from './sqlite-db.js';
-import { CodeFileIndex } from '../indexer/module-resolver.js';
-import type { ExtractedRelations, RelationKind } from '../indexer/relations.js';
-import { isSupportedExtension } from '../indexer/languages.js';
+import { RELATIONS_ADDED_COLUMNS, RELATIONS_AUX_DDL, RELATIONS_TABLE_DDL } from './schema.ts';
+import type { SqlParam, SqliteDatabase } from './sqlite-db.ts';
+import { CodeFileIndex } from '../indexer/module-resolver.ts';
+import type { ExtractedRelations, RelationKind } from '../indexer/relations.ts';
+import { isSupportedExtension } from '../indexer/languages.ts';
 
 /** Confidence of a relation, by how its target was found. */
 export const CONFIDENCE = { importResolved: 1, unique: 0.9, ambiguous: 0.5, unresolved: 0.3 } as const;

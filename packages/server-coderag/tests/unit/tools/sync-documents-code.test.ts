@@ -3,13 +3,13 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { writeFileSync, mkdirSync, rmSync } from 'node:fs';
 import type { McpServer } from '@modelcontextprotocol/server';
-import { VectorDB } from '../../../src/vectordb/db.js';
-import { Embedder } from '../../../src/embedder/embedder.js';
-import { Indexer } from '../../../src/indexer/indexer.js';
-import { SyncManager } from '../../../src/indexer/sync-manager.js';
-import { GlobMatcher } from '../../../src/core/glob-utils.js';
-import { PathGuard } from '../../../src/core/path-guard.js';
-import { registerSyncDocuments } from '../../../src/tools/sync-documents.js';
+import { VectorDB } from '../../../src/vectordb/db.ts';
+import { Embedder } from '../../../src/embedder/embedder.ts';
+import { Indexer } from '../../../src/indexer/indexer.ts';
+import { SyncManager } from '../../../src/indexer/sync-manager.ts';
+import { GlobMatcher } from '../../../src/core/glob-utils.ts';
+import { PathGuard } from '../../../src/core/path-guard.ts';
+import { registerSyncDocuments } from '../../../src/tools/sync-documents.ts';
 
 type Handler = (input: unknown) => Promise<{ content: { text: string }[] }>;
 

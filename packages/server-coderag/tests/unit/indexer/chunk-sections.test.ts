@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { chunkSections } from '../../../src/indexer/chunk.js';
-import type { DocumentSection } from '../../../src/indexer/loaders/types.js';
+import { chunkSections } from '../../../src/indexer/chunk.ts';
+import type { DocumentSection } from '../../../src/indexer/loaders/types.ts';
 
 function section(text: string, startLine = 1, headingPath: string[] = []): DocumentSection {
   return { headingPath, text, startLine, endLine: startLine + text.split('\n').length - 1 };

@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { McpServer } from '@modelcontextprotocol/server';
-import { registerIndexStatus } from '../../../src/tools/index-status.js';
-import { VectorDB } from '../../../src/vectordb/db.js';
-import { SyncManager } from '../../../src/indexer/sync-manager.js';
-import { registeredTool, registeredTools } from '../../fixtures/registered-tools.js';
+import { registerIndexStatus } from '../../../src/tools/index-status.ts';
+import { VectorDB } from '../../../src/vectordb/db.ts';
+import { SyncManager } from '../../../src/indexer/sync-manager.ts';
+import { registeredTool, registeredTools } from '../../fixtures/registered-tools.ts';
 
 const DIMS = 4;
 

@@ -5,8 +5,8 @@ import { promisify } from 'node:util';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { McpServer } from '@modelcontextprotocol/server';
-import { createGitServer } from '../../src/server/git-server.js';
-import { RepositoryManager } from '../../src/core/repository-manager.js';
+import { createGitServer } from '../../src/server/git-server.ts';
+import { RepositoryManager } from '../../src/core/repository-manager.ts';
 
 const execFileAsync = promisify(execFile);
 

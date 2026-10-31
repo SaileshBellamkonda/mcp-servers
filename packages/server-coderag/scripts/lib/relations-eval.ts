@@ -1,5 +1,5 @@
-import type { RelationHit, VectorDB } from '../../src/vectordb/db.js';
-import type { RelationQuestion, RelationQuestionKind } from './relations-queries.js';
+import type { RelationHit, VectorDB } from '../../src/vectordb/db.ts';
+import type { RelationQuestion, RelationQuestionKind } from './relations-queries.ts';
 
 /** The last two path segments, `tools/delete-document.ts`. */
 function last2(file: string): string {

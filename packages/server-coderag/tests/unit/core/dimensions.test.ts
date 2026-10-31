@@ -2,9 +2,9 @@ import { describe, it, expect, afterEach, beforeEach, vi, type Mock } from 'vite
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { resolveDimensions } from '../../../src/core/dimensions.js';
-import { VectorDB } from '../../../src/vectordb/db.js';
-import type { CodeRagConfig } from '../../../src/core/types.js';
+import { resolveDimensions } from '../../../src/core/dimensions.ts';
+import { VectorDB } from '../../../src/vectordb/db.ts';
+import type { CodeRagConfig } from '../../../src/core/types.ts';
 
 type LogMock = Mock<(data: unknown) => void>;
 

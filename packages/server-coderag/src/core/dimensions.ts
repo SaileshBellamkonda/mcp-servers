@@ -1,6 +1,6 @@
-import { VectorDB } from '../vectordb/db.js';
-import type { CodeRagConfig } from './types.js';
-import { createStderrLogger, type CodeRagLogger } from './logger.js';
+import { VectorDB } from '../vectordb/db.ts';
+import type { CodeRagConfig } from './types.ts';
+import { createStderrLogger, type CodeRagLogger } from './logger.ts';
 
 /**
  * Picks the embedding dimensions to open the database with: the stored value when the database

@@ -7,8 +7,8 @@ import {
   startMcpHttpServer,
   type McpHttpServer,
   type SessionInfo,
-} from '../../src/index.js';
-import { initializeSession, openEventStream, postJsonRpc, startTestServer } from '../../src/testing/index.js';
+} from '../../src/index.ts';
+import { initializeSession, openEventStream, postJsonRpc, startTestServer } from '../../src/testing/index.ts';
 
 const TOKEN = `tok-${'x'.repeat(40)}`;
 const SESSION_HEADER = 'mcp-session-id';

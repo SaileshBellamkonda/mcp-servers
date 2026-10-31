@@ -2,9 +2,9 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { writeFileSync, mkdirSync, rmSync, utimesSync } from 'node:fs';
-import { VectorDB } from '../../../src/vectordb/db.js';
-import { IndexFreshness } from '../../../src/indexer/freshness.js';
-import type { CodeChunk, MarkdownChunk } from '../../../src/core/types.js';
+import { VectorDB } from '../../../src/vectordb/db.ts';
+import { IndexFreshness } from '../../../src/indexer/freshness.ts';
+import type { CodeChunk, MarkdownChunk } from '../../../src/core/types.ts';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const tmpDir = path.join(__dirname, '../../../.tmp-freshness-test');

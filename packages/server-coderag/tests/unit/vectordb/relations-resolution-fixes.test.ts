@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { VectorDB, type RelationQuery } from '../../../src/vectordb/db.js';
-import type { CodeChunk } from '../../../src/core/types.js';
-import type { ExtractedRelations, RawRelation, RelationKind } from '../../../src/indexer/relations.js';
+import { VectorDB, type RelationQuery } from '../../../src/vectordb/db.ts';
+import type { CodeChunk } from '../../../src/core/types.ts';
+import type { ExtractedRelations, RawRelation, RelationKind } from '../../../src/indexer/relations.ts';
 
 const VEC = [0.1, 0.2, 0.3, 0.4];
 

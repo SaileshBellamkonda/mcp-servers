@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { PathValidator } from '../../../src/core/path-validator.js';
-import { RepositoryManager } from '../../../src/core/repository-manager.js';
+import { PathValidator } from '../../../src/core/path-validator.ts';
+import { RepositoryManager } from '../../../src/core/repository-manager.ts';
 import path from 'node:path';
-import { GitMcpError, ErrorCode } from '../../../src/core/types.js';
+import { GitMcpError, ErrorCode } from '../../../src/core/types.ts';
 
 describe('PathValidator', () => {
   let validator: PathValidator;

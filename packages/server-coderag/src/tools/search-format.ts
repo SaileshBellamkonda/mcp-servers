@@ -1,6 +1,6 @@
 import path from 'node:path';
-import { isPathWithin } from '../core/path-guard.js';
-import type { SearchResult } from '../core/types.js';
+import { isPathWithin } from '../core/path-guard.ts';
+import type { SearchResult } from '../core/types.ts';
 
 const CODE_SNIPPET_LINES = 5;
 const DOC_SNIPPET_LINES = 3;

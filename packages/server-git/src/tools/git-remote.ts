@@ -1,7 +1,7 @@
 import { type McpServer, fromJsonSchema } from '@modelcontextprotocol/server';
 import { z } from 'zod';
-import type { Services } from '../core/types.js';
-import { assertRemoteName, assertRemoteUrl, assertSafeRefLike } from '../core/git-args.js';
+import type { Services } from '../core/types.ts';
+import { assertRemoteName, assertRemoteUrl, assertSafeRefLike } from '../core/git-args.ts';
 
 // ─── git_remote_list ──────────────────────────────────────────────────────────
 

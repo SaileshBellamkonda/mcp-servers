@@ -1,8 +1,8 @@
 import { type McpServer, fromJsonSchema } from '@modelcontextprotocol/server';
 import { z } from 'zod';
-import type { RelationEndpoint, RelationHit, RelationPage, VectorDB } from '../vectordb/db.js';
-import { PathGuard } from '../core/path-guard.js';
-import { CHARS_PER_TOKEN, relativePath } from './search-format.js';
+import type { RelationEndpoint, RelationHit, RelationPage, VectorDB } from '../vectordb/db.ts';
+import { PathGuard } from '../core/path-guard.ts';
+import { CHARS_PER_TOKEN, relativePath } from './search-format.ts';
 
 const DEFAULT_MAX_TOKENS = 1000;
 /** Relations fetched per call; the token budget cuts the page well before this. */

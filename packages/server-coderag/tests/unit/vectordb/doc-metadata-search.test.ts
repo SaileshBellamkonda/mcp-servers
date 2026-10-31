@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { VectorDB } from '../../../src/vectordb/db.js';
-import type { CodeChunk, DocumentMetadata, MarkdownChunk, SearchResult } from '../../../src/core/types.js';
+import { VectorDB } from '../../../src/vectordb/db.ts';
+import type { CodeChunk, DocumentMetadata, MarkdownChunk, SearchResult } from '../../../src/core/types.ts';
 
 const DIM = 4;
 const VEC_AUTH = [0.9, 0.1, 0.1, 0.1];

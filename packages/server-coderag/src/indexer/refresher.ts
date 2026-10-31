@@ -1,11 +1,11 @@
 import { existsSync } from 'node:fs';
 import path from 'node:path';
-import type { VectorDB } from '../vectordb/db.js';
-import type { Indexer } from './indexer.js';
-import type { CodeRagLogger } from '../core/logger.js';
-import type { GlobMatcher } from '../core/glob-utils.js';
-import { isSupportedExtension } from './languages.js';
-import { yieldToEventLoop } from './indexer.js';
+import type { VectorDB } from '../vectordb/db.ts';
+import type { Indexer } from './indexer.ts';
+import type { CodeRagLogger } from '../core/logger.ts';
+import type { GlobMatcher } from '../core/glob-utils.ts';
+import { isSupportedExtension } from './languages.ts';
+import { yieldToEventLoop } from './indexer.ts';
 
 /**
  * Brings the index entry of one file up to date: removes it when the file is gone, re-indexes it (documents or

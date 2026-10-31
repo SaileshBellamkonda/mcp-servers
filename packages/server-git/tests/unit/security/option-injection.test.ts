@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { McpServer } from '@modelcontextprotocol/server';
-import { createGitServer } from '../../../src/server/git-server.js';
-import { RepositoryManager } from '../../../src/core/repository-manager.js';
-import { GitExecutor } from '../../../src/core/git-executor.js';
+import { createGitServer } from '../../../src/server/git-server.ts';
+import { RepositoryManager } from '../../../src/core/repository-manager.ts';
+import { GitExecutor } from '../../../src/core/git-executor.ts';
 
 /**
  * Exhaustive option-injection table: for EVERY tool parameter that carries a free-form string into a

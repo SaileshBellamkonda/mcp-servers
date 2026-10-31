@@ -1,6 +1,6 @@
 import { type McpServer, fromJsonSchema } from '@modelcontextprotocol/server';
 import { z } from 'zod';
-import type { Services } from '../core/types.js';
+import type { Services } from '../core/types.ts';
 
 interface BlameEntry {
   line: number;

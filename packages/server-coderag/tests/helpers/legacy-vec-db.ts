@@ -1,4 +1,4 @@
-import { loadSqliteVec, openSqliteDatabase } from '../../src/vectordb/sqlite-db.js';
+import { loadSqliteVec, openSqliteDatabase } from '../../src/vectordb/sqlite-db.ts';
 
 /**
  * Turns a database made by the current code into one written by the previous version: the vectors move to a plain vec0

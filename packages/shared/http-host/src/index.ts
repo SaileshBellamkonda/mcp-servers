@@ -1,4 +1,4 @@
-export { isLoopbackHost } from './loopback.js';
+export { isLoopbackHost } from './loopback.ts';
 export {
   HttpSecurityError,
   MIN_TOKEN_LENGTH,
@@ -8,11 +8,11 @@ export {
   resolveHttpSecurity,
   tokensEqual,
   type HttpSecurity,
-} from './security.js';
+} from './security.ts';
 export {
   startMcpHttpServer,
   type HttpHostLogger,
   type McpHttpServer,
   type SessionInfo,
   type StartMcpHttpServerOptions,
-} from './server.js';
+} from './server.ts';

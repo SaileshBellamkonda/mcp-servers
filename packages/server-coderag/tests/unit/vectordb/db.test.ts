@@ -2,8 +2,8 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { mkdirSync, rmSync } from 'node:fs';
-import { VectorDB } from '../../../src/vectordb/db.js';
-import type { MarkdownChunk, CodeChunk } from '../../../src/core/types.js';
+import { VectorDB } from '../../../src/vectordb/db.ts';
+import type { MarkdownChunk, CodeChunk } from '../../../src/core/types.ts';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const tmpDir = path.join(__dirname, '../../../.tmp-db-test');

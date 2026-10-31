@@ -1,6 +1,6 @@
-import type { MarkdownChunk } from '../core/types.js';
-import type { DocumentSection } from './loaders/types.js';
-import { isFenceClose, matchFenceOpen } from './loaders/fence.js';
+import type { MarkdownChunk } from '../core/types.ts';
+import type { DocumentSection } from './loaders/types.ts';
+import { isFenceClose, matchFenceOpen } from './loaders/fence.ts';
 
 const segmenter = new Intl.Segmenter();
 

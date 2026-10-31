@@ -3,7 +3,7 @@
  * the main entry point never imports this module.
  */
 import { McpServer } from '@modelcontextprotocol/server';
-import { startMcpHttpServer, type McpHttpServer, type StartMcpHttpServerOptions } from '../server.js';
+import { startMcpHttpServer, type McpHttpServer, type StartMcpHttpServerOptions } from '../server.ts';
 
 export interface TestServer extends McpHttpServer {
   /** Full `/mcp` URL on the bound address. */

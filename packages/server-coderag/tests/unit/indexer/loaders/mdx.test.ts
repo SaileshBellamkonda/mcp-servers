@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { MdxLoader, stripMdx } from '../../../../src/indexer/loaders/mdx.js';
+import { MdxLoader, stripMdx } from '../../../../src/indexer/loaders/mdx.ts';
 
 const loader = new MdxLoader();
 

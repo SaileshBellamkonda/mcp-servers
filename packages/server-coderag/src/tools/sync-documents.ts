@@ -1,12 +1,12 @@
 import { type McpServer, fromJsonSchema } from '@modelcontextprotocol/server';
 import { z } from 'zod';
-import type { VectorDB } from '../vectordb/db.js';
-import type { Indexer } from '../indexer/indexer.js';
-import { syncCode, syncDocuments, type SyncResult } from '../indexer/sync.js';
-import type { CodeRagLogger } from '../core/logger.js';
-import type { SyncManager } from '../indexer/sync-manager.js';
-import { syncLockedResponse, SyncInProgressError } from '../indexer/sync-manager.js';
-import type { PathGuard } from '../core/path-guard.js';
+import type { VectorDB } from '../vectordb/db.ts';
+import type { Indexer } from '../indexer/indexer.ts';
+import { syncCode, syncDocuments, type SyncResult } from '../indexer/sync.ts';
+import type { CodeRagLogger } from '../core/logger.ts';
+import type { SyncManager } from '../indexer/sync-manager.ts';
+import { syncLockedResponse, SyncInProgressError } from '../indexer/sync-manager.ts';
+import type { PathGuard } from '../core/path-guard.ts';
 
 const SyncDocumentsSchema = z.object({
   directory: z.string().optional(),

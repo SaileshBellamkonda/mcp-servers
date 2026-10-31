@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { GitMcpError, ErrorCode } from './types.js';
-import type { RepositoryManager } from './repository-manager.js';
+import { GitMcpError, ErrorCode } from './types.ts';
+import type { RepositoryManager } from './repository-manager.ts';
 
 /**
  * Validates and sanitizes file paths to prevent security vulnerabilities

@@ -1,4 +1,4 @@
-import type { DocumentMetadata } from '../../core/types.js';
+import type { DocumentMetadata } from '../../core/types.ts';
 
 export type { DocumentMetadata };
 

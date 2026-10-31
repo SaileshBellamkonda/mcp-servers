@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { VectorDB } from '../../../src/vectordb/db.js';
+import { VectorDB } from '../../../src/vectordb/db.ts';
 
 describe('VectorDB.open nativeModulesDir', () => {
   let dir: string;

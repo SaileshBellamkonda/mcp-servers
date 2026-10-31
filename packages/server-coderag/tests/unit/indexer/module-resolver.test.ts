@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { CodeFileIndex, moduleStems } from '../../../src/indexer/module-resolver.js';
+import { CodeFileIndex, moduleStems } from '../../../src/indexer/module-resolver.ts';
 
 const index = (files: string[]): CodeFileIndex => new CodeFileIndex(files);
 

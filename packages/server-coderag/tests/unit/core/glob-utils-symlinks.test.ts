@@ -2,8 +2,8 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdtempSync, mkdirSync, writeFileSync, symlinkSync, realpathSync, rmSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { GlobMatcher } from '../../../src/core/glob-utils.js';
-import { PathGuard } from '../../../src/core/path-guard.js';
+import { GlobMatcher } from '../../../src/core/glob-utils.ts';
+import { PathGuard } from '../../../src/core/path-guard.ts';
 
 const posix = (p: string): string => p.replace(/\\/g, '/');
 

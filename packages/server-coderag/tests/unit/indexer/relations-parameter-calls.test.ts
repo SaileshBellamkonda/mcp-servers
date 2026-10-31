@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { CodeParser } from '../../../src/indexer/code-parser.js';
+import { CodeParser } from '../../../src/indexer/code-parser.ts';
 
 let parser: CodeParser;
 let dir: string;

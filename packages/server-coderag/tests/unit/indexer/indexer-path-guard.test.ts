@@ -2,11 +2,11 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, mkdirSync, writeFileSync, symlinkSync, realpathSync, rmSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { Indexer } from '../../../src/indexer/indexer.js';
-import { VectorDB } from '../../../src/vectordb/db.js';
-import { Embedder } from '../../../src/embedder/embedder.js';
-import { GlobMatcher } from '../../../src/core/glob-utils.js';
-import { PathGuard, PathNotAllowedError } from '../../../src/core/path-guard.js';
+import { Indexer } from '../../../src/indexer/indexer.ts';
+import { VectorDB } from '../../../src/vectordb/db.ts';
+import { Embedder } from '../../../src/embedder/embedder.ts';
+import { GlobMatcher } from '../../../src/core/glob-utils.ts';
+import { PathGuard, PathNotAllowedError } from '../../../src/core/path-guard.ts';
 import type { McpLogger } from '@mcp-servers/common';
 
 const DIM = 4;

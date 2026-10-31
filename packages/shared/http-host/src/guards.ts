@@ -1,5 +1,5 @@
 import type { Context, MiddlewareHandler } from 'hono';
-import { isLoopbackHost } from './loopback.js';
+import { isLoopbackHost } from './loopback.ts';
 
 /** JSON-RPC style error body used by the host's own rejections (the SDK uses the same shape). */
 export function jsonRpcError(c: Context, status: 403 | 404 | 413 | 415 | 429, code: number, message: string, headers?: Record<string, string>): Response {

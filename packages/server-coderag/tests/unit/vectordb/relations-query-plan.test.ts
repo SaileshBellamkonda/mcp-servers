@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { openSqliteDatabase } from '../../../src/vectordb/sqlite-db.js';
-import { RELATIONS_AUX_DDL, RELATIONS_TABLE_DDL } from '../../../src/vectordb/schema.js';
-import { IMPORTED_FILES_SQL, IMPORTS_BY_STEM_SQL } from '../../../src/vectordb/relations-store.js';
+import { openSqliteDatabase } from '../../../src/vectordb/sqlite-db.ts';
+import { RELATIONS_AUX_DDL, RELATIONS_TABLE_DDL } from '../../../src/vectordb/schema.ts';
+import { IMPORTED_FILES_SQL, IMPORTS_BY_STEM_SQL } from '../../../src/vectordb/relations-store.ts';
 
 function planOf(sql: string, ...args: (string | number)[]): string[] {
   const db = openSqliteDatabase(':memory:');

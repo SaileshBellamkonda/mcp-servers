@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import type { VectorDB } from '../../../src/vectordb/db.js';
-import type { Indexer } from '../../../src/indexer/indexer.js';
-import type { SyncManager } from '../../../src/indexer/sync-manager.js';
-import type { GlobMatcher } from '../../../src/core/glob-utils.js';
+import type { VectorDB } from '../../../src/vectordb/db.ts';
+import type { Indexer } from '../../../src/indexer/indexer.ts';
+import type { SyncManager } from '../../../src/indexer/sync-manager.ts';
+import type { GlobMatcher } from '../../../src/core/glob-utils.ts';
 import type { McpLogger } from '@mcp-servers/common';
 
 vi.mock('node:fs', () => ({
@@ -11,7 +11,7 @@ vi.mock('node:fs', () => ({
 }));
 
 import * as fs from 'node:fs';
-import { CodeRagWatcher } from '../../../src/indexer/watcher.js';
+import { CodeRagWatcher } from '../../../src/indexer/watcher.ts';
 
 /** `handleChange` is private; the tests drive it directly instead of waiting for file-system events. */
 interface WatcherInternals {

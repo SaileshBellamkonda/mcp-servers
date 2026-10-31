@@ -1,2 +1,2 @@
-export { parseBool, parseList, parsePort } from './env.js';
-export { McpLogger } from './logger.js';
+export { parseBool, parseList, parsePort } from './env.ts';
+export { McpLogger } from './logger.ts';

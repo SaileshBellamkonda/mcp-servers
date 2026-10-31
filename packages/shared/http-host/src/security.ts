@@ -1,6 +1,6 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
 import type { MiddlewareHandler } from 'hono';
-import { isLoopbackHost } from './loopback.js';
+import { isLoopbackHost } from './loopback.ts';
 
 /** Shortest accepted bearer token (characters). */
 export const MIN_TOKEN_LENGTH = 32;

@@ -1,4 +1,4 @@
-import type { SyncStatus } from '../core/types.js';
+import type { SyncStatus } from '../core/types.ts';
 
 export class SyncInProgressError extends Error {
   readonly operation: string;

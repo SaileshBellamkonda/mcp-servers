@@ -7,7 +7,7 @@ import {
   loadSqliteVec,
   isNodeSqliteAvailable,
   type SqliteDatabase,
-} from '../../../src/vectordb/sqlite-db.js';
+} from '../../../src/vectordb/sqlite-db.ts';
 
 const open: SqliteDatabase[] = [];
 function memory(): SqliteDatabase {

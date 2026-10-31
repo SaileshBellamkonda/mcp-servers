@@ -1,11 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import path from 'node:path';
 import type { McpServer } from '@modelcontextprotocol/server';
-import { VectorDB } from '../../../src/vectordb/db.js';
-import { PathGuard } from '../../../src/core/path-guard.js';
-import type { CodeChunk } from '../../../src/core/types.js';
-import type { RawRelation, RelationKind } from '../../../src/indexer/relations.js';
-import { registerSearchRelations } from '../../../src/tools/search-relations.js';
+import { VectorDB } from '../../../src/vectordb/db.ts';
+import { PathGuard } from '../../../src/core/path-guard.ts';
+import type { CodeChunk } from '../../../src/core/types.ts';
+import type { RawRelation, RelationKind } from '../../../src/indexer/relations.ts';
+import { registerSearchRelations } from '../../../src/tools/search-relations.ts';
 
 type Handler = (input: unknown) => Promise<{ content: { text: string }[] }>;
 

@@ -1,9 +1,9 @@
 import { type McpServer, fromJsonSchema } from '@modelcontextprotocol/server';
 import { z } from 'zod';
-import type { Indexer } from '../indexer/indexer.js';
-import type { SyncManager } from '../indexer/sync-manager.js';
-import { syncLockedResponse } from '../indexer/sync-manager.js';
-import type { PathGuard } from '../core/path-guard.js';
+import type { Indexer } from '../indexer/indexer.ts';
+import type { SyncManager } from '../indexer/sync-manager.ts';
+import { syncLockedResponse } from '../indexer/sync-manager.ts';
+import type { PathGuard } from '../core/path-guard.ts';
 
 const IndexCodeSchema = z.object({
   filepath: z.string().optional(),

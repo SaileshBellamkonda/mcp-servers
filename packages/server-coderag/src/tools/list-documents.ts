@@ -1,5 +1,5 @@
 import { type McpServer, fromJsonSchema } from '@modelcontextprotocol/server';
-import type { VectorDB } from '../vectordb/db.js';
+import type { VectorDB } from '../vectordb/db.ts';
 
 export function registerListDocuments(server: McpServer, db: VectorDB): void {
   server.registerTool(

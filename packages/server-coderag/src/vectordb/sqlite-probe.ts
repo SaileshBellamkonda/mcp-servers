@@ -1,4 +1,4 @@
-import { SqliteDatabase, loadSqliteVec, type NodeSqliteModule } from './sqlite-db.js';
+import { SqliteDatabase, loadSqliteVec, type NodeSqliteModule } from './sqlite-db.ts';
 
 /** Oldest Node.js with a `node:sqlite` coderag can use (tree-sitter also crashes on 22.13). */
 const MIN_NODE = { major: 22, minor: 14 };

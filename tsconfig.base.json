@@ -4,6 +4,7 @@
   "compilerOptions": {
     "moduleResolution": "nodenext",
     "erasableSyntaxOnly": true,
+    "allowImportingTsExtensions": true,
     "customConditions": ["@mcp-servers/source"],
     "noEmit": true,
     "noUncheckedIndexedAccess": true,

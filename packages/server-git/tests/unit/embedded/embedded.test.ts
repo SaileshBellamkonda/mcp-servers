@@ -1,7 +1,7 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { initializeSession, postJsonRpc } from '@mcp-servers/http-host/testing';
-import { activateGitServer, deactivateGitServer, type GitServerInstance } from '../../../src/embedded.js';
-import { TestRepository } from '../../fixtures/test-repo.js';
+import { activateGitServer, deactivateGitServer, type GitServerInstance } from '../../../src/embedded.ts';
+import { TestRepository } from '../../fixtures/test-repo.ts';
 
 const TOKEN = `embedded-token-${'y'.repeat(32)}`;
 const silent = { info: () => undefined, warning: () => undefined, error: () => undefined };

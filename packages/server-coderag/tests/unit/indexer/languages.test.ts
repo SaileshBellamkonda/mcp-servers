@@ -3,7 +3,7 @@ import {
   getLanguageByExtension,
   isSupportedExtension,
   SUPPORTED_LANGUAGES,
-} from '../../../src/indexer/languages.js';
+} from '../../../src/indexer/languages.ts';
 
 describe('SUPPORTED_LANGUAGES', () => {
   it('includes all 13 expected languages', () => {

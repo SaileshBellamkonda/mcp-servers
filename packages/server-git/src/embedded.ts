@@ -1,8 +1,8 @@
 import { McpServer } from '@modelcontextprotocol/server';
 import { McpLogger } from '@mcp-servers/common';
 import { requireToken, startMcpHttpServer } from '@mcp-servers/http-host';
-import { createGitServer } from './server/git-server.js';
-import { RepositoryManager } from './core/repository-manager.js';
+import { createGitServer } from './server/git-server.ts';
+import { RepositoryManager } from './core/repository-manager.ts';
 
 /**
  * Receives host-level diagnostics. Declared here, not imported, because the shared packages are bundled

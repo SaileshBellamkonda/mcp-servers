@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { LoaderRegistry } from '../../../../src/indexer/loaders/registry.js';
-import type { DocumentLoader, LoadedDocument } from '../../../../src/indexer/loaders/types.js';
+import { LoaderRegistry } from '../../../../src/indexer/loaders/registry.ts';
+import type { DocumentLoader, LoadedDocument } from '../../../../src/indexer/loaders/types.ts';
 
 function fakeLoader(name: string, extensions: string[]): DocumentLoader {
   return {

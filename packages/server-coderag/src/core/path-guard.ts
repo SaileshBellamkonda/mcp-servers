@@ -1,7 +1,7 @@
 import { lstatSync, readlinkSync, realpathSync } from 'node:fs';
 import path from 'node:path';
-import type { GlobConfig } from './types.js';
-import { extractGlobBase, resolveToAbsolute } from './glob-utils.js';
+import type { GlobConfig } from './types.ts';
+import { extractGlobBase, resolveToAbsolute } from './glob-utils.ts';
 
 const MAX_SYMLINK_HOPS = 40;
 

@@ -1,7 +1,7 @@
 import { type McpServer, fromJsonSchema } from '@modelcontextprotocol/server';
 import { z } from 'zod';
-import type { Services } from '../core/types.js';
-import { assertSafeRefLike } from '../core/git-args.js';
+import type { Services } from '../core/types.ts';
+import { assertSafeRefLike } from '../core/git-args.ts';
 
 /** Only allow safe characters in commit refs — reject shell special chars */
 const SAFE_REF_PATTERN = /^[a-zA-Z0-9._/~^:-]+$/;

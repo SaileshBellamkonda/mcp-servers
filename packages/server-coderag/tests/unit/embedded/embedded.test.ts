@@ -5,15 +5,15 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { initializeSession, postJsonRpc } from '@mcp-servers/http-host/testing';
 
-vi.mock('../../../src/indexer/sync.js', async (importOriginal) => {
-  const original = await importOriginal<typeof import('../../../src/indexer/sync.js')>();
+vi.mock('../../../src/indexer/sync.ts', async (importOriginal) => {
+  const original = await importOriginal<typeof import('../../../src/indexer/sync.ts')>();
   return { ...original, runStartupSync: vi.fn().mockResolvedValue(undefined) };
 });
 
-import { activateCodeRagServer, deactivateCodeRagServer, type CodeRagServerInstance } from '../../../src/embedded.js';
-import { VectorDB } from '../../../src/vectordb/db.js';
-import { Indexer } from '../../../src/indexer/indexer.js';
-import { CodeRagWatcher } from '../../../src/indexer/watcher.js';
+import { activateCodeRagServer, deactivateCodeRagServer, type CodeRagServerInstance } from '../../../src/embedded.ts';
+import { VectorDB } from '../../../src/vectordb/db.ts';
+import { Indexer } from '../../../src/indexer/indexer.ts';
+import { CodeRagWatcher } from '../../../src/indexer/watcher.ts';
 
 const TOKEN = `embedded-token-${'e'.repeat(32)}`;
 const silent = { debug: () => undefined, info: () => undefined, warning: () => undefined, error: () => undefined };

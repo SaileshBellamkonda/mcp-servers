@@ -2,8 +2,8 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { CodeParser } from '../../../src/indexer/code-parser.js';
-import { getLanguageByExtension } from '../../../src/indexer/languages.js';
+import { CodeParser } from '../../../src/indexer/code-parser.ts';
+import { getLanguageByExtension } from '../../../src/indexer/languages.ts';
 
 const TSX_SOURCE = [
   "import React from 'react';",

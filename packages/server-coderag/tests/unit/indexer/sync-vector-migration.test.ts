@@ -2,13 +2,13 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import path from 'node:path';
 import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { runStartupSync } from '../../../src/indexer/sync.js';
-import { Indexer } from '../../../src/indexer/indexer.js';
-import { VectorDB } from '../../../src/vectordb/db.js';
-import { Embedder } from '../../../src/embedder/embedder.js';
-import { GlobMatcher } from '../../../src/core/glob-utils.js';
-import { SyncManager } from '../../../src/indexer/sync-manager.js';
-import { downgradeToLegacyVectorTable } from '../../helpers/legacy-vec-db.js';
+import { runStartupSync } from '../../../src/indexer/sync.ts';
+import { Indexer } from '../../../src/indexer/indexer.ts';
+import { VectorDB } from '../../../src/vectordb/db.ts';
+import { Embedder } from '../../../src/embedder/embedder.ts';
+import { GlobMatcher } from '../../../src/core/glob-utils.ts';
+import { SyncManager } from '../../../src/indexer/sync-manager.ts';
+import { downgradeToLegacyVectorTable } from '../../helpers/legacy-vec-db.ts';
 import type { McpLogger } from '@mcp-servers/common';
 
 const DIM = 4;
@@ -57,7 +57,7 @@ describe('startup sync and the vector index', () => {
     expect(db.isVectorIndexMigrated()).toBe(false);
     const { indexer, config } = makeIndexer(db);
     // the parser version of the index is current, so the sync itself re-embeds nothing
-    db.setCodeParserVersion((await import('../../../src/indexer/code-parser.js')).CODE_PARSER_VERSION);
+    db.setCodeParserVersion((await import('../../../src/indexer/code-parser.ts')).CODE_PARSER_VERSION);
     await runStartupSync(db, indexer, new SyncManager(), config, dir, logger);
     expect(db.isVectorIndexMigrated()).toBe(true);
     expect(embeddings).toBe(0);

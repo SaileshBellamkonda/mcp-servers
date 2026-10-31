@@ -1,10 +1,10 @@
-import { LoaderRegistry } from './registry.js';
-import { MarkdownLoader } from './markdown.js';
-import { MdxLoader } from './mdx.js';
+import { LoaderRegistry } from './registry.ts';
+import { MarkdownLoader } from './markdown.ts';
+import { MdxLoader } from './mdx.ts';
 import path from 'node:path';
 
 export { LoaderRegistry, MarkdownLoader, MdxLoader };
-export type { DocumentLoader, DocumentMetadata, DocumentSection, LoadedDocument } from './types.js';
+export type { DocumentLoader, DocumentMetadata, DocumentSection, LoadedDocument } from './types.ts';
 
 export function createDefaultLoaderRegistry(): LoaderRegistry {
   const registry = new LoaderRegistry();

@@ -3,10 +3,10 @@ import { McpServer } from '@modelcontextprotocol/server';
 import { mkdtemp, rm, symlink, realpath } from 'node:fs/promises';
 import { join, sep } from 'node:path';
 import { tmpdir } from 'node:os';
-import { createGitServer } from '../../src/server/git-server.js';
-import { RepositoryManager } from '../../src/core/repository-manager.js';
-import { GitExecutor } from '../../src/core/git-executor.js';
-import { TestRepository } from '../fixtures/test-repo.js';
+import { createGitServer } from '../../src/server/git-server.ts';
+import { RepositoryManager } from '../../src/core/repository-manager.ts';
+import { GitExecutor } from '../../src/core/git-executor.ts';
+import { TestRepository } from '../fixtures/test-repo.ts';
 
 type Handler = (input: unknown) => Promise<{ content: { text: string }[] }>;
 

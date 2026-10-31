@@ -3,12 +3,12 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, realpathSync, rmSy
 import os from 'node:os';
 import path from 'node:path';
 import type { McpServer } from '@modelcontextprotocol/server';
-import { VectorDB } from '../../../src/vectordb/db.js';
-import { Indexer } from '../../../src/indexer/indexer.js';
-import { SyncManager } from '../../../src/indexer/sync-manager.js';
-import type { Embedder } from '../../../src/embedder/embedder.js';
-import { createCodeRagServer } from '../../../src/server/coderag-server.js';
-import { PathGuard, PathNotAllowedError } from '../../../src/core/path-guard.js';
+import { VectorDB } from '../../../src/vectordb/db.ts';
+import { Indexer } from '../../../src/indexer/indexer.ts';
+import { SyncManager } from '../../../src/indexer/sync-manager.ts';
+import type { Embedder } from '../../../src/embedder/embedder.ts';
+import { createCodeRagServer } from '../../../src/server/coderag-server.ts';
+import { PathGuard, PathNotAllowedError } from '../../../src/core/path-guard.ts';
 
 type Handler = (input: unknown) => unknown;
 type ToolResult = { content: { text: string }[] };

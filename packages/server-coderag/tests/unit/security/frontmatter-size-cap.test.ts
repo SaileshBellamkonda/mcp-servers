@@ -3,15 +3,15 @@ import { mkdtempSync, writeFileSync, readFileSync, realpathSync, rmSync } from '
 import os from 'node:os';
 import path from 'node:path';
 import type { McpServer } from '@modelcontextprotocol/server';
-import { registerAddFrontmatter } from '../../../src/tools/add-frontmatter.js';
-import { registerUpdateFrontmatter } from '../../../src/tools/update-frontmatter.js';
+import { registerAddFrontmatter } from '../../../src/tools/add-frontmatter.ts';
+import { registerUpdateFrontmatter } from '../../../src/tools/update-frontmatter.ts';
 import {
   MAX_FRONTMATTER_BYTES,
   MarkdownLoader,
   parseFrontmatter,
   splitFrontmatter,
-} from '../../../src/indexer/loaders/markdown.js';
-import { PathGuard } from '../../../src/core/path-guard.js';
+} from '../../../src/indexer/loaders/markdown.ts';
+import { PathGuard } from '../../../src/core/path-guard.ts';
 
 type Handler = (input: unknown) => unknown;
 

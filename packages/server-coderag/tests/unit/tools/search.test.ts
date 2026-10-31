@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { McpServer } from '@modelcontextprotocol/server';
-import { VectorDB } from '../../../src/vectordb/db.js';
-import type { Embedder } from '../../../src/embedder/embedder.js';
-import { PathGuard } from '../../../src/core/path-guard.js';
-import type { CodeChunk, DocumentMetadata, MarkdownChunk } from '../../../src/core/types.js';
-import { registerSearch } from '../../../src/tools/search.js';
+import { VectorDB } from '../../../src/vectordb/db.ts';
+import type { Embedder } from '../../../src/embedder/embedder.ts';
+import { PathGuard } from '../../../src/core/path-guard.ts';
+import type { CodeChunk, DocumentMetadata, MarkdownChunk } from '../../../src/core/types.ts';
+import { registerSearch } from '../../../src/tools/search.ts';
 
 type Handler = (input: unknown) => Promise<{ content: { text: string }[] }>;
 

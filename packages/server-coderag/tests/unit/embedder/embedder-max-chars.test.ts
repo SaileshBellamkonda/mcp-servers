@@ -3,10 +3,10 @@ import { createServer, type Server } from 'node:http';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { Embedder, truncateForEmbedding } from '../../../src/embedder/embedder.js';
-import { Indexer } from '../../../src/indexer/indexer.js';
-import { VectorDB } from '../../../src/vectordb/db.js';
-import { GlobMatcher } from '../../../src/core/glob-utils.js';
+import { Embedder, truncateForEmbedding } from '../../../src/embedder/embedder.ts';
+import { Indexer } from '../../../src/indexer/indexer.ts';
+import { VectorDB } from '../../../src/vectordb/db.ts';
+import { GlobMatcher } from '../../../src/core/glob-utils.ts';
 
 const DIM = 4;
 let server: Server;

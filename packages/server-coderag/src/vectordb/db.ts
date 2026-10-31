@@ -8,14 +8,14 @@ import {
   CODE_DOC_COLUMN_DDL,
   FTS_BM25_WEIGHTS,
   FTS_DELETE_TRIGGER_DDL,
-} from './schema.js';
-import { LEGACY_VEC_TABLE } from './schema.js';
-import { migrateVecIndex, openVecIndex, resetVecTables, type VecMigrationOptions } from './vec-index.js';
-import { FTS_VERSION, buildFtsQueries, buildFtsRow, symbolNameCandidates, type FtsRow } from './fts-text.js';
-import { openSqliteDatabase, loadSqliteVec, type SqlParam, type SqliteDatabase } from './sqlite-db.js';
-import { RelationStore, ensureRelationsSchema, type RelationPage, type RelationQuery, type ResolveOptions } from './relations-store.js';
-import { moduleStems } from '../indexer/module-resolver.js';
-import type { ExtractedRelations } from '../indexer/relations.js';
+} from './schema.ts';
+import { LEGACY_VEC_TABLE } from './schema.ts';
+import { migrateVecIndex, openVecIndex, resetVecTables, type VecMigrationOptions } from './vec-index.ts';
+import { FTS_VERSION, buildFtsQueries, buildFtsRow, symbolNameCandidates, type FtsRow } from './fts-text.ts';
+import { openSqliteDatabase, loadSqliteVec, type SqlParam, type SqliteDatabase } from './sqlite-db.ts';
+import { RelationStore, ensureRelationsSchema, type RelationPage, type RelationQuery, type ResolveOptions } from './relations-store.ts';
+import { moduleStems } from '../indexer/module-resolver.ts';
+import type { ExtractedRelations } from '../indexer/relations.ts';
 import type {
   MarkdownChunk,
   CodeChunk,
@@ -24,9 +24,9 @@ import type {
   SearchResult,
   SearchFilter,
   GlobConfig,
-} from '../core/types.js';
+} from '../core/types.ts';
 
-export type { RelationEndpoint, RelationHit, RelationPage, RelationQuery, ResolveOptions } from './relations-store.js';
+export type { RelationEndpoint, RelationHit, RelationPage, RelationQuery, ResolveOptions } from './relations-store.ts';
 
 export interface VectorDBOpenOptions {
   /** Directory whose `node_modules` holds sqlite-vec (bundled builds); default: this package's own resolution. */

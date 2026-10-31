@@ -3,11 +3,11 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, realpa
 import os from 'node:os';
 import path from 'node:path';
 import type { McpServer } from '@modelcontextprotocol/server';
-import { registerAddFrontmatter } from '../../../src/tools/add-frontmatter.js';
-import { registerUpdateFrontmatter } from '../../../src/tools/update-frontmatter.js';
+import { registerAddFrontmatter } from '../../../src/tools/add-frontmatter.ts';
+import { registerUpdateFrontmatter } from '../../../src/tools/update-frontmatter.ts';
 import matter from 'gray-matter';
-import { parseFrontmatter, splitFrontmatter } from '../../../src/indexer/loaders/markdown.js';
-import { PathGuard } from '../../../src/core/path-guard.js';
+import { parseFrontmatter, splitFrontmatter } from '../../../src/indexer/loaders/markdown.ts';
+import { PathGuard } from '../../../src/core/path-guard.ts';
 
 type Handler = (input: unknown) => unknown;
 

@@ -5,12 +5,12 @@ import { mkdtempSync, writeFileSync, realpathSync, rmSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import type { McpServer } from '@modelcontextprotocol/server';
-import { Embedder } from '../../../src/embedder/embedder.js';
-import { VectorDB } from '../../../src/vectordb/db.js';
-import { Indexer } from '../../../src/indexer/indexer.js';
-import { SyncManager } from '../../../src/indexer/sync-manager.js';
-import { PathGuard } from '../../../src/core/path-guard.js';
-import { createCodeRagServer } from '../../../src/server/coderag-server.js';
+import { Embedder } from '../../../src/embedder/embedder.ts';
+import { VectorDB } from '../../../src/vectordb/db.ts';
+import { Indexer } from '../../../src/indexer/indexer.ts';
+import { SyncManager } from '../../../src/indexer/sync-manager.ts';
+import { PathGuard } from '../../../src/core/path-guard.ts';
+import { createCodeRagServer } from '../../../src/server/coderag-server.ts';
 
 const API_KEY = 'sk-live-SUPERSECRET-1234567890';
 
