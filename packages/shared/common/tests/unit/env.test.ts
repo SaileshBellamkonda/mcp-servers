@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseBool, parseList, parsePort } from '../../src/env.ts';
+import { loadLogConfigFromEnv, parseBool, parseList, parseLogLevel, parsePort } from '../../src/env.ts';
 
 describe('parsePort', () => {
   it('returns the default when the value is undefined, empty or blank', () => {
@@ -75,5 +75,46 @@ describe('parseBool', () => {
   it('falls back to the default for unrecognised values', () => {
     expect(parseBool('maybe', true)).toBe(true);
     expect(parseBool('maybe', false)).toBe(false);
+  });
+});
+
+describe('parseLogLevel', () => {
+  it('returns the default (info unless told otherwise) when unset or blank', () => {
+    expect(parseLogLevel(undefined)).toBe('info');
+    expect(parseLogLevel('')).toBe('info');
+    expect(parseLogLevel('   ')).toBe('info');
+    expect(parseLogLevel(undefined, 'warning')).toBe('warning');
+  });
+
+  it('accepts every MCP level, ignoring case and surrounding whitespace', () => {
+    expect(parseLogLevel('debug')).toBe('debug');
+    expect(parseLogLevel(' WARNING ')).toBe('warning');
+    expect(parseLogLevel('Emergency')).toBe('emergency');
+  });
+
+  it('throws on an unknown level and names the value', () => {
+    expect(() => parseLogLevel('verbose')).toThrow(/verbose/);
+    expect(() => parseLogLevel('verbose')).toThrow(/LOG_LEVEL/);
+  });
+});
+
+describe('loadLogConfigFromEnv', () => {
+  it('defaults to info with no file', () => {
+    expect(loadLogConfigFromEnv({})).toEqual({ level: 'info' });
+  });
+
+  it('reads LOG_LEVEL and LOG_FILE', () => {
+    expect(loadLogConfigFromEnv({ LOG_LEVEL: 'debug', LOG_FILE: ' /var/log/mcp.log ' })).toEqual({
+      level: 'debug',
+      file: '/var/log/mcp.log',
+    });
+  });
+
+  it('treats a blank LOG_FILE as unset', () => {
+    expect(loadLogConfigFromEnv({ LOG_FILE: '  ' })).toEqual({ level: 'info' });
+  });
+
+  it('throws on an invalid LOG_LEVEL', () => {
+    expect(() => loadLogConfigFromEnv({ LOG_LEVEL: 'loud' })).toThrow(/loud/);
   });
 });

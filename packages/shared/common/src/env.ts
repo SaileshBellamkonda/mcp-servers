@@ -5,6 +5,8 @@
  * the supplied default, so `FOO=` behaves like an unset variable.
  */
 
+import { LOG_LEVELS, isLogLevel, type LogLevel } from './log-level.ts';
+
 const MAX_PORT = 65535;
 
 /**
@@ -46,4 +48,28 @@ export function parseBool(value: string | undefined, defaultValue: boolean): boo
   if (TRUE_VALUES.has(normalised)) return true;
   if (FALSE_VALUES.has(normalised)) return false;
   return defaultValue;
+}
+
+/**
+ * Parse a log level (`LOG_LEVEL`): any MCP logging level, case-insensitive. Unset or blank yields the default;
+ * an unknown value throws so a typo does not silently change what gets logged.
+ */
+export function parseLogLevel(value: string | undefined, defaultLevel: LogLevel = 'info'): LogLevel {
+  const normalised = value?.trim().toLowerCase();
+  if (normalised === undefined || normalised === '') return defaultLevel;
+  if (isLogLevel(normalised)) return normalised;
+  throw new Error(`Invalid LOG_LEVEL ${JSON.stringify(value)}: expected one of ${LOG_LEVELS.join(', ')}`);
+}
+
+export interface LogConfig {
+  level: LogLevel;
+  /** Absolute or relative path of the log file; undefined means "do not log to a file". */
+  file?: string;
+}
+
+/** Read `LOG_LEVEL` (default `info`) and `LOG_FILE` (blank counts as unset). */
+export function loadLogConfigFromEnv(env: Readonly<Record<string, string | undefined>>): LogConfig {
+  const level = parseLogLevel(env['LOG_LEVEL']);
+  const file = env['LOG_FILE']?.trim();
+  return file ? { level, file } : { level };
 }

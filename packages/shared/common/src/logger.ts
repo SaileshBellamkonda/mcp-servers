@@ -1,17 +1,23 @@
 import type { McpServer, LoggingLevel } from '@modelcontextprotocol/server';
+import { noopSink, type LogSink } from './log-sink.ts';
 
+/**
+ * Logs to `sink` (the log file, the VS Code Output channel, or nowhere) and to the connected MCP client. Which
+ * client notifications are delivered is up to the client's own `logging/setLevel`.
+ */
 export class McpLogger {
   private readonly server: McpServer;
   private readonly name: string;
+  private readonly sink: LogSink;
 
-  constructor(server: McpServer, name: string) {
+  constructor(server: McpServer, name: string, sink: LogSink = noopSink) {
     this.server = server;
     this.name = name;
+    this.sink = sink;
   }
 
   log(level: LoggingLevel, data: unknown): void {
-    const msg = typeof data === 'string' ? data : JSON.stringify(data);
-    process.stderr.write(`[${level.toUpperCase()}] [${this.name}] ${msg}\n`);
+    this.sink(level, this.name, data);
     void this.server.sendLoggingMessage({ level, logger: this.name, data }).catch((_e: unknown) => { /* fire-and-forget */ });
   }
 
