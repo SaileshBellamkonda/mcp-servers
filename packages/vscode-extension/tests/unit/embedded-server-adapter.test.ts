@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
 import { EmbeddedServerAdapter } from '../../src/core/embedded-server-adapter';
 import { InMemoryTokenProvider } from '../../src/core/token-provider';
+import { callArg } from './call-args';
 import type {
   ActivationContext,
   Availability,
@@ -439,12 +440,12 @@ describe('EmbeddedServerAdapter', () => {
     it('restarts instead of re-scoping when the folder set changes the workspace scope (the token follows the scope)', async () => {
       const h = makeHarness({ scopeOf: (folders) => folders.join('|') });
       await h.adapter.start();
-      const first = (h.descriptor.activate.mock.calls[0]?.[0] as ActivationContext).authToken;
+      const first = callArg<ActivationContext>(h.descriptor.activate).authToken;
       h.folders.splice(0, h.folders.length, '/work/a', '/work/b');
       await expect(h.adapter.syncWorkspace()).resolves.toBe('restarted');
       expect(h.instances[0]?.updateWorkspaceFolders).not.toHaveBeenCalled();
       expect(h.instances[0]?.close).toHaveBeenCalledOnce();
-      const second = (h.descriptor.activate.mock.calls[1]?.[0] as ActivationContext).authToken;
+      const second = callArg<ActivationContext>(h.descriptor.activate, 1).authToken;
       expect(second).not.toBe(first);
       expect(h.descriptor.activate.mock.calls[1]?.[0].workspaceFolders).toEqual(['/work/a', '/work/b']);
     });

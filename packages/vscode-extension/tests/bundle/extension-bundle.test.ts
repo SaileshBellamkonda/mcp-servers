@@ -29,7 +29,8 @@ describe('extension bundle in plain Node (stub vscode module)', () => {
         'extension.dispose',
       ]);
       expect(result.steps['extension.coderag_start']?.detail).toMatchObject({ contextValue: 'server.running' });
-      const commands = (result.steps['extension.activate']?.detail as { commands: string[] }).commands;
+      const detail = result.steps['extension.activate']?.detail as { commands: string[] } | undefined;
+      const commands = detail?.commands;
       expect(commands).toEqual([
         'mcpServers.addToClaudeCode',
         'mcpServers.coderag.clearApiKey',

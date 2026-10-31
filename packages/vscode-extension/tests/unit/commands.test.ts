@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
 import { FailureReporter, registerCommands } from '../../src/commands';
 import { makeRegistry } from './fake-servers';
+import { callArg } from './call-args';
 
 type Handler = (arg?: unknown) => Promise<void>;
 
@@ -175,7 +176,7 @@ describe('commands', () => {
 
     it('never copies the token', async () => {
       const { run, servers } = await setup([['git', 'running']]);
-      const { authToken } = servers['git']?.activate.mock.calls[0]?.[0] as { authToken: string };
+      const { authToken } = callArg<{ authToken: string }>(servers['git']?.activate);
       await run(COPY, servers['git']?.adapter);
       const copied = vi.mocked(vscode.env.clipboard.writeText).mock.calls.map(String).join('\n');
       const shown = vi.mocked(vscode.window.showInformationMessage).mock.calls.map(String).join('\n');

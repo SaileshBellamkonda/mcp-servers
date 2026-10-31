@@ -16,6 +16,7 @@ import { deriveServerToken } from '../../src/core/server-token';
 import { SecretStorageTokenProvider, tokenSecretKey } from '../../src/core/token-provider';
 import { makeRegistry } from './fake-servers';
 import { MemorySecrets } from './test-context';
+import { callArg } from './call-args';
 
 type Handler = (arg?: unknown) => Promise<void>;
 const SCOPE = 'abcdef0123456789';
@@ -163,7 +164,7 @@ describe('CodeRAG API key commands', () => {
     fixture = await setup();
     input.mockResolvedValueOnce(undefined);
     await fixture.run(COMMAND_SET_API_KEY);
-    const validate = (input.mock.calls[0]?.[0] as { validateInput: (value: string) => string | undefined }).validateInput;
+    const validate = callArg<{ validateInput: (value: string) => string | undefined }>(input).validateInput;
     expect(validate('')).toMatch(/enter/i);
     expect(validate('   ')).toMatch(/enter/i);
     expect(validate('x')).toBeUndefined();

@@ -40,6 +40,8 @@
     "@eslint/js": "catalog:",
     "@tsconfig/node24": "catalog:",
     "eslint": "catalog:",
+    "oxlint": "catalog:",
+    "oxlint-tsgolint": "catalog:",
     "typescript-eslint": "catalog:",
     "vite": "catalog:"
   }

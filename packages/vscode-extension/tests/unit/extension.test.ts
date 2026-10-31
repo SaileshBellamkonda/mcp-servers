@@ -52,6 +52,7 @@ vi.mock('../../src/servers/module-loader', () => ({
 }));
 
 import { activate, deactivate } from '../../src/extension';
+import { callArg } from './call-args';
 
 type Item = vscode.TreeItem;
 type Disposable = { dispose: () => void };
@@ -62,8 +63,7 @@ interface Provider {
 }
 
 function treeProvider(): Provider {
-  const call = vi.mocked(vscode.window.createTreeView).mock.calls[0];
-  return (call?.[1] as { treeDataProvider: Provider }).treeDataProvider;
+  return callArg<{ treeDataProvider: Provider }>(vi.mocked(vscode.window.createTreeView), 0, 1).treeDataProvider;
 }
 function gitState(): string | undefined {
   return treeProvider().getChildren()[0]?.getInfo().state;
@@ -100,7 +100,7 @@ function ragOptions(call = 0): Record<string, unknown> {
   return (rag.activateCodeRagServer.mock.calls[call]?.[0] ?? {}) as Record<string, unknown>;
 }
 function gitToken(): string {
-  return (git.activateGitServer.mock.calls[0]?.[0] as unknown as { authToken: string }).authToken;
+  return callArg<{ authToken: string }>(git.activateGitServer).authToken;
 }
 function contextKey(key: string): unknown {
   const calls = vi.mocked(vscode.commands.executeCommand).mock.calls.filter((c) => c[0] === 'setContext' && c[1] === key);
@@ -211,7 +211,7 @@ describe('extension', () => {
     it('logs to the output channel and never writes the token', async () => {
       activate(ctx as never);
       await until('running');
-      const token = (git.activateGitServer.mock.calls[0]?.[0] as unknown as { authToken: string }).authToken;
+      const token = callArg<{ authToken: string }>(git.activateGitServer).authToken;
       const lines = outputLines();
       expect(lines.some((line) => /\[git\] started on 127\.0\.0\.1:3000/.test(line))).toBe(true);
       expect(lines.join('\n')).not.toContain(token);
@@ -673,7 +673,7 @@ describe('extension', () => {
       await vi.waitFor(() => {
         expect(git.activateGitServer).toHaveBeenCalledTimes(2);
       });
-      const after = (git.activateGitServer.mock.calls[1]?.[0] as unknown as { authToken: string }).authToken;
+      const after = callArg<{ authToken: string }>(git.activateGitServer, 1).authToken;
       expect(after).not.toBe(before);
       expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(expect.stringMatching(/token.*another window.*Git/i));
       expect(listener).toHaveBeenCalled();

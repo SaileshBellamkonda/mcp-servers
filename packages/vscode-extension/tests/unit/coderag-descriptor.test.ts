@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ModuleLoader } from '../../src/core/module-loader';
 import type { ActivationContext, AvailabilityContext, ServerLogger } from '../../src/core/server-descriptor';
 import { createCodeRagDescriptor, type CodeRagEnvironment } from '../../src/servers/coderag-descriptor';
+import { callArg } from './call-args';
 
 type Probe = { ok: true } | { ok: false; reason: string; needs?: 'fts5' | 'node' };
 
@@ -218,7 +219,7 @@ describe('coderag descriptor', () => {
     it('does not expose watch or toolset through the vsCodeConfig the server reads', async () => {
       const t = setup({ storage, settings: { 'mcpServers.coderag.watch': false, 'mcpServers.coderag.toolset': 'all' } });
       await t.descriptor.activate(t.activation());
-      const { get } = (t.activateCodeRagServer.mock.calls[0]?.[0] as { vsCodeConfig: { get(key: string): unknown } }).vsCodeConfig;
+      const { get } = callArg<{ vsCodeConfig: { get(key: string): unknown } }>(t.activateCodeRagServer).vsCodeConfig;
       expect(get('watch')).toBeUndefined();
       expect(get('toolset')).toBeUndefined();
     });
@@ -266,7 +267,7 @@ describe('coderag descriptor', () => {
         },
       });
       await t.descriptor.activate(t.activation());
-      const { get } = (t.activateCodeRagServer.mock.calls[0]?.[0] as { vsCodeConfig: { get(key: string): unknown } }).vsCodeConfig;
+      const { get } = callArg<{ vsCodeConfig: { get(key: string): unknown } }>(t.activateCodeRagServer).vsCodeConfig;
       expect(get('embeddingUrl')).toBe('http://127.0.0.1:11434/v1');
       expect(get('embeddingModel')).toBe('nomic-embed-text');
       expect(get('embeddingDim')).toBe(768);
@@ -286,7 +287,7 @@ describe('coderag descriptor', () => {
     it('hands the server a logger with debug (dropped), forwarding info, warning and error', async () => {
       const t = setup({ storage });
       await t.descriptor.activate(t.activation());
-      const given = (t.activateCodeRagServer.mock.calls[0]?.[0] as { logger: Record<string, (data: unknown) => void> }).logger;
+      const given = callArg<{ logger: Record<string, (data: unknown) => void> }>(t.activateCodeRagServer).logger;
       given['debug']?.('quiet');
       given['info']?.('i');
       given['warning']?.('w');

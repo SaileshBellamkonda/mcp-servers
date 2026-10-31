@@ -25,6 +25,8 @@ catalog:
   hono: ^4.13.11
   micromatch: ^4.0.8
   node-gyp: ^13.1.0
+  oxlint: ^1.90.0
+  oxlint-tsgolint: ^7.0.2005
   sqlite-vec: ^0.1.6
   tree-sitter: ^0.25.1
   tree-sitter-bash: ^0.25.1
