@@ -4,7 +4,7 @@ import * as packaging from '../../../../scripts/package-extension.mjs';
 
 const api = packaging as {
   parseArgs(argv: string[], defaults?: { host: string }): { target: string; out: string | undefined };
-  vsceArguments(options: { target: string; out: string | undefined }): string[];
+  vsceOptions(options: { target: string; out: string | undefined }, cwd: string): Record<string, unknown>;
 };
 
 describe('package-extension arguments', () => {
@@ -23,11 +23,11 @@ describe('package-extension arguments', () => {
   });
 
   it('packages without resolving dependencies, for one target, without the licence prompt', () => {
-    expect(api.vsceArguments({ target: 'linux-x64', out: undefined })).toEqual([
-      'package', '--no-dependencies', '--skip-license', '--target', 'linux-x64',
-    ]);
-    expect(api.vsceArguments({ target: 'win32-x64', out: '/o/x.vsix' })).toEqual([
-      'package', '--no-dependencies', '--skip-license', '--target', 'win32-x64', '--out', '/o/x.vsix',
-    ]);
+    expect(api.vsceOptions({ target: 'linux-x64', out: undefined }, '/ext')).toEqual({
+      cwd: '/ext', target: 'linux-x64', dependencies: false, skipLicense: true,
+    });
+    expect(api.vsceOptions({ target: 'win32-x64', out: '/o/x.vsix' }, '/ext')).toEqual({
+      cwd: '/ext', target: 'win32-x64', dependencies: false, skipLicense: true, packagePath: '/o/x.vsix',
+    });
   });
 });
