@@ -110,23 +110,32 @@ describe('host handling', () => {
     expect(await rawStatus(server.port, { Host: 'evil.example' }, '127.0.0.2')).toBe(403);
   });
 
-  it('writes to stderr when no logger is supplied', async () => {
+  it('stays silent on stderr when no logger is supplied', async () => {
     const write = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     const { createServer } = makeFactory();
     const server = await startMcpHttpServer({ createServer, port: 0 });
     running.push(server);
     await postJsonRpc(`http://127.0.0.1:${String(server.port)}/mcp`, { jsonrpc: '2.0', id: 1, method: 'tools/list' }, { headers: { 'mcp-session-id': 'x' } });
-    const output = write.mock.calls.map((c) => String(c[0])).join('');
-    expect(output).toMatch(/\[INFO\].*auth: disabled/);
-    expect(output).toMatch(/\[WARNING\].*any local process/);
+    expect(write).not.toHaveBeenCalled();
   });
 
-  it('logs errors through the default logger', async () => {
+  it('reports startup and the unauthenticated warning to the supplied logger', async () => {
+    const logger = { info: vi.fn(), warning: vi.fn(), error: vi.fn() };
+    const { createServer } = makeFactory();
+    const server = await startMcpHttpServer({ createServer, port: 0, logger });
+    running.push(server);
+    expect(logger.info).toHaveBeenCalledWith(expect.stringMatching(/auth: disabled/));
+    expect(logger.warning).toHaveBeenCalledWith(expect.stringMatching(/any local process/));
+  });
+
+  it('logs errors through the supplied logger, not stderr', async () => {
     const write = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
-    const server = await startMcpHttpServer({ createServer: () => { throw new Error('kaboom'); }, port: 0 });
+    const logger = { info: vi.fn(), warning: vi.fn(), error: vi.fn() };
+    const server = await startMcpHttpServer({ createServer: () => { throw new Error('kaboom'); }, port: 0, logger });
     running.push(server);
     await postJsonRpc(`http://127.0.0.1:${String(server.port)}/mcp`, { jsonrpc: '2.0', id: 1, method: 'initialize' });
-    expect(write.mock.calls.map((c) => String(c[0])).join('')).toMatch(/\[ERROR\].*kaboom/);
+    expect(logger.error).toHaveBeenCalledWith(expect.stringMatching(/kaboom/));
+    expect(write).not.toHaveBeenCalled();
   });
 });
 

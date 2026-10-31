@@ -33,7 +33,7 @@ connections and frees the port.
 | `port` | required | TCP port; `0` picks a free port |
 | `host` | `127.0.0.1` | Interface to bind. The host name is always passed to `listen` |
 | `token` | none | Bearer token, at least 32 characters, no control characters. Empty counts as unset |
-| `logger` | stderr | `{ info, warning, error }`; `McpLogger` fits |
+| `logger` | silent | `{ info, warning, error }`; `McpLogger` fits |
 | `allowedHosts` | localhost names (loopback binds) | Accepted `Host` header values |
 | `allowedOrigins` | none | Extra browser origins (`https://app.example`) or host names; loopback origins are always accepted |
 | `maxSessions` | `64` | Concurrent sessions; more initializations get `429` with `Retry-After: 5` |

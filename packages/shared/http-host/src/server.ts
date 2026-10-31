@@ -68,10 +68,11 @@ const DEFAULT_SESSION_IDLE_TIMEOUT_MS = 30 * 60 * 1000;
 const DEFAULT_MAX_BODY_BYTES = 4 * 1024 * 1024;
 const SESSION_FULL_RETRY_AFTER_SECONDS = '5';
 
-const stderrLogger: HttpHostLogger = {
-  info: (data) => process.stderr.write(`[INFO] [http-host] ${String(data)}\n`),
-  warning: (data) => process.stderr.write(`[WARNING] [http-host] ${String(data)}\n`),
-  error: (data) => process.stderr.write(`[ERROR] [http-host] ${String(data)}\n`),
+/** Used when the caller supplies no logger: the host logs only where it is told to. */
+const silentLogger: HttpHostLogger = {
+  info: () => undefined,
+  warning: () => undefined,
+  error: () => undefined,
 };
 
 function formatUrlHost(host: string): string {
@@ -117,7 +118,7 @@ function listen(httpServerFactory: () => Server): Promise<Server> {
 export async function startMcpHttpServer(options: StartMcpHttpServerOptions): Promise<McpHttpServer> {
   const host = options.host ?? DEFAULT_HOST;
   const token = options.token === '' ? undefined : options.token;
-  const logger = options.logger ?? stderrLogger;
+  const logger = options.logger ?? silentLogger;
   assertSafeBinding({ host, token });
   const maxSessions = positiveInteger('maxSessions', options.maxSessions ?? DEFAULT_MAX_SESSIONS);
   const maxBodyBytes = positiveInteger('maxBodyBytes', options.maxBodyBytes ?? DEFAULT_MAX_BODY_BYTES);
