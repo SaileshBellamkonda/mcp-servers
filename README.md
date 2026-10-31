@@ -28,7 +28,7 @@ The extension's package name is `mcp-servers`, the same as the root package; see
 
 - Node.js **24 or later** for standalone use (`engines.node` is `>=24.0.0` in every package). `server-coderag` uses
   `node:sqlite` with FTS5.
-- pnpm 12 (`devEngines` in the root `package.json` requires `^12.0.0` and Node `^24.0.0`) to build from source.
+- pnpm 12 to build from source (`devEngines` in the root `package.json` requires pnpm `^12.0.0` and Node `^24.0.0`, and also lets npm run so you can bootstrap pnpm with `npm install -g pnpm@12`).
 - `git` on `PATH` for `server-git`.
 
 ## Quick start
