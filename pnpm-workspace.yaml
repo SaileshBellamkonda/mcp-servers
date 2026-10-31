@@ -40,7 +40,7 @@ catalog:
   tree-sitter-ruby: ^0.23.1
   tree-sitter-rust: ^0.24.0
   tree-sitter-typescript: ^0.23.2
-  tsx: ^4.7.0
+  tsx: ^4.23.15
   # Hold at 6.x: TS 7 (native Go compiler) ships no classic compiler API, and typescript-eslint
   # (typed linting in eslint.config.mjs) requires typescript <6.1.0. Revisit when typescript-eslint supports TS 7.
   typescript: ^6.0.0
