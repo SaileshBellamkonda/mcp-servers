@@ -4,24 +4,15 @@
   "description": "CodeRAG MCP Server - Semantic search over code and docs via OpenAI-compatible embeddings",
   "type": "module",
   "main": "./dist/standalone.js",
-  "types": "./dist/standalone.d.ts",
-  "files": ["dist", "!dist/.tsbuildinfo", "README.md"],
+  "files": ["dist", "README.md"],
   "engines": {
     "node": ">=24.0.0"
   },
   "exports": {
-    ".": {
-      "import": {
-        "types": "./dist/standalone.d.ts",
-        "default": "./dist/standalone.js"
-      }
-    },
+    ".": "./dist/standalone.js",
     "./embedded": {
       "@mcp-servers/source": "./src/embedded.ts",
-      "import": {
-        "types": "./dist/embedded.d.ts",
-        "default": "./dist/embedded.js"
-      }
+      "default": "./dist/embedded.js"
     }
   },
   "bin": {
@@ -29,7 +20,7 @@
   },
   "scripts": {
     "bundle": "tsdown",
-    "build": "pnpm run clean && pnpm run bundle && tsc -b tsconfig.build.json",
+    "build": "pnpm run clean && pnpm run bundle",
     "dev": "tsx --conditions=@mcp-servers/source src/standalone.ts",
     "test": "vitest run",
     "test:watch": "vitest",

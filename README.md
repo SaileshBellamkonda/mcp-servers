@@ -133,7 +133,7 @@ model.
 
 ```sh
 pnpm install
-pnpm build        # pnpm -r run build: shared packages, servers (esbuild bundle + declarations), extension
+pnpm build        # pnpm -r run build: servers and extension (tsdown bundles)
 pnpm typecheck    # pnpm -r run typecheck
 pnpm test         # pnpm -r run test (Vitest)
 pnpm lint         # eslint .

@@ -13,11 +13,8 @@
     "noImplicitOverride": true,
     "noFallthroughCasesInSwitch": true,
     "verbatimModuleSyntax": true,
-    "declaration": true,
-    "declarationMap": true,
     "sourceMap": true,
-    "resolveJsonModule": true,
-    "tsBuildInfoFile": "${configDir}/dist/.tsbuildinfo"
+    "resolveJsonModule": true
   },
   "include": ["${configDir}/src/**/*", "${configDir}/tests/**/*"]
 }

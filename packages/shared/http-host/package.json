@@ -4,33 +4,22 @@
   "private": true,
   "description": "Shared, secured Streamable HTTP host for the MCP servers in this repository",
   "type": "module",
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
-  "files": [
-    "dist"
-  ],
   "engines": {
     "node": ">=24.0.0"
   },
   "exports": {
     ".": {
-      "@mcp-servers/source": "./src/index.ts",
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
+      "@mcp-servers/source": "./src/index.ts"
     },
     "./testing": {
-      "@mcp-servers/source": "./src/testing/index.ts",
-      "types": "./dist/testing/index.d.ts",
-      "import": "./dist/testing/index.js"
+      "@mcp-servers/source": "./src/testing/index.ts"
     }
   },
   "scripts": {
-    "build": "tsc -b tsconfig.build.json",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "typecheck": "tsc --noEmit",
-    "clean": "rm -rf dist"
+    "typecheck": "tsc --noEmit"
   },
   "license": "MIT",
   "dependencies": {

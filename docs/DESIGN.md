@@ -47,7 +47,7 @@ The monorepo provides a unified development environment for creating MCP servers
 ### Technology Stack
 
 - **Package Manager**: pnpm with workspaces
-- **Build System**: `tsc -b` project references (declarations, type checking) and esbuild (server and extension bundles); no Turbo
+- **Build System**: tsdown (rolldown) bundles the servers and the extension from `tsdown.config.json`; `tsc --noEmit` type-checks; no declarations are emitted, because the servers ship as binaries; no Turbo
 - **Testing**: Vitest with coverage reporting (85 % thresholds)
 - **Language**: TypeScript (strict mode)
 - **MCP SDK**: `@modelcontextprotocol/server` and `@modelcontextprotocol/hono` (2.0 alpha, pinned exactly in the shared packages)
@@ -197,9 +197,9 @@ Level 4: vscode-extension (bundles the servers' embedded entry points)
 **Root scripts** run `pnpm -r`, which orders packages by their workspace dependencies.
 
 **Build Process** (`pnpm build`):
-1. Shared packages: `tsc -b` emits JavaScript and declarations
-2. Servers: clean, esbuild bundles `src/standalone.ts` and `src/embedded.ts` into `dist/` (the private `@mcp-servers/*` packages are inlined; third-party and native dependencies stay external), then `tsc -b` emits declarations only
-3. Extension: esbuild bundles the extension and the headers helper to CommonJS; `pnpm --filter ./packages/vscode-extension run package` also stages the native modules for a target and runs `vsce package`
+1. Shared packages: nothing to build; they are private and inlined from source into every bundle through the `@mcp-servers/source` export condition
+2. Servers: clean, then tsdown bundles `src/standalone.ts` and `src/embedded.ts` into `dist/` (the private `@mcp-servers/*` packages are inlined; third-party and native dependencies stay external)
+3. Extension: tsdown bundles the extension and the headers helper to CommonJS; `pnpm --filter ./packages/vscode-extension run package` also stages the native modules for a target and runs `vsce package`
 4. `pnpm typecheck`, `pnpm test` and `pnpm lint` run separately
 
 ### Workspace Configuration
@@ -277,11 +277,9 @@ TypeScript project references enable:
 ### Configuration Hierarchy
 
 ```
-Root tsconfig.json (base configuration)
+tsconfig.base.json (base configuration)
     ↓
 Package tsconfig.json (extends root)
-    ↓
-tsconfig.build.json (production builds)
 ```
 
 ### Strict Mode
@@ -764,7 +762,7 @@ Each package includes:
 
 ### 3. Developer Experience
 
-- **Fast Builds**: Incremental `tsc -b`, esbuild bundling and parallel `pnpm -r` execution
+- **Fast Builds**: tsdown bundling and parallel `pnpm -r` execution
 - **Hot Reload**: Watch mode for rapid iteration
 - **Type Safety**: Catch errors at compile time
 - **Clear Errors**: Meaningful error messages
