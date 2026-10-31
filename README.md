@@ -18,7 +18,7 @@ Each server runs in two ways from the same code:
 | `@mcp-servers/http-host` | [packages/shared/http-host](packages/shared/http-host/README.md) | Private. The secured Streamable HTTP host both servers use |
 
 The two `shared/*` packages are `private` and never published. The servers and the extension inline them at build time
-(esbuild), so a built server needs no unpublished package. Third-party dependencies, including the native ones
+(tsdown), so a built server needs no unpublished package. Third-party dependencies, including the native ones
 (`tree-sitter*`, `sqlite-vec`), stay external.
 
 The extension's package name is `mcp-servers`, the same as the root package; see
@@ -136,7 +136,7 @@ pnpm install
 pnpm build        # pnpm -r run build: servers and extension (tsdown bundles)
 pnpm typecheck    # pnpm -r run typecheck
 pnpm test         # pnpm -r run test (Vitest)
-pnpm lint         # eslint .
+pnpm lint         # oxlint (type-aware, configured in .oxlintrc.json)
 ```
 
 Run one package's script with a path filter, for example `pnpm --filter ./packages/server-git run test`.

@@ -30,19 +30,16 @@
   "scripts": {
     "build": "pnpm -r run build",
     "typecheck": "pnpm -r run typecheck",
-    "lint": "eslint .",
-    "lint:fix": "eslint . --fix",
+    "lint": "oxlint",
+    "lint:fix": "oxlint --fix",
     "test": "pnpm -r run test",
     "clean": "pnpm -r run clean"
   },
   "keywords": [],
   "devDependencies": {
-    "@eslint/js": "catalog:",
     "@tsconfig/node24": "catalog:",
-    "eslint": "catalog:",
     "oxlint": "catalog:",
     "oxlint-tsgolint": "catalog:",
-    "typescript-eslint": "catalog:",
     "vite": "catalog:"
   }
 }

@@ -39,7 +39,7 @@ The monorepo provides a unified development environment for creating MCP servers
 │                           │                                   │
 │                  ┌────────▼────────┐                         │
 │                  │  Build System   │                         │
-│                  │ (tsc/esbuild)   │                         │
+│                  │ (tsdown)        │                         │
 │                  └─────────────────┘                         │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -90,7 +90,7 @@ MCP servers are the core components that implement the Model Context Protocol. E
 
 #### Key Features
 
-- **Dual Entry Points**: Separate entry points for standalone and embedded modes (both bundled by the package's `bundle` script, an esbuild command)
+- **Dual Entry Points**: Separate entry points for standalone and embedded modes (both bundled by the package's `bundle` script, which runs tsdown)
 - **Transport Abstraction**: stdio or HTTP for standalone, authenticated loopback HTTP for embedded; HTTP always goes through `@mcp-servers/http-host`
 - **One server per session**: the HTTP host calls a `createServer` factory for every session, so each session has its own `McpServer` while the domain services (repository manager, vector database) are shared
 - **Tool Registration**: each tool lives in `tools/` and is registered with `server.registerTool()`
@@ -326,7 +326,7 @@ pnpm --filter @mcp-servers/server-name dev
 
 **Automated Checks**:
 - Type checking (tsc --noEmit)
-- Linting (ESLint)
+- Linting (oxlint)
 - Formatting (Prettier)
 - Unit and integration tests
 - Build verification
@@ -364,9 +364,9 @@ Use `workspace:*` protocol for all internal dependencies:
 **Root-Level** (shared across all packages):
 - TypeScript
 - Vitest
-- ESLint
+- oxlint (type-aware rules through oxlint-tsgolint)
 - Prettier
-- esbuild (a devDependency of each bundled package)
+- tsdown (a devDependency of each bundled package)
 
 **Package-Level** (specific to package needs):
 - @modelcontextprotocol/server and @modelcontextprotocol/hono (servers, `http-host`)
@@ -657,7 +657,7 @@ Each package includes:
 - **Test Coverage**: Minimum 80% coverage
 - **Documentation**: All public APIs documented
 - **Code Review**: Required for all changes
-- **Linting**: ESLint with strict rules
+- **Linting**: oxlint with the strict type-aware rule set (`.oxlintrc.json`)
 - **Formatting**: Prettier for consistent style
 
 ### Dependency Updates
