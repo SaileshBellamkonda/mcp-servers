@@ -6,6 +6,9 @@
   "main": "./dist/standalone.js",
   "types": "./dist/standalone.d.ts",
   "files": ["dist", "!dist/.tsbuildinfo", "README.md"],
+  "engines": {
+    "node": ">=24.0.0"
+  },
   "exports": {
     ".": {
       "import": {
@@ -53,7 +56,7 @@
     "@mcp-servers/common": "workspace:*",
     "@mcp-servers/http-host": "workspace:*",
     "esbuild": "catalog:",
-    "@tsconfig/node22": "catalog:",
+    "@tsconfig/node24": "catalog:",
     "@types/node": "catalog:",
     "@types/which": "catalog:",
     "@vitest/coverage-v8": "catalog:",
@@ -68,8 +71,5 @@
     "@types/vscode": {
       "optional": true
     }
-  },
-  "engines": {
-    "node": ">=22.0.0"
   }
 }

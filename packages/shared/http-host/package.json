@@ -9,6 +9,9 @@
   "files": [
     "dist"
   ],
+  "engines": {
+    "node": ">=24.0.0"
+  },
   "exports": {
     ".": {
       "@mcp-servers/source": "./src/index.ts",
@@ -38,13 +41,10 @@
     "hono": "catalog:"
   },
   "devDependencies": {
-    "@tsconfig/node22": "catalog:",
+    "@tsconfig/node24": "catalog:",
     "@types/node": "catalog:",
     "@vitest/coverage-v8": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
-  },
-  "engines": {
-    "node": ">=22.0.0"
   }
 }

@@ -198,7 +198,7 @@ describe('package.json contributes', () => {
 
   it('declares the MCP server definition provider the extension registers, on an engine that has the API', () => {
     expect(manifest.contributes.mcpServerDefinitionProviders).toEqual([{ id: MCP_PROVIDER_ID, label: expect.any(String) as string }]);
-    expect(manifest.engines.vscode).toBe('^1.101.0');
+    expect(manifest.engines.vscode).toBe('>=1.123.0');
   });
 
   it('offers the integration commands in the view title menu', () => {

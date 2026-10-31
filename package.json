@@ -4,10 +4,21 @@
   "private": true,
   "type": "module",
   "description": "A collection of Model Context Protocol (MCP) servers.",
-  "packageManager": "pnpm@10.33.0",
   "engines": {
-    "node": ">=22.0.0",
-    "pnpm": ">=10.0.0"
+    "node": "^24.0.0",
+    "pnpm": "^12.0.0"
+  },
+  "devEngines": {
+    "runtime": {
+      "name": "node",
+      "version": "^24.0.0",
+      "onFail": "error"
+    },
+    "packageManager": {
+      "name": "pnpm",
+      "version": "^12.0.0",
+      "onFail": "error"
+    }
   },
   "scripts": {
     "build": "pnpm -r run build",
@@ -20,7 +31,7 @@
   "keywords": [],
   "devDependencies": {
     "@eslint/js": "catalog:",
-    "@tsconfig/node22": "catalog:",
+    "@tsconfig/node24": "catalog:",
     "eslint": "catalog:",
     "typescript-eslint": "catalog:",
     "vite": "catalog:"

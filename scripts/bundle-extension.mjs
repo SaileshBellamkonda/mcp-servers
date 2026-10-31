@@ -35,7 +35,7 @@ export function extensionBundleOptions(extensionDir, overrides = {}) {
     bundle: true,
     format: 'cjs',
     platform: 'node',
-    target: 'node22',
+    target: 'node24',
     sourcemap: true,
     minify: false,
     conditions: [SOURCE_CONDITION],

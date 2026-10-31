@@ -46,7 +46,7 @@ export function bundleOptions(packageDir, overrides = {}) {
     bundle: true,
     format: 'esm',
     platform: 'node',
-    target: 'node22',
+    target: 'node24',
     sourcemap: true,
     conditions: [SOURCE_CONDITION],
     external,
