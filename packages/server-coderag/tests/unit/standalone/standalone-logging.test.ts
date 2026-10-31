@@ -1,8 +1,8 @@
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { TOKEN, freePort, spawnStandalone, type StandaloneProcess } from '../../fixtures/standalone-process.ts';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { TOKEN, connectOutcome, freePort, spawnStandalone, type StandaloneProcess } from '../../fixtures/standalone-process.ts';
 
 describe('standalone coderag logging', () => {
   let dir: string;
@@ -21,7 +21,7 @@ describe('standalone coderag logging', () => {
     rmSync(dir, { recursive: true, force: true });
   });
 
-  async function start(extra: Record<string, string>): Promise<void> {
+  async function start(extra: Record<string, string>): Promise<number> {
     const port = await freePort();
     proc = spawnStandalone({
       MCP_TRANSPORT: 'http',
@@ -36,6 +36,14 @@ describe('standalone coderag logging', () => {
       CODERAG_WATCH: '0',
       ...extra,
     });
+    return port;
+  }
+
+  /** Resolves once the server accepts connections, i.e. has started (and logged what it logs at startup). */
+  async function untilListening(port: number): Promise<void> {
+    await vi.waitFor(async () => {
+      expect(await connectOutcome('127.0.0.1', port)).toBe('connected');
+    }, { timeout: 20000, interval: 50 });
   }
 
   it('writes timestamped entries to LOG_FILE (creating its directory) and nothing to stderr', async () => {
@@ -50,8 +58,8 @@ describe('standalone coderag logging', () => {
   }, 30000);
 
   it('writes nothing anywhere when LOG_FILE is not set', async () => {
-    await start({ LOG_FILE: '' });
-    await new Promise((resolve) => setTimeout(resolve, 2000));
+    const port = await start({ LOG_FILE: '' });
+    await untilListening(port);
 
     expect(proc?.log()).toBe('');
     expect(proc?.stderr()).toBe('');
@@ -59,8 +67,8 @@ describe('standalone coderag logging', () => {
 
   it('filters entries by LOG_LEVEL', async () => {
     const file = path.join(dir, 'coderag.log');
-    await start({ LOG_FILE: file, LOG_LEVEL: 'error' });
-    await new Promise((resolve) => setTimeout(resolve, 2000));
+    const port = await start({ LOG_FILE: file, LOG_LEVEL: 'error' });
+    await untilListening(port);
 
     expect(existsSync(file)).toBe(true);
     expect(readFileSync(file, 'utf8')).toBe('');

@@ -55,7 +55,6 @@ import { activate, deactivate } from '../../src/extension';
 import { callArg } from './call-args';
 
 type Item = vscode.TreeItem;
-type Disposable = { dispose: () => void };
 
 interface Provider {
   getChildren(): { id: string; getInfo(): { state: string; port?: number; reason?: string } }[];
@@ -99,11 +98,11 @@ function channelNames(): string[] {
 /** Every line written to the Output channel with this name. */
 function channelLines(name: string): string[] {
   const { calls, results } = vi.mocked(vscode.window.createOutputChannel).mock;
-  return calls.flatMap((call, index) =>
-    String((call as unknown as [string])[0]) === name
-      ? (results[index]?.value as { appendLine: ReturnType<typeof vi.fn> }).appendLine.mock.calls.map((c) => String(c[0]))
-      : []
-  );
+  return calls.flatMap((call, index) => {
+    if (String((call as unknown as [string])[0]) !== name) return [];
+    const channel = results[index]?.value as { appendLine: ReturnType<typeof vi.fn> } | undefined;
+    return (channel?.appendLine.mock.calls ?? []).map((c) => String(c[0]));
+  });
 }
 /** Every line written to any Output channel. */
 function outputLines(): string[] {

@@ -124,8 +124,9 @@ describe('activateCodeRagServer', () => {
 
   it('logs nowhere when no logger is supplied', async () => {
     const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
-    const { logger: _omitted, ...withoutLogger } = base();
-    instance = await activateCodeRagServer({ ...withoutLogger, toolset: 'all' });
+    const options: Record<string, unknown> = { ...base(), toolset: 'all' };
+    delete options['logger'];
+    instance = await activateCodeRagServer(options as never);
     const url = urlOf(instance);
     const { sessionId } = await initializeSession(url, { token: TOKEN });
 

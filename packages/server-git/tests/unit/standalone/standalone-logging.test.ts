@@ -1,9 +1,9 @@
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TestRepository } from '../../fixtures/test-repo.ts';
-import { TOKEN, freePort, spawnStandalone, type StandaloneProcess } from '../../fixtures/standalone-process.ts';
+import { TOKEN, connectOutcome, freePort, spawnStandalone, type StandaloneProcess } from '../../fixtures/standalone-process.ts';
 
 describe('standalone git logging', () => {
   let repo: TestRepository;
@@ -23,7 +23,7 @@ describe('standalone git logging', () => {
     rmSync(scratch, { recursive: true, force: true });
   });
 
-  async function startHttp(extra: Record<string, string>): Promise<void> {
+  async function startHttp(extra: Record<string, string>): Promise<number> {
     const port = await freePort();
     proc = spawnStandalone({
       MCP_TRANSPORT: 'http',
@@ -32,6 +32,14 @@ describe('standalone git logging', () => {
       GIT_ALLOWED_REPOS: repo.path,
       ...extra,
     });
+    return port;
+  }
+
+  /** Resolves once the server accepts connections, i.e. has started (and logged what it logs at startup). */
+  async function untilListening(port: number): Promise<void> {
+    await vi.waitFor(async () => {
+      expect(await connectOutcome('127.0.0.1', port)).toBe('connected');
+    }, { timeout: 20000, interval: 50 });
   }
 
   it('writes timestamped entries to LOG_FILE (creating its directory) and nothing to stderr', async () => {
@@ -46,8 +54,8 @@ describe('standalone git logging', () => {
   }, 30000);
 
   it('writes nothing anywhere when LOG_FILE is not set', async () => {
-    await startHttp({ LOG_FILE: '' });
-    await new Promise((resolve) => setTimeout(resolve, 1500));
+    const port = await startHttp({ LOG_FILE: '' });
+    await untilListening(port);
 
     expect(proc?.log()).toBe('');
     expect(proc?.stderr()).toBe('');
@@ -55,9 +63,9 @@ describe('standalone git logging', () => {
 
   it('filters entries by LOG_LEVEL', async () => {
     const file = path.join(scratch, 'git.log');
-    await startHttp({ LOG_FILE: file, LOG_LEVEL: 'warning' });
+    const port = await startHttp({ LOG_FILE: file, LOG_LEVEL: 'warning' });
     // The unauthenticated warning is not emitted (a token is set) and the info lines are below the threshold.
-    await new Promise((resolve) => setTimeout(resolve, 1500));
+    await untilListening(port);
 
     expect(existsSync(file)).toBe(true);
     expect(readFileSync(file, 'utf8')).toBe('');
