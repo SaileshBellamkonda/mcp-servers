@@ -27,7 +27,7 @@ describe(`vsce ls --no-dependencies on a bundled and staged extension${reason ? 
     if (reason) return;
     packageDir = mkdtempSync(path.join(tmpdir(), 'vsix-contents-'));
     // What is on disk in a working copy: manifest, ignore file, README, sources and the build output ...
-    for (const entry of ['package.json', '.vscodeignore', 'README.md', 'tsconfig.json', 'vitest.config.ts', 'src', 'tests', '__mocks__']) {
+    for (const entry of ['package.json', '.vscodeignore', 'README.md', 'tsconfig.json', 'tsdown.config.json', 'vitest.config.ts', 'src', 'tests', '__mocks__']) {
       if (existsSync(path.join(extensionDir, entry))) cpSync(path.join(extensionDir, entry), path.join(packageDir, entry), { recursive: true });
     }
     // (the test-only servers-entry bundle is not part of what the build produces)
@@ -88,6 +88,7 @@ describe(`vsce ls --no-dependencies on a bundled and staged extension${reason ? 
         f.startsWith('__mocks__/') ||
         f.startsWith('coverage/') ||
         /^tsconfig.*\.json$/.test(f) ||
+        f === 'tsdown.config.json' ||
         f.startsWith('vitest.config') ||
         f.endsWith('.map') ||
         f.endsWith('.vsix') ||

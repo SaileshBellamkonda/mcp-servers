@@ -20,7 +20,6 @@ catalog:
   '@types/which': ^3.0.4
   '@vitest/coverage-v8': ^5.0.5
   '@vscode/vsce': ^4.1.0
-  esbuild: ^0.28.2
   eslint: ^10.0.0
   gray-matter: ^4.0.3
   hono: ^4.13.11
@@ -40,6 +39,7 @@ catalog:
   tree-sitter-ruby: ^0.23.1
   tree-sitter-rust: ^0.24.0
   tree-sitter-typescript: ^0.23.2
+  tsdown: ^0.23.4
   tsx: ^4.23.15
   # Hold at 6.x: TS 7 (native Go compiler) ships no classic compiler API, and typescript-eslint
   # (typed linting in eslint.config.mjs) requires typescript <6.1.0. Revisit when typescript-eslint supports TS 7.

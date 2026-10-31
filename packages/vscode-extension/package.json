@@ -313,7 +313,7 @@
     }
   },
   "scripts": {
-    "bundle": "esbuild extension=src/extension.ts mcp-headers=src/helper/mcp-headers.ts --bundle --format=cjs --platform=node --target=node24 --sourcemap --conditions=@mcp-servers/source --external:vscode --log-override:empty-import-meta=silent --outdir=dist --log-level=warning",
+    "bundle": "tsdown",
     "build": "pnpm run bundle",
     "stage:native": "node ../../scripts/stage-native.mjs",
     "package": "pnpm run build && node ../../scripts/package-extension.mjs",
@@ -329,7 +329,7 @@
     "@types/vscode": "1.125.0",
     "@vitest/coverage-v8": "catalog:",
     "@vscode/vsce": "catalog:",
-    "esbuild": "catalog:",
+    "tsdown": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
   }

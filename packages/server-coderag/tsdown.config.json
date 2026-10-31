@@ -1,0 +1,52 @@
+[
+  {
+    "entry": {
+      "standalone": "src/standalone.ts"
+    },
+    "format": "esm",
+    "platform": "node",
+    "sourcemap": true,
+    "clean": false,
+    "dts": false,
+    "hash": false,
+    "fixedExtension": false,
+    "outDir": "dist",
+    "outputOptions": {
+      "codeSplitting": false
+    },
+    "inputOptions": {
+      "resolve": {
+        "conditionNames": [
+          "@mcp-servers/source",
+          "import",
+          "node"
+        ]
+      }
+    }
+  },
+  {
+    "entry": {
+      "embedded": "src/embedded.ts"
+    },
+    "format": "esm",
+    "platform": "node",
+    "sourcemap": true,
+    "clean": false,
+    "dts": false,
+    "hash": false,
+    "fixedExtension": false,
+    "outDir": "dist",
+    "outputOptions": {
+      "codeSplitting": false
+    },
+    "inputOptions": {
+      "resolve": {
+        "conditionNames": [
+          "@mcp-servers/source",
+          "import",
+          "node"
+        ]
+      }
+    }
+  }
+]

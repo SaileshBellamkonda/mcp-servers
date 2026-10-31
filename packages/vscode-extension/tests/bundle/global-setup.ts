@@ -2,9 +2,11 @@ import { execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { build, type UserConfig } from 'tsdown';
 import type { TestProject } from 'vitest/node';
 // @ts-expect-error -- plain ESM script without declarations
 import { stageNative, hostTarget, TARGETS } from '../../../../scripts/stage-native.mjs';
+import { importedSpecifiers } from './bundle-imports';
 
 /** What the bundle tests share: one bundle + staged natives built once into a temporary directory. */
 export interface BundleFixture {
@@ -14,9 +16,9 @@ export interface BundleFixture {
   extensionJs: string;
   /** `<root>/dist/mcp-headers.js`: the dependency-free headersHelper script. */
   helperJs: string;
-  /** `<root>/dist/servers-entry.cjs`: the same bundle options, exporting the embedded server entry points. */
+  /** `<root>/dist/servers-entry.js`: the same bundle options, exporting the embedded server entry points. */
   serversEntry: string;
-  /** Every module the extension bundle leaves external, per esbuild's metafile (should be `vscode` and built-ins). */
+  /** Every module the extension bundles load at run time (should be `vscode` and built-ins). */
   externalImports: string[];
   /** `<root>/dist/native`, or undefined when staging was not possible (see `nativeSkipReason`). */
   nativeDir: string | undefined;
@@ -32,14 +34,6 @@ declare module 'vitest' {
 const extensionDir = path.resolve(import.meta.dirname, '../..');
 const coderagSource = path.resolve(extensionDir, '../server-coderag/src');
 
-/** The flags of the package's `bundle` script, without its entry points and output locations (tests set their own). */
-function bundleFlags(): string[] {
-  const manifest = JSON.parse(readFileSync(path.join(extensionDir, 'package.json'), 'utf8')) as { scripts: { bundle: string } };
-  return manifest.scripts.bundle
-    .split(/\s+/)
-    .filter((token) => token.startsWith('--') && !token.startsWith('--outdir=') && !token.startsWith('--metafile='));
-}
-
 /** Test-only second entry point: the embedded server activators, so plain Node can drive the bundled servers. */
 const SERVERS_ENTRY = `
 export { activateGitServer } from '@mcp-servers/server-git/embedded';
@@ -53,31 +47,22 @@ export default async function setup(project: TestProject): Promise<() => void> {
   mkdirSync(dist, { recursive: true });
 
   // The package's own `bundle` script, redirected to a temporary directory.
-  const metafilePath = path.join(root, 'meta.json');
-  execFileSync('pnpm', ['run', 'bundle', `--outdir=${dist}`, `--metafile=${metafilePath}`], { cwd: extensionDir, stdio: 'pipe' });
-  const built = {
-    metafile: JSON.parse(readFileSync(metafilePath, 'utf8')) as {
-      inputs: Record<string, { imports: { path: string; external?: boolean }[] }>;
-    },
-  };
+  execFileSync('pnpm', ['run', 'bundle', '--out-dir', dist], { cwd: extensionDir, stdio: 'pipe' });
   const externalImports = [
-    ...new Set(
-      Object.values(built.metafile.inputs)
-        .flatMap((input) => input.imports)
-        .filter((imported) => imported.external === true)
-        .map((imported) => imported.path)
-    ),
+    ...new Set(['extension.js', 'mcp-headers.js'].flatMap((name) => importedSpecifiers(readFileSync(path.join(dist, name), 'utf8')))),
   ].sort();
-  // The entry lives inside the extension directory so its bare specifiers resolve from the extension's node_modules.
+
+  // Second bundle with the extension's own build settings, from a test-only entry. The entry lives inside the
+  // extension directory so its bare specifiers resolve from the extension's node_modules.
+  const configs = JSON.parse(readFileSync(path.join(extensionDir, 'tsdown.config.json'), 'utf8')) as UserConfig[];
+  const extensionBuild = configs.find((config) => typeof config.entry === 'object' && !Array.isArray(config.entry) && 'extension' in config.entry);
+  if (extensionBuild === undefined) throw new Error('tsdown.config.json has no "extension" build');
   const entryDir = path.join(extensionDir, '.tmp-servers-entry');
   mkdirSync(entryDir, { recursive: true });
   try {
     const entry = path.join(entryDir, 'servers-entry.ts');
     writeFileSync(entry, SERVERS_ENTRY);
-    execFileSync('pnpm', ['exec', 'esbuild', entry, ...bundleFlags(), `--outfile=${path.join(dist, 'servers-entry.cjs')}`], {
-      cwd: extensionDir,
-      stdio: 'pipe',
-    });
+    await build({ ...extensionBuild, config: false, cwd: extensionDir, entry: { 'servers-entry': entry }, outDir: dist });
   } finally {
     rmSync(entryDir, { recursive: true, force: true });
   }
@@ -99,7 +84,7 @@ export default async function setup(project: TestProject): Promise<() => void> {
   project.provide('bundle', {
     root,
     extensionJs: path.join(dist, 'extension.js'),
-    serversEntry: path.join(dist, 'servers-entry.cjs'),
+    serversEntry: path.join(dist, 'servers-entry.js'),
     helperJs: path.join(dist, 'mcp-headers.js'),
     externalImports,
     nativeDir,

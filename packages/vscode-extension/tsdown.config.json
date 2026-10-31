@@ -1,0 +1,66 @@
+[
+  {
+    "entry": {
+      "extension": "src/extension.ts"
+    },
+    "format": "cjs",
+    "platform": "node",
+    "sourcemap": true,
+    "clean": false,
+    "dts": false,
+    "hash": false,
+    "fixedExtension": false,
+    "outDir": "dist",
+    "outputOptions": {
+      "codeSplitting": false
+    },
+    "deps": {
+      "neverBundle": [
+        "vscode"
+      ]
+    },
+    "inputOptions": {
+      "resolve": {
+        "conditionNames": [
+          "@mcp-servers/source",
+          "require",
+          "node",
+          "import"
+        ]
+      }
+    },
+    "logLevel": "error"
+  },
+  {
+    "entry": {
+      "mcp-headers": "src/helper/mcp-headers.ts"
+    },
+    "format": "cjs",
+    "platform": "node",
+    "sourcemap": true,
+    "clean": false,
+    "dts": false,
+    "hash": false,
+    "fixedExtension": false,
+    "outDir": "dist",
+    "outputOptions": {
+      "codeSplitting": false
+    },
+    "deps": {
+      "neverBundle": [
+        "vscode"
+      ]
+    },
+    "inputOptions": {
+      "resolve": {
+        "conditionNames": [
+          "@mcp-servers/source",
+          "require",
+          "node",
+          "import"
+        ]
+      }
+    },
+    "logLevel": "error"
+  }
+]

@@ -28,7 +28,7 @@
     "coderag-mcp-server": "./dist/standalone.js"
   },
   "scripts": {
-    "bundle": "esbuild standalone=src/standalone.ts embedded=src/embedded.ts --bundle --format=esm --platform=node --target=node24 --sourcemap --conditions=@mcp-servers/source --packages=external --alias:@mcp-servers/common=../shared/common/src/index.ts --alias:@mcp-servers/http-host=../shared/http-host/src/index.ts --outdir=dist --log-level=warning",
+    "bundle": "tsdown",
     "build": "pnpm run clean && pnpm run bundle && tsc -b tsconfig.build.json",
     "dev": "tsx --conditions=@mcp-servers/source src/standalone.ts",
     "test": "vitest run",
@@ -71,11 +71,11 @@
   "devDependencies": {
     "@mcp-servers/common": "workspace:*",
     "@mcp-servers/http-host": "workspace:*",
-    "esbuild": "catalog:",
     "@tsconfig/node24": "catalog:",
     "@types/micromatch": "catalog:",
     "@types/node": "catalog:",
     "@vitest/coverage-v8": "catalog:",
+    "tsdown": "catalog:",
     "tsx": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:",

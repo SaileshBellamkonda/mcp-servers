@@ -1,5 +1,4 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import type { Metafile } from 'esbuild';
 import { execFileSync } from 'node:child_process';
 import { readFileSync, rmSync, existsSync } from 'node:fs';
 import { builtinModules } from 'node:module';
@@ -7,10 +6,12 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { initializeSession, postJsonRpc } from '@mcp-servers/http-host/testing';
 import { TestRepository } from '../../fixtures/test-repo.js';
+import { importedSpecifiers } from '../../fixtures/bundle-imports.js';
 import { TOKEN, freePort, spawnStandalone, type StandaloneProcess } from '../../fixtures/standalone-process.js';
 
 const packageRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 const outdir = path.join(packageRoot, '.tmp-bundle-test');
+const OUTPUTS = ['standalone.js', 'embedded.js'];
 const packageJson = JSON.parse(readFileSync(path.join(packageRoot, 'package.json'), 'utf8')) as {
   dependencies: Record<string, string>;
   peerDependencies?: Record<string, string>;
@@ -25,14 +26,13 @@ function externalPackage(specifier: string): string | undefined {
 }
 
 describe('server bundle (shared packages inlined at build time)', () => {
-  let metafile: Metafile;
+  /** Every module specifier the built `name` loads at run time. */
+  const importsOf = (name: string): string[] => importedSpecifiers(readFileSync(path.join(outdir, name), 'utf8'));
 
   beforeAll(() => {
     rmSync(outdir, { recursive: true, force: true });
     // The package's own `bundle` script, redirected to a temporary directory.
-    const metafilePath = path.join(outdir, 'meta.json');
-    execFileSync('pnpm', ['run', 'bundle', `--outdir=${outdir}`, `--metafile=${metafilePath}`], { cwd: packageRoot, stdio: 'pipe' });
-    metafile = JSON.parse(readFileSync(metafilePath, 'utf8')) as Metafile;
+    execFileSync('pnpm', ['run', 'bundle', '--out-dir', outdir], { cwd: packageRoot, stdio: 'pipe' });
   }, 60000);
 
   afterAll(() => {
@@ -47,13 +47,11 @@ describe('server bundle (shared packages inlined at build time)', () => {
   });
 
   it('leaves no @mcp-servers/* import, require or dynamic import in the output', () => {
-    for (const name of ['standalone.js', 'embedded.js']) {
+    for (const name of OUTPUTS) {
       const text = readFileSync(path.join(outdir, name), 'utf8');
       expect(text, name).not.toMatch(/\b(?:from|import|require)\s*\(?\s*["']@mcp-servers\//);
-    }
-    for (const output of Object.values(metafile.outputs)) {
-      for (const imported of output.imports) {
-        expect(imported.path.startsWith('@mcp-servers/'), imported.path).toBe(false);
+      for (const specifier of importsOf(name)) {
+        expect(specifier.startsWith('@mcp-servers/'), specifier).toBe(false);
       }
     }
   });
@@ -64,9 +62,9 @@ describe('server bundle (shared packages inlined at build time)', () => {
       ...Object.keys(packageJson.peerDependencies ?? {}),
     ]);
     const used = new Set<string>();
-    for (const output of Object.values(metafile.outputs)) {
-      for (const imported of output.imports) {
-        const pkg = externalPackage(imported.path);
+    for (const name of OUTPUTS) {
+      for (const specifier of importsOf(name)) {
+        const pkg = externalPackage(specifier);
         if (pkg !== undefined) used.add(pkg);
       }
     }

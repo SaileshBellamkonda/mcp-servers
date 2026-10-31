@@ -8,14 +8,14 @@ describe('bundle-extension: dist/extension.js', () => {
 
   it('is a readable CommonJS bundle with a source map', () => {
     expect(code.split('\n').length).toBeGreaterThan(5000);
-    expect(code).toMatch(/module\.exports = __toCommonJS/);
+    expect(code).toMatch(/^Object\.defineProperty\(exports, Symbol\.toStringTag, \{ value: "Module" \}\);/);
     expect(existsSync(`${extensionJs}.map`)).toBe(true);
     expect(code).toMatch(/\/\/# sourceMappingURL=extension\.js\.map/);
   });
 
   it('exports activate and deactivate', () => {
-    expect(code).toMatch(/\bactivate: \(\) => activate\b/);
-    expect(code).toMatch(/\bdeactivate: \(\) => deactivate\b/);
+    expect(code).toMatch(/^exports\.activate = activate;$/m);
+    expect(code).toMatch(/^exports\.deactivate = deactivate;$/m);
   });
 
   it('leaves only "vscode" and Node built-ins external: every other dependency is bundled', () => {

@@ -3,7 +3,7 @@
 // with ELECTRON_RUN_AS_NODE=1) and prints one line: `SMOKE_RESULT <json>`. It uses nothing but Node built-ins, so
 // it also works from outside the repository with an empty NODE_PATH. The vitest files interpret the result.
 //
-//   --mode servers   --entry <servers-entry.cjs> --native <dist/native>
+//   --mode servers   --entry <servers-entry.js> --native <dist/native>
 //   --mode extension --bundle <dist/extension.js>
 const childProcess = require('node:child_process');
 const fs = require('node:fs');
