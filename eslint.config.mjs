@@ -16,7 +16,7 @@ export default defineConfig(
     '**/coverage/**',
     '**/node_modules/**',
     '**/*.js',
-    '**/*.mjs',
+    'eslint.config.mjs',
     '**/*.cjs',
     '**/*.d.ts',
   ]),
@@ -46,5 +46,11 @@ export default defineConfig(
       '@typescript-eslint/no-explicit-any': 'warn',
       '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
     },
+  },
+
+  // ── Build scripts — plain ESM run directly by Node ──────────────────────
+  {
+    files: ['scripts/**/*.mjs'],
+    languageOptions: { globals: { process: 'readonly' } },
   },
 );
