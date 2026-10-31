@@ -33,7 +33,7 @@ describe('standalone git HTTP entry point', () => {
       MCP_AUTH_TOKEN: TOKEN,
       GIT_ALLOWED_REPOS: repo.path,
     });
-    await proc.waitForStderr(/listening on http:\/\/127\.0\.0\.1:\d+\/mcp/);
+    await proc.waitForLog(/listening on http:\/\/127\.0\.0\.1:\d+\/mcp/);
     const url = `http://127.0.0.1:${String(port)}/mcp`;
 
     const anonymous = await initializeSession(url);
@@ -58,6 +58,7 @@ describe('standalone git HTTP entry point', () => {
     if (external) expect(await connectOutcome(external, port)).toBe('refused');
 
     expect(proc.stderr()).not.toContain(TOKEN);
+    expect(proc.log()).not.toContain(TOKEN);
 
     proc.child.kill('SIGTERM');
     const { code } = await proc.exited;

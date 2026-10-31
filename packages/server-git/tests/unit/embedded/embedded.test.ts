@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import { initializeSession, postJsonRpc } from '@mcp-servers/http-host/testing';
 import { activateGitServer, deactivateGitServer, type GitServerInstance } from '../../../src/embedded.ts';
 import { TestRepository } from '../../fixtures/test-repo.ts';
@@ -111,5 +111,56 @@ describe('activateGitServer', () => {
     await deactivateGitServer(instance);
     instance = undefined;
     await expect(initializeSession(url, { token: TOKEN })).rejects.toThrow();
+  });
+
+  describe('logging', () => {
+    function recordingLogger() {
+      return { debug: vi.fn(), info: vi.fn(), warning: vi.fn(), error: vi.fn() };
+    }
+
+    async function callTool(url: string, sessionId: string, name: string, args: Record<string, unknown>): Promise<void> {
+      await postJsonRpc(
+        url,
+        { jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name, arguments: args } },
+        { headers: { Authorization: `Bearer ${TOKEN}`, 'mcp-session-id': sessionId } },
+      );
+    }
+
+    it('sends what the tools log (git commands at debug level) to the host logger, never to stderr', async () => {
+      const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+      const repo = await newRepo();
+      const logger = recordingLogger();
+      instance = await activateGitServer({ workspaceFolders: [repo.path], port: 0, authToken: TOKEN, logger });
+      const url = urlOf(instance);
+      const { sessionId } = await initializeSession(url, { token: TOKEN });
+
+      await callTool(url, sessionId ?? '', 'git_status', { repository: repo.path });
+
+      expect(logger.debug).toHaveBeenCalledWith(expect.objectContaining({ cmd: expect.stringContaining('git ') }));
+      expect(stderr).not.toHaveBeenCalled();
+    });
+
+    it('tolerates a host logger without a debug method', async () => {
+      const repo = await newRepo();
+      const logger = { info: vi.fn(), warning: vi.fn(), error: vi.fn() };
+      instance = await activateGitServer({ workspaceFolders: [repo.path], port: 0, authToken: TOKEN, logger });
+      const url = urlOf(instance);
+      const { sessionId } = await initializeSession(url, { token: TOKEN });
+
+      await expect(callTool(url, sessionId ?? '', 'git_status', { repository: repo.path })).resolves.toBeUndefined();
+    });
+
+    it('reports a re-scoped repository list to the host logger instead of stderr', async () => {
+      const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+      const first = await newRepo();
+      const second = await newRepo();
+      const logger = recordingLogger();
+      instance = await activateGitServer({ workspaceFolders: [first.path], port: 0, authToken: TOKEN, logger });
+
+      instance.updateAllowedRepositories([second.path]);
+
+      expect(logger.info).toHaveBeenCalledWith(`Updated allowed repositories: ${second.path}`);
+      expect(stderr).not.toHaveBeenCalled();
+    });
   });
 });

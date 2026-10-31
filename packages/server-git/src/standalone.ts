@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { McpServer, StdioServerTransport } from '@modelcontextprotocol/server';
-import { McpLogger, parseList, parsePort } from '@mcp-servers/common';
+import { McpLogger, createSinkFromEnv, createSinkLogger, parseList, parsePort, type LogSink } from '@mcp-servers/common';
 import { resolveHttpSecurity, startMcpHttpServer } from '@mcp-servers/http-host';
 import { createGitServer } from './server/git-server.ts';
 import { RepositoryManager } from './core/repository-manager.ts';
@@ -12,7 +12,14 @@ function newServer(): McpServer {
   );
 }
 
+// The sink `main` logs to, kept so a crash can be recorded in the log file as well.
+let fatalSink: LogSink | undefined;
+
 async function main() {
+  // Log entries go to LOG_FILE at LOG_LEVEL, or nowhere; an invalid LOG_LEVEL fails here, before anything starts.
+  const sink = createSinkFromEnv(process.env);
+  fatalSink = sink;
+  const log = createSinkLogger('git-server', sink);
   const allowedReposEnv = process.env['GIT_ALLOWED_REPOS'];
 
   if (!allowedReposEnv) {
@@ -38,20 +45,21 @@ async function main() {
     const httpServer = await startMcpHttpServer({
       createServer: () => {
         const server = newServer();
-        createGitServer(server, repoManager, new McpLogger(server, 'git-server'));
+        createGitServer(server, repoManager, new McpLogger(server, 'git-server', sink));
         return server;
       },
       port,
       host,
       token,
+      logger: createSinkLogger('http-host', sink),
     });
-    process.stderr.write(`[INFO] Git MCP Server ready. Allowed repositories: ${allowedRepos.join(', ')}\n`);
+    log.info(`Git MCP Server ready. Allowed repositories: ${allowedRepos.join(', ')}`);
 
     const shutdown = async (): Promise<void> => {
       try {
         await httpServer.close();
       } catch (err) {
-        process.stderr.write(`[ERROR] closing HTTP server: ${String(err)}\n`);
+        log.error(`closing HTTP server: ${String(err)}`);
       }
       process.exit(0);
     };
@@ -60,7 +68,7 @@ async function main() {
   } else {
     // Default: stdio, a single server
     const server = newServer();
-    const logger = new McpLogger(server, 'git-server');
+    const logger = new McpLogger(server, 'git-server', sink);
     createGitServer(server, repoManager, logger);
 
     const transport = new StdioServerTransport();
@@ -77,6 +85,8 @@ async function main() {
 }
 
 main().catch((error: unknown) => {
+  // A crash is reported on stderr even though servers never log there, and also recorded when a log file exists.
+  fatalSink?.('critical', 'git-server', `FATAL ${String(error)}`);
   process.stderr.write(`[FATAL] ${String(error)}\n`);
   process.exit(1);
 });

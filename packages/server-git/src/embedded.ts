@@ -1,5 +1,5 @@
 import { McpServer } from '@modelcontextprotocol/server';
-import { McpLogger } from '@mcp-servers/common';
+import { McpLogger, createHostSink } from '@mcp-servers/common';
 import { requireToken, startMcpHttpServer } from '@mcp-servers/http-host';
 import { createGitServer } from './server/git-server.ts';
 import { RepositoryManager } from './core/repository-manager.ts';
@@ -9,6 +9,8 @@ import { RepositoryManager } from './core/repository-manager.ts';
  * at build time and the published declarations must not reference them.
  */
 export interface GitServerLogger {
+  /** Optional: git commands are logged at debug level, and dropped when the host has no debug output. */
+  debug?(data: unknown): void;
   info(data: unknown): void;
   warning(data: unknown): void;
   error(data: unknown): void;
@@ -21,7 +23,7 @@ export interface ActivateGitServerOptions {
   port?: number;
   /** Bearer token clients must send (>= 32 characters). Required: embedded servers always authenticate. */
   authToken: string;
-  /** Receives host-level diagnostics (defaults to stderr). */
+  /** Receives host-level diagnostics and what the tools log (defaults to nowhere). */
   logger?: GitServerLogger;
 }
 
@@ -45,6 +47,7 @@ export async function activateGitServer(options: ActivateGitServerOptions): Prom
 
   // Created once; every session gets its own McpServer over the same repository manager.
   const repoManager = new RepositoryManager(workspaceFolders);
+  const sink = createHostSink(options.logger);
 
   const httpServer = await startMcpHttpServer({
     createServer: () => {
@@ -52,7 +55,7 @@ export async function activateGitServer(options: ActivateGitServerOptions): Prom
         { name: 'git-server', version: '1.0.0' },
         { capabilities: { tools: {}, logging: {} } }
       );
-      createGitServer(server, repoManager, new McpLogger(server, 'git-server'));
+      createGitServer(server, repoManager, new McpLogger(server, 'git-server', sink));
       return server;
     },
     port: options.port ?? 3000,
@@ -65,7 +68,7 @@ export async function activateGitServer(options: ActivateGitServerOptions): Prom
     port: httpServer.port,
     host: httpServer.host,
     close: () => httpServer.close(),
-    updateAllowedRepositories: (folders) => { updateAllowedRepositories(repoManager, folders); },
+    updateAllowedRepositories: (folders) => { updateAllowedRepositories(repoManager, folders, options.logger); },
   };
 }
 
@@ -75,8 +78,9 @@ export async function deactivateGitServer(instance: GitServerInstance): Promise<
 
 export function updateAllowedRepositories(
   repoManager: RepositoryManager,
-  workspaceFolders: string[]
+  workspaceFolders: string[],
+  logger?: GitServerLogger
 ): void {
   repoManager.updateAllowedRepositories(workspaceFolders);
-  process.stderr.write(`[INFO] Updated allowed repositories: ${workspaceFolders.join(', ')}\n`);
+  logger?.info(`Updated allowed repositories: ${workspaceFolders.join(', ')}`);
 }

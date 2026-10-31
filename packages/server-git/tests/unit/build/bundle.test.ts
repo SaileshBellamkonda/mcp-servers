@@ -101,7 +101,7 @@ describe('server bundle (shared packages inlined at build time)', () => {
         { MCP_TRANSPORT: 'http', MCP_HTTP_PORT: String(port), MCP_AUTH_TOKEN: TOKEN, GIT_ALLOWED_REPOS: repo.path },
         path.join(outdir, 'standalone.js'),
       );
-      await proc.waitForStderr(/listening on http:\/\/127\.0\.0\.1:\d+\/mcp/);
+      await proc.waitForLog(/listening on http:\/\/127\.0\.0\.1:\d+\/mcp/);
       const url = `http://127.0.0.1:${String(port)}/mcp`;
 
       expect((await initializeSession(url)).status).toBe(401);
